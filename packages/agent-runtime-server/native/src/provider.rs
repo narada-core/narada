@@ -215,7 +215,7 @@ impl<'a> NativeProviderAdapter<'a> {
                 }),
             )?;
             let tool_calls = parse_tool_calls(&response);
-            if let Some(call) = tool_calls.first() {
+            if !tool_calls.is_empty() {
                 self.emit_invocation_state(
                     sink,
                     &invocation_id,
@@ -224,60 +224,67 @@ impl<'a> NativeProviderAdapter<'a> {
                     "completed",
                     json!({
                         "result_kind": "tool_call",
+                        "tool_call_count": tool_calls.len(),
                     }),
                 )?;
-                let tool_name = call.get("name").and_then(Value::as_str).unwrap_or_default();
-                let arguments = call.get("arguments").cloned().unwrap_or_else(|| json!({}));
-                let tool_call_id = call
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| {
-                        format!("narada_tool_{}_{}", turn_id.unwrap_or("turn"), round + 1)
-                    });
-                Self::emit(
-                    sink,
-                    json!({
-                        "event": "carrier_tool_requested",
-                        "kind": "carrier_tool_requested",
-                        "turn_id": turn_id,
-                        "input_event_id": turn_id,
-                        "tool_name": tool_name,
-                        "tool_call_id": tool_call_id,
-                        "arguments": arguments,
-                    }),
-                )?;
-                let mut gateway_sink = |event: Value| sink(event).map_err(|error| error.0);
-                let result = self
-                    .gateway
-                    .invoke(tool_name, arguments, turn_id, turn_id, &mut gateway_sink)
-                    .map_err(CoreError)?;
-                let status = result
-                    .get("status")
-                    .and_then(Value::as_str)
-                    .unwrap_or("failed");
-                Self::emit(
-                    sink,
-                    json!({
-                        "event": "carrier_tool_completed",
-                        "kind": "carrier_tool_completed",
-                        "turn_id": turn_id,
-                        "input_event_id": turn_id,
-                        "tool_name": tool_name,
-                        "tool_call_id": tool_call_id,
-                        "status": status,
-                        "result": result,
-                    }),
-                )?;
-                prompt = format!(
-                    "{prompt}
+                for (call_index, call) in tool_calls.iter().enumerate() {
+                    let tool_name = call.get("name").and_then(Value::as_str).unwrap_or_default();
+                    let arguments = call.get("arguments").cloned().unwrap_or_else(|| json!({}));
+                    let tool_call_id = call
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| {
+                            format!(
+                                "narada_tool_{}_{}",
+                                turn_id.unwrap_or("turn"),
+                                round + call_index + 1
+                            )
+                        });
+                    Self::emit(
+                        sink,
+                        json!({
+                            "event": "carrier_tool_requested",
+                            "kind": "carrier_tool_requested",
+                            "turn_id": turn_id,
+                            "input_event_id": turn_id,
+                            "tool_name": tool_name,
+                            "tool_call_id": tool_call_id,
+                            "arguments": arguments,
+                        }),
+                    )?;
+                    let mut gateway_sink = |event: Value| sink(event).map_err(|error| error.0);
+                    let result = self
+                        .gateway
+                        .invoke(tool_name, arguments, turn_id, turn_id, &mut gateway_sink)
+                        .map_err(CoreError)?;
+                    let status = result
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("failed");
+                    Self::emit(
+                        sink,
+                        json!({
+                            "event": "carrier_tool_completed",
+                            "kind": "carrier_tool_completed",
+                            "turn_id": turn_id,
+                            "input_event_id": turn_id,
+                            "tool_name": tool_name,
+                            "tool_call_id": tool_call_id,
+                            "status": status,
+                            "result": result,
+                        }),
+                    )?;
+                    prompt = format!(
+                        "{prompt}
 
 Narada tool result ({tool_name}):
 {}
 
 Answer the original request using this tool result.",
-                    compact(&result)
-                );
+                        compact(&result)
+                    );
+                }
                 continue;
             }
             self.emit_invocation_state(

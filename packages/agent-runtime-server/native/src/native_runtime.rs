@@ -1364,6 +1364,24 @@ impl NativeRuntime {
             if let Some(value) = input.get("request_id") {
                 settings.insert("requestId".to_string(), value.clone());
             }
+            if let Some(value) = input
+                .get("runtime_request_id")
+                .or_else(|| input.get("runtimeRequestId"))
+            {
+                settings.insert("runtimeRequestId".to_string(), value.clone());
+            }
+            if let Some(value) = input
+                .get("idempotency_key")
+                .or_else(|| input.get("idempotencyKey"))
+            {
+                settings.insert("idempotencyKey".to_string(), value.clone());
+            }
+            if let Some(value) = input
+                .get("turn_attempt")
+                .or_else(|| input.get("turnAttempt"))
+            {
+                settings.insert("turnAttempt".to_string(), value.clone());
+            }
             input["provider_settings"] = Value::Object(settings);
         }
     }
@@ -1403,6 +1421,18 @@ impl NativeRuntime {
                 if let Some(value) = params.get(key) {
                     input[key] = value.clone();
                 }
+            }
+        }
+        for key in [
+            "runtime_request_id",
+            "runtimeRequestId",
+            "idempotency_key",
+            "idempotencyKey",
+            "turn_attempt",
+            "turnAttempt",
+        ] {
+            if let Some(value) = request.get(key) {
+                input[key] = value.clone();
             }
         }
         self.enrich_provider_input(&mut input);

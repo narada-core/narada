@@ -1,14 +1,19 @@
+use crate::http::{
+    base64_decode, broadcast_event, ControlRequest, EventSubscribers, HttpProjection, HttpResponse,
+};
+use crate::mcp::NativeMcpGateway;
+use crate::provider::NativeProviderAdapter;
 use narada_nars_session_authority::AuthorityBinding;
 use narada_nars_session_core::{
-    session_index, supervisor::SessionSupervisor, CoreError, NarsProviderAdapter, ProviderOutcome,
-    SessionCore, SessionCoreConfig,
+    session_index, supervisor::SessionSupervisor, CoreError, SessionCore, SessionCoreConfig,
 };
 use serde_json::{json, Map, Value};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -17,6 +22,12 @@ pub struct NativeRuntimeConfig {
     pub session_id: String,
     pub site_root: Option<PathBuf>,
     pub mcp_scope: String,
+    pub health_enabled: bool,
+    pub health_host: String,
+    pub health_port: u16,
+    pub events_enabled: bool,
+    pub events_host: String,
+    pub events_port: u16,
 }
 
 impl NativeRuntimeConfig {
@@ -28,6 +39,26 @@ impl NativeRuntimeConfig {
             .or_else(|_| env::var("NARADA_CARRIER_SESSION_ID"))
             .unwrap_or_default();
         let mut site_root = env::var("NARADA_SITE_ROOT").ok().map(PathBuf::from);
+        let mut health_enabled = env::var("NARADA_AGENT_RUNTIME_HEALTH_ENABLED")
+            .ok()
+            .as_deref()
+            != Some("0");
+        let mut health_host = env::var("NARADA_AGENT_RUNTIME_HEALTH_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let mut health_port = env::var("NARADA_AGENT_RUNTIME_HEALTH_PORT")
+            .ok()
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(0);
+        let mut events_enabled = env::var("NARADA_AGENT_RUNTIME_EVENTS_ENABLED")
+            .ok()
+            .as_deref()
+            != Some("0");
+        let mut events_host = env::var("NARADA_AGENT_RUNTIME_EVENTS_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let mut events_port = env::var("NARADA_AGENT_RUNTIME_EVENTS_PORT")
+            .ok()
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(0);
         let mut index = 0;
         while index < args.len() {
             match args[index].as_str() {
@@ -44,6 +75,36 @@ impl NativeRuntimeConfig {
                         .get(index)
                         .cloned()
                         .ok_or_else(|| "session_required".to_string())?;
+                }
+                "--no-health" => health_enabled = false,
+                "--health-host" => {
+                    index += 1;
+                    health_host = args
+                        .get(index)
+                        .cloned()
+                        .ok_or_else(|| "health_host_required".to_string())?;
+                }
+                "--health-port" => {
+                    index += 1;
+                    health_port = args
+                        .get(index)
+                        .and_then(|value| value.parse::<u16>().ok())
+                        .ok_or_else(|| "health_port_required".to_string())?;
+                }
+                "--no-events" => events_enabled = false,
+                "--events-host" => {
+                    index += 1;
+                    events_host = args
+                        .get(index)
+                        .cloned()
+                        .ok_or_else(|| "events_host_required".to_string())?;
+                }
+                "--events-port" => {
+                    index += 1;
+                    events_port = args
+                        .get(index)
+                        .and_then(|value| value.parse::<u16>().ok())
+                        .ok_or_else(|| "events_port_required".to_string())?;
                 }
                 "--site-root" => {
                     index += 1;
@@ -75,6 +136,12 @@ impl NativeRuntimeConfig {
             session_id,
             site_root,
             mcp_scope: normalize_mcp_scope(env::var("NARADA_MCP_SCOPE").ok().as_deref()),
+            health_enabled,
+            health_host,
+            health_port,
+            events_enabled,
+            events_host,
+            events_port,
         })
     }
 }
@@ -189,6 +256,49 @@ fn request_content(request: &Value) -> Option<String> {
         })
 }
 
+fn provider_content(value: Option<&Value>) -> String {
+    let Some(value) = value else {
+        return String::new();
+    };
+    match value {
+        Value::String(text) => text.trim().to_string(),
+        Value::Array(parts) => parts
+            .iter()
+            .map(|part| provider_content(Some(part)))
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Value::Object(object) => {
+            if object.get("type").and_then(Value::as_str) == Some("artifact_ref") {
+                let title = object
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .map(|value| format!(" {value}"))
+                    .unwrap_or_default();
+                let kind = object
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .map(|value| format!(" ({value})"))
+                    .unwrap_or_default();
+                let id = object
+                    .get("artifact_id")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or("unknown");
+                return format!("[Artifact{title}{kind}; id={id}]");
+            }
+            object
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }
+        _ => String::new(),
+    }
+}
 fn map_event(event: &str) -> Map<String, Value> {
     let mut object = Map::new();
     object.insert("event".to_string(), json!(event));
@@ -249,36 +359,10 @@ pub struct NativeRuntime {
     session_dir: Option<PathBuf>,
     heartbeat_path: Option<PathBuf>,
     authority: Option<AuthorityBinding>,
+    mcp_gateway: NativeMcpGateway,
+    execution_policy: Value,
+    intelligence_selection: Option<Value>,
     closed: bool,
-}
-
-struct EnvironmentProviderAdapter {
-    mode: String,
-}
-
-impl EnvironmentProviderAdapter {
-    fn from_environment() -> Self {
-        Self {
-            mode: env::var("NARADA_NATIVE_PROVIDER_MODE")
-                .unwrap_or_else(|_| "unavailable".to_string()),
-        }
-    }
-}
-
-impl NarsProviderAdapter for EnvironmentProviderAdapter {
-    fn run_turn(&mut self, input: &Value) -> ProviderOutcome {
-        let content = request_content(input).unwrap_or_default();
-        match self.mode.as_str() {
-            "echo" => ProviderOutcome::Completed(format!("native-rust: {content}")),
-            "refused" => ProviderOutcome::Refused("native_provider_adapter_refused".to_string()),
-            "failed" => ProviderOutcome::Failed("native_provider_adapter_failed".to_string()),
-            "error" => ProviderOutcome::Error("native_provider_adapter_error".to_string()),
-            "interrupted" => {
-                ProviderOutcome::Interrupted("native_provider_adapter_interrupted".to_string())
-            }
-            _ => ProviderOutcome::Blocked("native_provider_adapter_unavailable".to_string()),
-        }
-    }
 }
 
 impl NativeRuntime {
@@ -309,12 +393,22 @@ impl NativeRuntime {
             &config.identity,
         )
         .map_err(|error| error.to_string())?;
+        let mcp_gateway = NativeMcpGateway::new(config.site_root.as_deref(), &config.mcp_scope);
+        let execution_policy = json!({
+            "schema": "narada.nars.execution_policy.v1",
+            "scope": "session",
+            "source": {"kind": "runtime-default", "ref": null, "revision": 1},
+            "tool_loop": {"max_rounds": 200},
+        });
         let runtime = Self {
             config,
             supervisor: SessionSupervisor::new(core),
             session_dir,
             heartbeat_path,
             authority,
+            mcp_gateway,
+            execution_policy,
+            intelligence_selection: None,
             closed: false,
         };
         runtime.write_session_projection(None)?;
@@ -323,6 +417,8 @@ impl NativeRuntime {
     }
 
     pub fn startup(&mut self) -> Result<Vec<Value>, String> {
+        let gateway_events = self.mcp_gateway.start();
+        let gateway_snapshot = self.mcp_gateway.snapshot();
         let mut event = map_event("session_started");
         put(&mut event, "runtime", "narada-agent-runtime-server");
         put(&mut event, "runtime_engine_kind", "rust");
@@ -349,6 +445,16 @@ impl NativeRuntime {
         put(&mut event, "runtime_origin", "local");
         put(&mut event, "authority_runtime_host", "local");
         put(&mut event, "transport", "jsonl_stdio");
+        put(
+            &mut event,
+            "health_endpoint",
+            env::var("NARADA_HEALTH_URL").ok(),
+        );
+        put(
+            &mut event,
+            "event_endpoint",
+            env::var("NARADA_EVENT_STREAM_URL").ok(),
+        );
         put(
             &mut event,
             "site_root",
@@ -382,20 +488,12 @@ impl NativeRuntime {
         put(
             &mut event,
             "mcp_server_count",
-            if self.config.mcp_scope == "none" {
-                json!(0)
-            } else {
-                Value::Null
-            },
+            json!(gateway_snapshot.server_count),
         );
         put(
             &mut event,
             "mcp_operational_state",
-            if self.config.mcp_scope == "none" {
-                "disabled"
-            } else {
-                "starting"
-            },
+            gateway_snapshot.operational_state.clone(),
         );
         put(
             &mut event,
@@ -408,12 +506,26 @@ impl NativeRuntime {
             .append_event(Value::Object(event))
             .map_err(core_error)?];
         output.extend(self.supervisor.start().map_err(core_error)?);
+        for gateway_event in gateway_events {
+            if let Value::Object(object) = gateway_event {
+                output.push(
+                    self.supervisor
+                        .core_mut()
+                        .append_event(Value::Object(object))
+                        .map_err(core_error)?,
+                );
+            }
+        }
         if let Some(authority) = self.authority.as_mut() {
             authority
                 .activate(&now_iso(), Some(std::process::id() as i64))
                 .map_err(|error| error.to_string())?;
         }
-        let mut adapter = EnvironmentProviderAdapter::from_environment();
+        let mut adapter = NativeProviderAdapter::from_environment(
+            self.config.site_root.clone(),
+            &mut self.mcp_gateway,
+        )
+        .with_session_context(self.config.session_id.clone());
         output.extend(
             self.supervisor
                 .recover_with_adapter(&mut adapter)
@@ -434,6 +546,15 @@ impl NativeRuntime {
                 .map_err(|error| error.to_string())?;
         }
         let result = match method.as_deref() {
+            Some("runtime.intelligence.reconfigure") => {
+                self.reconfigure_intelligence(request_id, &request)
+            }
+            Some("runtime.intelligence.reconfigure.cancel") => {
+                self.cancel_intelligence_reconfigure(request_id, &request)
+            }
+            Some("runtime.execution_policy.reconfigure") => {
+                self.reconfigure_execution_policy(request_id, &request)
+            }
             Some("session.health") => Ok(vec![self.health(request_id)]),
             Some("session.recovery") => Ok(vec![self.recovery(request_id)]),
             Some("session.events.read") => match self.events_read(request_id.clone(), &request) {
@@ -461,15 +582,229 @@ impl NativeRuntime {
         }
     }
 
+    fn append_runtime_event(
+        &mut self,
+        event: Value,
+        output: &mut Vec<Value>,
+    ) -> Result<(), String> {
+        output.push(
+            self.supervisor
+                .core_mut()
+                .append_event(event)
+                .map_err(core_error)?,
+        );
+        Ok(())
+    }
+
+    fn runtime_is_busy(&self) -> bool {
+        self.supervisor.active_turn_id().is_some() || self.supervisor.core().pending_count() > 0
+    }
+
+    fn reconfigure_intelligence(
+        &mut self,
+        request_id: Option<String>,
+        request: &Value,
+    ) -> Result<Vec<Value>, String> {
+        let params = request_params(request).cloned().unwrap_or_default();
+        let control_id = params
+            .get("request_id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or(request_id.clone())
+            .unwrap_or_else(|| new_id("reconfigure"));
+        let provider = params.get("requested_inference_provider").cloned();
+        let model = params.get("requested_model").cloned();
+        let options = params
+            .get("requested_options")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        let valid_ref = |value: Option<&Value>, kind: &str, prefix: &str| -> bool {
+            let Some(value) = value else {
+                return false;
+            };
+            let Some(object) = value.as_object() else {
+                return false;
+            };
+            object.get("kind").and_then(Value::as_str) == Some(kind)
+                && object
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|id| id.starts_with(prefix))
+        };
+        let valid = valid_ref(
+            provider.as_ref(),
+            "inference-provider",
+            "inference-provider:",
+        ) && valid_ref(model.as_ref(), "model", "model:")
+            && options.is_object()
+            && params.get("provider").is_none()
+            && params.get("thinking").is_none();
+        let mut output = Vec::new();
+        if !valid {
+            self.append_runtime_event(
+                json!({
+                    "event": "runtime_intelligence_reconfiguration",
+                    "request_id": control_id.clone(),
+                    "terminal_state": "refused",
+                    "reason": "target_not_admitted",
+                    "active": Value::Null,
+                }),
+                &mut output,
+            )?;
+            return Ok(output);
+        }
+        if self.runtime_is_busy() {
+            self.append_runtime_event(
+                json!({
+                    "event": "runtime_intelligence_reconfiguration",
+                    "request_id": control_id.clone(),
+                    "terminal_state": "refused",
+                    "reason": "runtime_not_at_clean_turn_boundary",
+                    "active_turn_id": self.supervisor.active_turn_id(),
+                }),
+                &mut output,
+            )?;
+            return Ok(output);
+        }
+        let mut previous: Option<&str> = None;
+        for state in ["requested", "validating", "admitted", "switching", "active"] {
+            self.append_runtime_event(
+                json!({
+                    "event": "intelligence_runtime_reconfiguration_state_transition",
+                    "schema": "narada.nars.intelligence_runtime_reconfiguration_state.v1",
+                    "request_id": control_id.clone(),
+                    "previous_state": previous,
+                    "reconfiguration_state": state,
+                }),
+                &mut output,
+            )?;
+            previous = Some(state);
+        }
+        let active = json!({
+            "requestedInferenceProvider": provider,
+            "requestedModel": model,
+            "requestedOptions": options,
+            "reconfiguration_state": "active",
+        });
+        self.intelligence_selection = Some(active.clone());
+        self.append_runtime_event(
+            json!({
+                "event": "runtime_intelligence_reconfiguration",
+                "request_id": control_id.clone(),
+                "terminal_state": "active",
+                "active": active,
+                "reason": "native_runtime_selection_updated",
+            }),
+            &mut output,
+        )?;
+        Ok(output)
+    }
+
+    fn cancel_intelligence_reconfigure(
+        &mut self,
+        request_id: Option<String>,
+        request: &Value,
+    ) -> Result<Vec<Value>, String> {
+        let params = request_params(request).cloned().unwrap_or_default();
+        let target = params
+            .get("target_request_id")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let mut output = Vec::new();
+        self.append_runtime_event(
+            json!({
+                "event": "runtime_intelligence_reconfiguration_cancel",
+                "request_id": request_id,
+                "target_request_id": target,
+                "accepted": false,
+                "terminal_state": "refused",
+                "reason": "reconfiguration_not_active",
+            }),
+            &mut output,
+        )?;
+        Ok(output)
+    }
+
+    fn reconfigure_execution_policy(
+        &mut self,
+        request_id: Option<String>,
+        request: &Value,
+    ) -> Result<Vec<Value>, String> {
+        let params = request_params(request).cloned().unwrap_or_default();
+        let Some(candidate) = params
+            .get("execution_policy")
+            .or_else(|| params.get("executionPolicy"))
+        else {
+            return self.reject(
+                request_id,
+                Some("runtime.execution_policy.reconfigure"),
+                "execution_policy_required",
+            );
+        };
+        let valid = candidate.get("schema").and_then(Value::as_str)
+            == Some("narada.nars.execution_policy.v1")
+            && candidate
+                .get("tool_loop")
+                .and_then(|value| value.get("max_rounds"))
+                .and_then(Value::as_u64)
+                .is_some_and(|rounds| (1..=500).contains(&rounds));
+        if !valid {
+            return self.reject(
+                request_id,
+                Some("runtime.execution_policy.reconfigure"),
+                "execution_policy_invalid",
+            );
+        }
+        let mut output = Vec::new();
+        if self.runtime_is_busy() {
+            self.append_runtime_event(
+                json!({
+                    "event": "runtime_execution_policy_reconfiguration",
+                    "request_id": request_id,
+                    "accepted": false,
+                    "terminal_state": "rejected",
+                    "reason": "runtime_not_at_clean_turn_boundary",
+                    "active_turn_id": self.supervisor.active_turn_id(),
+                }),
+                &mut output,
+            )?;
+            return Ok(output);
+        }
+        self.execution_policy = candidate.clone();
+        self.append_runtime_event(
+            json!({
+                "event": "runtime_execution_policy_reconfiguration",
+                "request_id": request_id,
+                "accepted": true,
+                "terminal_state": "completed",
+                "active": self.execution_policy.clone(),
+                "reason": "execution_policy_updated_at_clean_turn_boundary",
+            }),
+            &mut output,
+        )?;
+        Ok(output)
+    }
+    fn intelligence_snapshot(&self) -> Value {
+        let selection = self.intelligence_selection.clone().unwrap_or_else(|| {
+            json!({
+                "requestedInferenceProvider": Value::Null,
+                "requestedModel": Value::Null,
+                "requestedOptions": {},
+            })
+        });
+        json!({
+            "schema": "narada.nars.intelligence_runtime_snapshot.v1",
+            "intelligence_kernel_kind": env::var("NARADA_INTELLIGENCE_KERNEL").unwrap_or_else(|_| "narada-native".to_string()),
+            "requested_inference_provider": selection.get("requestedInferenceProvider").cloned().unwrap_or(Value::Null),
+            "requested_model": selection.get("requestedModel").cloned().unwrap_or(Value::Null),
+            "requested_options": selection.get("requestedOptions").cloned().unwrap_or_else(|| json!({})),
+            "selection_choices": {"providers": []},
+            "latest_reconfiguration": selection,
+        })
+    }
     fn health(&self, request_id: Option<String>) -> Value {
-        let mut value = self
-            .supervisor
-            .core()
-            .health(if self.config.mcp_scope == "none" {
-                "disabled"
-            } else {
-                "degraded"
-            });
+        let snapshot = self.mcp_gateway.snapshot();
+        let mut value = self.supervisor.core().health(&snapshot.operational_state);
         if let Some(object) = value.as_object_mut() {
             object.insert("request_id".to_string(), json!(request_id));
             object.insert("runtime".to_string(), json!("narada-agent-runtime-server"));
@@ -488,7 +823,28 @@ impl NativeRuntime {
             );
             object.insert("agent_id".to_string(), json!(self.config.identity));
             object.insert("mcp_scope".to_string(), json!(self.config.mcp_scope));
-            object.insert("mcp".to_string(), json!({ "operational_state": if self.config.mcp_scope == "none" { "disabled" } else { "degraded" }, "server_count": if self.config.mcp_scope == "none" { json!(0) } else { Value::Null }, "startup_failure_count": 0, "runtime_fault_count": 0 }));
+            object.insert(
+                "execution_policy".to_string(),
+                self.execution_policy.clone(),
+            );
+            object.insert("intelligence".to_string(), self.intelligence_snapshot());
+            object.insert(
+                "mcp".to_string(),
+                json!({
+                    "operational_state": snapshot.operational_state,
+                    "lifecycle_state": snapshot.lifecycle_state,
+                    "scope": self.config.mcp_scope,
+                    "server_count": snapshot.server_count,
+                    "startup_failure_count": snapshot.startup_failure_count,
+                    "startup_failures": self.mcp_gateway.startup_failures(),
+                    "runtime_fault_count": self.mcp_gateway.runtime_faults().len(),
+                    "active_execution_count": snapshot.active_execution_count,
+                    "execution_count": snapshot.execution_count,
+                    "runtime_faults": self.mcp_gateway.runtime_faults(),
+                    "tool_count": self.mcp_gateway.tool_catalog().len(),
+                    "tools": self.mcp_gateway.tool_catalog(),
+                }),
+            );
         }
         value
     }
@@ -736,6 +1092,107 @@ impl NativeRuntime {
         Ok(output)
     }
 
+    fn provider_messages_for(&self, input: &Value) -> Vec<Value> {
+        let current_id = input
+            .get("event_id")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let control = input
+            .get("metadata")
+            .and_then(|metadata| metadata.get("intelligence_invocation"));
+        let current_only = control
+            .and_then(|value| {
+                if value.get("intent_id").is_some() {
+                    return Some(true);
+                }
+                match value.get("mode").and_then(Value::as_str) {
+                    Some("retry") | Some("resume") | Some("replay") => Some(true),
+                    _ => None,
+                }
+            })
+            .unwrap_or(false);
+        let mut messages = Vec::new();
+        if !current_only {
+            let page = self
+                .supervisor
+                .core()
+                .events_page_contract(&json!({
+                    "view": "raw",
+                    "direction": "forward",
+                    "after_sequence": 0,
+                    "limit": 1000,
+                }))
+                .ok();
+            if let Some(events) = page
+                .as_ref()
+                .and_then(|value| value.get("events"))
+                .and_then(Value::as_array)
+            {
+                for event in events {
+                    let kind = event
+                        .get("event")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let event_id = event
+                        .get("turn_id")
+                        .or_else(|| event.get("input_event_id"))
+                        .or_else(|| event.get("event_id"))
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    if event_id == current_id {
+                        continue;
+                    }
+                    if kind == "user_message" {
+                        let content = provider_content(event.get("content"));
+                        if !content.is_empty() {
+                            messages.push(json!({ "role": "user", "content": content }));
+                        }
+                    } else if kind == "assistant_message" {
+                        let content = provider_content(event.get("content"));
+                        if !content.is_empty() {
+                            messages.push(json!({ "role": "assistant", "content": content }));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(content) = input.get("content") {
+            let content = provider_content(Some(content));
+            if !content.is_empty() {
+                messages.push(json!({ "role": "user", "content": content }));
+            }
+        }
+        messages
+    }
+
+    fn enrich_provider_input(&self, input: &mut Value) {
+        let messages = self.provider_messages_for(input);
+        input["provider_messages"] = Value::Array(messages);
+        input["execution_policy"] = self.execution_policy.clone();
+        if let Some(control) = input
+            .get("metadata")
+            .and_then(|metadata| metadata.get("intelligence_invocation"))
+            .cloned()
+        {
+            let mut settings = Map::new();
+            if let Some(value) = control.get("intent_id") {
+                settings.insert("intentId".to_string(), value.clone());
+            }
+            if let Some(value) = control.get("operation_id") {
+                settings.insert("operationId".to_string(), value.clone());
+            }
+            if let Some(value) = control.get("mode") {
+                settings.insert("mode".to_string(), value.clone());
+            }
+            if let Some(value) = control.get("allow_replan") {
+                settings.insert("allowReplan".to_string(), value.clone());
+            }
+            if let Some(value) = input.get("request_id") {
+                settings.insert("requestId".to_string(), value.clone());
+            }
+            input["provider_settings"] = Value::Object(settings);
+        }
+    }
     fn submit(
         &mut self,
         request_id: Option<String>,
@@ -774,7 +1231,12 @@ impl NativeRuntime {
                 }
             }
         }
-        let mut adapter = EnvironmentProviderAdapter::from_environment();
+        self.enrich_provider_input(&mut input);
+        let mut adapter = NativeProviderAdapter::from_environment(
+            self.config.site_root.clone(),
+            &mut self.mcp_gateway,
+        )
+        .with_session_context(self.config.session_id.clone());
         let mut output = vec![accepted];
         output.extend(
             self.supervisor
@@ -821,23 +1283,150 @@ impl NativeRuntime {
         request_id: Option<String>,
         request: &Value,
     ) -> Result<Vec<Value>, String> {
-        let command = request_params(request)
-            .and_then(|params| params.get("command"))
+        let params = request_params(request).cloned().unwrap_or_default();
+        let command = params
+            .get("command")
+            .or_else(|| request.get("command"))
             .and_then(Value::as_str)
             .unwrap_or_default()
             .trim()
             .to_string();
-        if command.is_empty() {
+        let value = params
+            .get("value")
+            .or_else(|| request.get("value"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let input = if value.is_empty() {
+            command.clone()
+        } else if command.is_empty() {
+            value.clone()
+        } else {
+            format!("{command} {value}")
+        }
+        .trim()
+        .to_ascii_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+        let (command_name, primary, argument, summary) = if input == "/help" || input == "help" {
+            ("help", "/help", "", "Show commands")
+        } else if input == "/status" || input == "status" {
+            ("status", "/status", "", "")
+        } else if input == "/goal" || input.starts_with("/goal ") {
+            (
+                "goal",
+                "/goal",
+                input.strip_prefix("/goal").unwrap_or("").trim(),
+                "Show, set, pause, resume, or clear carrier session goal",
+            )
+        } else if input == "/stats" || input.starts_with("/stats ") {
+            (
+                "stats",
+                "/stats",
+                input.strip_prefix("/stats").unwrap_or("").trim(),
+                "Show NARS session activity statistics",
+            )
+        } else if input == "/model" || input.starts_with("/model ") {
+            (
+                "model",
+                "/model",
+                input.strip_prefix("/model").unwrap_or("").trim(),
+                "Set model for later turns",
+            )
+        } else if input == "/thinking" || input.starts_with("/thinking ") {
+            (
+                "thinking",
+                "/thinking",
+                input.strip_prefix("/thinking").unwrap_or("").trim(),
+                "Set thinking level for later turns",
+            )
+        } else if input == "/tool-output"
+            || input.starts_with("/tool-output ")
+            || input == "/tool-outputs"
+            || input.starts_with("/tool-outputs ")
+        {
+            (
+                "tool_output",
+                "/tool-output",
+                input
+                    .strip_prefix("/tool-output")
+                    .or_else(|| input.strip_prefix("/tool-outputs"))
+                    .unwrap_or("")
+                    .trim(),
+                "Toggle displayed tool call outputs",
+            )
+        } else if input == "/tools"
+            || input.starts_with("/tools ")
+            || input == "/tool"
+            || input.starts_with("/tool ")
+        {
+            (
+                "tools",
+                "/tools",
+                input
+                    .strip_prefix("/tools")
+                    .or_else(|| input.strip_prefix("/tool"))
+                    .unwrap_or("")
+                    .trim(),
+                "Show discovered MCP tools and input schemas",
+            )
+        } else if input == "/observers" || input.starts_with("/observers ") {
+            (
+                "observers",
+                "/observers",
+                input.strip_prefix("/observers").unwrap_or("").trim(),
+                "Show observer posture",
+            )
+        } else if input == "/observer mute" {
+            (
+                "observer_mute",
+                "/observer mute",
+                "",
+                "Mute visible observer interjections",
+            )
+        } else if input == "/observer unmute" {
+            (
+                "observer_unmute",
+                "/observer unmute",
+                "",
+                "Unmute visible observer interjections",
+            )
+        } else if input == "/queue" {
+            ("queue_show", "/queue", "", "Show queued carrier input")
+        } else if input == "/queue clear" {
+            (
+                "queue_clear",
+                "/queue clear",
+                "",
+                "Clear queued operator input",
+            )
+        } else if input.starts_with("/queue drop ") {
+            (
+                "queue_drop",
+                "/queue drop <index>",
+                input.strip_prefix("/queue drop").unwrap_or("").trim(),
+                "Drop one queued operator input item",
+            )
+        } else if input == "/clear" {
+            ("clear", "/clear", "", "Clear terminal display")
+        } else if input == "/exit" || input == "/quit" || input == "exit" {
+            ("exit", "/exit", "", "Save and quit")
+        } else {
             return self.reject(
                 request_id,
                 Some("session.command.execute"),
-                "missing_session_command",
+                "unsupported_session_command",
             );
-        }
+        };
         let mut accepted = map_event("session_control_accepted");
         put(&mut accepted, "request_id", request_id.clone());
         put(&mut accepted, "method", "session.command.execute");
         put(&mut accepted, "command", command.clone());
+        put(&mut accepted, "value", value.clone());
+        put(&mut accepted, "acceptance_state", "accepted");
+        put(&mut accepted, "transport", "jsonl_stdio");
         let mut result = vec![self
             .supervisor
             .core_mut()
@@ -845,23 +1434,68 @@ impl NativeRuntime {
             .map_err(core_error)?];
         let mut command_result = map_event("command_result");
         put(&mut command_result, "request_id", request_id.clone());
-        put(&mut command_result, "command", command.clone());
-        put(
-            &mut command_result,
-            "command_name",
-            command.trim_start_matches('/'),
-        );
+        put(&mut command_result, "command", primary);
+        put(&mut command_result, "value", argument);
+        put(&mut command_result, "command_name", command_name);
         put(&mut command_result, "status", "ok");
         put(
             &mut command_result,
             "summary",
-            if command == "status" || command == "/status" {
+            if command_name == "status" {
                 format!("session {}", self.supervisor.core().lifecycle_state())
             } else {
-                format!("{command} is handled by native Rust")
+                summary.to_string()
             },
         );
         put(&mut command_result, "terminal_state", "completed");
+        if command_name == "status" {
+            put(
+                &mut command_result,
+                "health",
+                self.health(request_id.clone()),
+            );
+        } else if command_name == "tools" {
+            put(
+                &mut command_result,
+                "tools",
+                self.mcp_gateway.tool_catalog(),
+            );
+        } else if command_name == "help" {
+            put(
+                &mut command_result,
+                "commands",
+                json!([
+                    "/help",
+                    "/status",
+                    "/goal",
+                    "/stats",
+                    "/model",
+                    "/thinking",
+                    "/tool-output",
+                    "/tools",
+                    "/observers",
+                    "/queue",
+                    "/clear",
+                    "/exit"
+                ]),
+            );
+        }
+        result.push(
+            self.supervisor
+                .core_mut()
+                .append_event(json!({
+                    "event": "carrier_command_executed",
+                    "request_id": request_id.clone(),
+                    "method": "session.command.execute",
+                    "command": primary,
+                    "value": argument,
+                    "command_name": command_name,
+                    "status": "ok",
+                    "summary": command_result["summary"],
+                    "terminal_state": "completed",
+                }))
+                .map_err(core_error)?,
+        );
         result.push(
             self.supervisor
                 .core_mut()
@@ -880,7 +1514,235 @@ impl NativeRuntime {
         );
         Ok(result)
     }
+    fn artifact_http(&mut self, method: &str, path: &str, body: &[u8]) -> HttpResponse {
+        let clean_path = path.split('?').next().unwrap_or(path);
+        let segments = clean_path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(percent_decode)
+            .collect::<Result<Vec<_>, _>>();
+        let Ok(segments) = segments else {
+            return artifact_error_response(400, "invalid_artifact_path");
+        };
+        if segments.len() < 3
+            || segments[0] != "sessions"
+            || segments[2] != "artifacts"
+            || segments.len() > 5
+        {
+            return artifact_error_response(404, "artifact_route_not_found");
+        }
+        if segments[1] != self.config.session_id {
+            return HttpResponse::json(
+                404,
+                json!({
+                    "schema": "narada.nars.artifact_error.v1",
+                    "error": "session_not_found",
+                    "message": "Artifact session does not match this NARS runtime.",
+                }),
+            );
+        }
+        let artifact_id = segments.get(3).cloned();
+        let suffix = segments.get(4).map(String::as_str);
+        let parsed = serde_json::from_slice::<Value>(body).unwrap_or_else(|_| json!({}));
+        let result = match (method, artifact_id.as_deref(), suffix) {
+            ("POST", None, None) => {
+                let mut options = parsed.as_object().cloned().unwrap_or_default();
+                if !options.contains_key("source_path") {
+                    if let Some(path) = options.get("path").cloned() {
+                        options.insert("source_path".to_string(), path);
+                    }
+                }
+                self.supervisor
+                    .core_mut()
+                    .register_artifact(Value::Object(options))
+                    .map(|registered| {
+                        let mut response = HttpResponse::json(
+                            201,
+                            json!({
+                                "schema": "narada.nars.artifact_registered.v1",
+                                "artifact": registered.get("public_record"),
+                            }),
+                        );
+                        if let Some(event) = registered.get("event") {
+                            response.events.push(event.clone());
+                        }
+                        response
+                    })
+            }
+            ("PATCH", Some(id), None) => {
+                let next_state = parsed
+                    .get("lifecycle_state")
+                    .or_else(|| parsed.get("state"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if next_state.trim().is_empty() {
+                    Err(CoreError("artifact_lifecycle_state_required".to_string()))
+                } else {
+                    self.supervisor
+                        .core_mut()
+                        .transition_artifact(
+                            id,
+                            next_state,
+                            json!({
+                                "reason": parsed.get("reason"),
+                                "requested_by": parsed.get("requested_by"),
+                            }),
+                        )
+                        .map(|transition| {
+                            let mut response = HttpResponse::json(
+                                200,
+                                json!({
+                                    "schema": "narada.nars.artifact_lifecycle_transition.v1",
+                                    "changed": transition.get("changed"),
+                                    "previous_state": transition
+                                        .get("previous_record")
+                                        .and_then(|value| value.get("lifecycle"))
+                                        .and_then(|value| value.get("state")),
+                                    "artifact_state": transition
+                                        .get("record")
+                                        .and_then(|value| value.get("lifecycle"))
+                                        .and_then(|value| value.get("state")),
+                                    "artifact": transition.get("public_record"),
+                                }),
+                            );
+                            if let Some(event) = transition.get("event") {
+                                response.events.push(event.clone());
+                            }
+                            response
+                        })
+                }
+            }
+            ("POST", Some(id), Some("message")) => {
+                let artifact = match self.public_artifact(id) {
+                    Ok(value) => value,
+                    Err(error) => return artifact_error_response(error_status(&error.0), &error.0),
+                };
+                let message_part = artifact_message_part(&artifact, &parsed);
+                let text = parsed
+                    .get("text")
+                    .or_else(|| parsed.get("message"))
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        format!(
+                            "Artifact ready: {}",
+                            message_part
+                                .get("title")
+                                .and_then(Value::as_str)
+                                .or_else(|| message_part.get("artifact_id").and_then(Value::as_str))
+                                .unwrap_or("Artifact")
+                        )
+                    });
+                let event = json!({
+                    "event": "assistant_message",
+                    "event_family": "turn",
+                    "agent_id": self.config.identity,
+                    "agent_identity_ref": Value::Null,
+                    "session_id": self.config.session_id,
+                    "request_id": parsed
+                        .get("request_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_else(|| message_part.get("artifact_id").and_then(Value::as_str).unwrap_or("artifact_present")),
+                    "timestamp": now_iso(),
+                    "source": "nars_artifact_presentation",
+                    "content": [{ "type": "text", "text": text }, message_part.clone()],
+                    "artifact_id": message_part.get("artifact_id"),
+                });
+                self.supervisor
+                    .core_mut()
+                    .append_event(event)
+                    .map(|published| {
+                        let event_for_subscribers = published.clone();
+                        let mut response = HttpResponse::json(
+                            201,
+                            json!({
+                                "schema": "narada.nars.artifact_message_presented.v1",
+                                "status": "presented",
+                                "artifact": artifact,
+                                "event": published,
+                                "message_part": message_part,
+                            }),
+                        );
+                        response.events.push(event_for_subscribers);
+                        response
+                    })
+            }
+            ("GET", None, None) => self
+                .supervisor
+                .core()
+                .artifact_index()
+                .map(|value| HttpResponse::json(200, value)),
+            ("GET", Some(id), None) => self.public_artifact(id).map(|artifact| {
+                HttpResponse::json(
+                    200,
+                    json!({
+                        "schema": "narada.nars.artifact_read.v1",
+                        "artifact": artifact,
+                    }),
+                )
+            }),
+            ("GET", Some(id), Some("content")) => {
+                match self.supervisor.core().read_artifact_content(id) {
+                    Ok(content) => {
+                        let bytes = content
+                            .get("content_base64")
+                            .and_then(Value::as_str)
+                            .ok_or_else(|| CoreError("artifact_content_missing".to_string()))
+                            .and_then(|value| base64_decode(value).map_err(CoreError));
+                        match bytes {
+                            Ok(bytes) => {
+                                let content_type = content
+                                    .get("content_type")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("application/octet-stream")
+                                    .to_string();
+                                let mut headers = std::collections::BTreeMap::new();
+                                if let Some(object) =
+                                    content.get("headers").and_then(Value::as_object)
+                                {
+                                    for (name, value) in object {
+                                        if let Some(value) = value.as_str() {
+                                            headers.insert(name.clone(), value.to_string());
+                                        }
+                                    }
+                                }
+                                Ok(HttpResponse {
+                                    status: 200,
+                                    reason: "OK".to_string(),
+                                    content_type,
+                                    headers,
+                                    body: bytes,
+                                    events: Vec::new(),
+                                })
+                            }
+                            Err(error) => Err(error),
+                        }
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            _ => Err(CoreError("method_not_allowed".to_string())),
+        };
+        match result {
+            Ok(response) => response,
+            Err(error) => artifact_error_response(error_status(&error.0), &error.0),
+        }
+    }
 
+    fn public_artifact(&self, artifact_id: &str) -> Result<Value, CoreError> {
+        let index = self.supervisor.core().artifact_index()?;
+        let record = index
+            .get("artifacts")
+            .and_then(Value::as_array)
+            .and_then(|items| {
+                items.iter().find(|item| {
+                    item.get("artifact_id").and_then(Value::as_str) == Some(artifact_id)
+                })
+            })
+            .ok_or_else(|| CoreError("artifact_not_found".to_string()))?;
+        Ok(narada_nars_session_core::artifacts::public_record(record))
+    }
     fn cancel(&mut self, request_id: Option<String>) -> Result<Vec<Value>, String> {
         let mut output = self
             .supervisor
@@ -936,6 +1798,16 @@ impl NativeRuntime {
                 )
                 .map_err(core_error)?,
         );
+        for gateway_event in self.mcp_gateway.close() {
+            if let Value::Object(object) = gateway_event {
+                output.push(
+                    self.supervisor
+                        .core_mut()
+                        .append_event(Value::Object(object))
+                        .map_err(core_error)?,
+                );
+            }
+        }
         self.closed = true;
         self.write_session_projection(None)?;
         self.write_heartbeat("stopped", "session_closed")?;
@@ -1032,56 +1904,144 @@ impl NativeRuntime {
     }
 }
 
-pub fn run(args: &[String]) -> Result<(), String> {
-    let config = NativeRuntimeConfig::from_args(args)?;
-    let mut runtime = NativeRuntime::new(config)?;
-    let mut output = std::io::BufWriter::new(std::io::stdout().lock());
-    for event in runtime.startup()? {
-        serde_json::to_writer(&mut output, &event)
+fn artifact_error_response(status: u16, error: &str) -> HttpResponse {
+    HttpResponse::json(
+        status,
+        json!({
+            "schema": "narada.nars.artifact_error.v1",
+            "error": error,
+            "message": error,
+            "details": Value::Null,
+        }),
+    )
+}
+
+fn error_status(error: &str) -> u16 {
+    if error == "artifact_not_found"
+        || error == "artifact_content_missing"
+        || error == "session_not_found"
+    {
+        404
+    } else if error == "artifact_path_outside_admitted_roots" {
+        403
+    } else if error.starts_with("invalid_nars_artifact_lifecycle_transition") {
+        409
+    } else if error == "method_not_allowed" {
+        405
+    } else if error == "session_core_unavailable" {
+        503
+    } else {
+        400
+    }
+}
+
+fn percent_decode(value: &str) -> Result<String, String> {
+    let bytes = value.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len() {
+                return Err("invalid_percent_encoding".to_string());
+            }
+            let high = hex_digit(bytes[index + 1])?;
+            let low = hex_digit(bytes[index + 2])?;
+            output.push((high << 4) | low);
+            index += 3;
+        } else {
+            output.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(output).map_err(|_| "invalid_utf8_path".to_string())
+}
+
+fn hex_digit(value: u8) -> Result<u8, String> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => Err("invalid_percent_encoding".to_string()),
+    }
+}
+
+fn artifact_message_part(artifact: &Value, params: &Value) -> Value {
+    let mut part = Map::new();
+    part.insert("type".to_string(), json!("artifact_ref"));
+    part.insert(
+        "artifact_id".to_string(),
+        artifact.get("artifact_id").cloned().unwrap_or(Value::Null),
+    );
+    for (key, artifact_key) in [("kind", "kind"), ("title", "title")] {
+        let value = artifact
+            .get(artifact_key)
+            .cloned()
+            .or_else(|| params.get(key).cloned());
+        if let Some(value) = value {
+            if !value.is_null() {
+                part.insert(key.to_string(), value);
+            }
+        }
+    }
+    part.insert(
+        "render_hint".to_string(),
+        params
+            .get("render_hint")
+            .cloned()
+            .or_else(|| artifact.get("render_hint").cloned())
+            .unwrap_or_else(|| json!("inline")),
+    );
+    Value::Object(part)
+}
+fn dispatch_request<W: Write>(
+    runtime: &mut NativeRuntime,
+    raw_line: String,
+    output: &mut std::io::BufWriter<W>,
+    health_snapshot: &Arc<Mutex<Value>>,
+    event_log: &Arc<Mutex<Vec<Value>>>,
+    subscribers: &EventSubscribers,
+) -> Result<(), String> {
+    if raw_line.trim().is_empty() {
+        return Ok(());
+    }
+    let request = match serde_json::from_str::<Value>(&raw_line) {
+        Ok(value) => value,
+        Err(_) => {
+            let mut event = map_event("session_control_rejected");
+            put(&mut event, "code", "invalid_json");
+            put(&mut event, "error", "invalid_json");
+            Value::Object(event)
+        }
+    };
+    let events = if request.get("event").and_then(Value::as_str) == Some("session_control_rejected")
+    {
+        runtime.reject(None, None, "invalid_json")?
+    } else {
+        runtime.handle(request)?
+    };
+    publish_native_events(events, output, event_log, subscribers)?;
+    if let Ok(mut value) = health_snapshot.lock() {
+        *value = runtime.health(None);
+    }
+    Ok(())
+}
+
+fn publish_native_events<W: Write>(
+    events: Vec<Value>,
+    output: &mut std::io::BufWriter<W>,
+    event_log: &Arc<Mutex<Vec<Value>>>,
+    subscribers: &EventSubscribers,
+) -> Result<(), String> {
+    if let Ok(mut log) = event_log.lock() {
+        log.extend(events.iter().cloned());
+    }
+    for event in events {
+        serde_json::to_writer(&mut *output, &event)
             .map_err(|error| format!("stdout_encode_failed:{error}"))?;
         output
             .write_all(b"\n")
             .map_err(|error| format!("stdout_write_failed:{error}"))?;
-    }
-    output
-        .flush()
-        .map_err(|error| format!("stdout_flush_failed:{error}"))?;
-    for line in std::io::stdin().lock().lines() {
-        let line = line.map_err(|error| format!("stdin_read_failed:{error}"))?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let request = match serde_json::from_str::<Value>(&line) {
-            Ok(value) => value,
-            Err(_) => {
-                let mut event = map_event("session_control_rejected");
-                put(&mut event, "code", "invalid_json");
-                put(&mut event, "error", "invalid_json");
-                Value::Object(event)
-            }
-        };
-        let events =
-            if request.get("event").and_then(Value::as_str) == Some("session_control_rejected") {
-                runtime.reject(None, None, "invalid_json")?
-            } else {
-                runtime.handle(request)?
-            };
-        for event in events {
-            serde_json::to_writer(&mut output, &event)
-                .map_err(|error| format!("stdout_encode_failed:{error}"))?;
-            output
-                .write_all(b"\n")
-                .map_err(|error| format!("stdout_write_failed:{error}"))?;
-        }
-        output
-            .flush()
-            .map_err(|error| format!("stdout_flush_failed:{error}"))?;
-        if runtime.closed {
-            break;
-        }
-    }
-    if !runtime.closed {
-        let _ = runtime.close(None)?;
+        broadcast_event(subscribers, &event);
     }
     output
         .flush()
@@ -1089,6 +2049,136 @@ pub fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+pub fn run(args: &[String]) -> Result<(), String> {
+    let config = NativeRuntimeConfig::from_args(args)?;
+    let health_snapshot = Arc::new(Mutex::new(Value::Null));
+    let event_log = Arc::new(Mutex::new(Vec::new()));
+    let (control_tx, control_rx) = mpsc::channel::<ControlRequest>();
+    let projection = HttpProjection::start(
+        config.health_enabled,
+        &config.health_host,
+        config.health_port,
+        config.events_enabled,
+        &config.events_host,
+        config.events_port,
+        Arc::clone(&health_snapshot),
+        Arc::clone(&event_log),
+        control_tx,
+    )?;
+    if let Some(url) = projection.health_url.as_ref() {
+        env::set_var("NARADA_HEALTH_URL", url);
+    }
+    if let Some(url) = projection.events_url.as_ref() {
+        env::set_var("NARADA_EVENT_STREAM_URL", url);
+        env::set_var("NARADA_WEBSOCKET_URL", url);
+    }
+
+    let mut runtime = NativeRuntime::new(config.clone())?;
+    if let Ok(mut value) = health_snapshot.lock() {
+        *value = runtime.health(None);
+    }
+    let mut output = std::io::BufWriter::new(std::io::stdout().lock());
+    publish_native_events(
+        runtime.startup()?,
+        &mut output,
+        &event_log,
+        &projection.subscribers,
+    )?;
+    if let Ok(mut value) = health_snapshot.lock() {
+        *value = runtime.health(None);
+    }
+
+    let (stdin_tx, stdin_rx) = mpsc::channel::<Result<String, String>>();
+    std::thread::spawn(move || {
+        let stdin = std::io::stdin();
+        for line in stdin.lock().lines() {
+            if stdin_tx
+                .send(line.map_err(|error| format!("stdin_read_failed:{error}")))
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    let mut stdin_closed = false;
+    loop {
+        while let Ok(control_request) = control_rx.try_recv() {
+            match control_request {
+                ControlRequest::Json(request) => {
+                    dispatch_request(
+                        &mut runtime,
+                        serde_json::to_string(&request).map_err(|error| error.to_string())?,
+                        &mut output,
+                        &health_snapshot,
+                        &event_log,
+                        &projection.subscribers,
+                    )?;
+                }
+                ControlRequest::Http {
+                    method,
+                    path,
+                    body,
+                    reply,
+                    ..
+                } => {
+                    let mut response = runtime.artifact_http(&method, &path, &body);
+                    let events = std::mem::take(&mut response.events);
+                    if !events.is_empty() {
+                        publish_native_events(
+                            events,
+                            &mut output,
+                            &event_log,
+                            &projection.subscribers,
+                        )?;
+                    }
+                    let _ = reply.send(response);
+                }
+            }
+            if runtime.closed {
+                break;
+            }
+        }
+        if runtime.closed {
+            break;
+        }
+        if stdin_closed {
+            break;
+        }
+        match stdin_rx.recv_timeout(Duration::from_millis(20)) {
+            Ok(Ok(line)) => {
+                dispatch_request(
+                    &mut runtime,
+                    line,
+                    &mut output,
+                    &health_snapshot,
+                    &event_log,
+                    &projection.subscribers,
+                )?;
+            }
+            Ok(Err(error)) => return Err(error),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => stdin_closed = true,
+        }
+    }
+    if !runtime.closed {
+        let close_events = runtime.close(None)?;
+        publish_native_events(
+            close_events,
+            &mut output,
+            &event_log,
+            &projection.subscribers,
+        )?;
+        if let Ok(mut value) = health_snapshot.lock() {
+            *value = runtime.health(None);
+        }
+    }
+    output
+        .flush()
+        .map_err(|error| format!("stdout_flush_failed:{error}"))?;
+    std::thread::sleep(Duration::from_millis(50));
+    projection.close();
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1100,6 +2190,12 @@ mod tests {
             session_id: "native-test-session".to_string(),
             site_root: Some(root.to_path_buf()),
             mcp_scope: "none".to_string(),
+            health_enabled: false,
+            health_host: "127.0.0.1".to_string(),
+            health_port: 0,
+            events_enabled: false,
+            events_host: "127.0.0.1".to_string(),
+            events_port: 0,
         })
         .unwrap()
     }

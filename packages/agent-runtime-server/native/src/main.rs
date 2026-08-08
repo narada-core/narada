@@ -1,4 +1,7 @@
+mod http;
+mod mcp;
 mod native_runtime;
+mod provider;
 
 use std::env;
 use std::process::{Command, Stdio};

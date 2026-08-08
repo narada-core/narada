@@ -511,6 +511,7 @@ export function buildCarrierProcessEnvironment({
     ...inheritedEnvironment,
     ...projectedCarrierEnvironment,
     ...(carrierName === 'pi' ? {} : runtimeEnvironment),
+    ...(isNarsOperatorSurface(carrierName) && runtimeEnvironment?.NARADA_RUNTIME_ENGINE === 'rust' ? { NARADA_NATIVE_PROVIDER_MODE: 'codex-subscription' } : {}),
     ...(isNarsOperatorSurface(carrierName) ? intelligenceEnvironment : {}),
     NARADA_AGENT_ID: identity,
     ...(role ? { NARADA_AGENT_ROLE: role } : {}),

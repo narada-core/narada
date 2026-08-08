@@ -1183,9 +1183,9 @@ impl SessionCore {
             recovery_attempt_id,
             cancellation: cancellation.clone(),
         };
-        let cancellation_requested = cancellation.is_cancelled();
         let mut adapter_failure: Option<CoreError> = None;
-        let outcome = if cancellation.is_cancelled() {
+        let cancelled_before_provider = cancellation.is_cancelled();
+        let outcome = if cancelled_before_provider {
             ProviderOutcome::Interrupted("provider_request_cancelled".to_string())
         } else {
             let mut sink = |event: Value| -> Result<(), CoreError> {
@@ -1202,7 +1202,6 @@ impl SessionCore {
             }
         };
         events.extend(self.events_after(provider_start_sequence));
-        let adapter_error = matches!(&outcome, ProviderOutcome::Error(_));
         let current_after_events = self
             .turns
             .get(&event_id)
@@ -1210,7 +1209,8 @@ impl SessionCore {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
-        let event_interrupted = current_after_events == "interrupted";
+
+        let outcome_is_error = matches!(&outcome, ProviderOutcome::Error(_));
         let terminal = if is_terminal_turn(&current_after_events) {
             current_after_events
         } else {
@@ -1286,7 +1286,11 @@ impl SessionCore {
                 }
             }
         };
-        let recoverable = adapter_error || cancellation_requested || event_interrupted;
+        // Explicit provider terminal outcomes settle the queue. A structured
+        // adapter error, thrown adapter failure, or pre-call cancellation has
+        // no completed provider result and remains durable for recovery.
+        let recoverable =
+            adapter_failure.is_some() || outcome_is_error || cancelled_before_provider;
         if !recoverable {
             events.push(self.append_event(json!({ "event": "input_event_completed", "input_event_id": event_id, "event_id": event_id, "request_id": input.get("request_id"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted", "terminal_state": terminal, "idempotency_key": input.get("idempotency_key") }))?);
             events.push(self.append_event(json!({ "event": "input_completed", "input_event_id": event_id, "request_id": input.get("request_id"), "terminal_state": terminal, "idempotency_key": input.get("idempotency_key"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted" }))?);
@@ -1561,7 +1565,7 @@ impl SessionCore {
     }
 
     pub fn register_artifact(&mut self, options: Value) -> Result<Value, CoreError> {
-        let result = artifacts::register(
+        let mut result = artifacts::register(
             self.config.session_path.as_deref(),
             Some(&self.config.session_id),
             Some(&self.config.agent_id),
@@ -1579,7 +1583,10 @@ impl SessionCore {
             options.get("access_scope").and_then(Value::as_str),
         )?;
         let record = result.get("record").cloned().unwrap_or(Value::Null);
-        self.append_event(json!({ "event": "session_artifact_registered", "artifact_id": record.get("artifact_id"), "kind": record.get("kind"), "artifact": result.get("public_record") }))?;
+        let published = self.append_event(json!({ "event": "session_artifact_registered", "artifact_id": record.get("artifact_id"), "kind": record.get("kind"), "artifact": result.get("public_record") }))?;
+        if let Some(object) = result.as_object_mut() {
+            object.insert("event".to_string(), published);
+        }
         Ok(result)
     }
 
@@ -1595,7 +1602,7 @@ impl SessionCore {
         if self.lifecycle == "closed" {
             return Err(CoreError("nars_session_closed".into()));
         }
-        let result = artifacts::transition(
+        let mut result = artifacts::transition(
             self.config.session_path.as_deref(),
             artifact_id,
             next_state,
@@ -1611,7 +1618,10 @@ impl SessionCore {
                 .get("previous_record")
                 .cloned()
                 .unwrap_or(Value::Null);
-            self.append_event(json!({ "event": "session_artifact_lifecycle_transition", "artifact_id": artifact_id, "kind": record.get("kind"), "previous_state": previous.get("lifecycle").and_then(|v| v.get("state")), "artifact_state": record.get("lifecycle").and_then(|v| v.get("state")), "reason": record.get("lifecycle").and_then(|v| v.get("reason")), "artifact": result.get("public_record") }))?;
+            let published = self.append_event(json!({ "event": "session_artifact_lifecycle_transition", "artifact_id": artifact_id, "kind": record.get("kind"), "previous_state": previous.get("lifecycle").and_then(|v| v.get("state")), "artifact_state": record.get("lifecycle").and_then(|v| v.get("state")), "reason": record.get("lifecycle").and_then(|v| v.get("reason")), "artifact": result.get("public_record") }))?;
+            if let Some(object) = result.as_object_mut() {
+                object.insert("event".to_string(), published);
+            }
         }
         Ok(result)
     }

@@ -13,7 +13,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -826,6 +826,10 @@ impl NativeRuntime {
             object.insert(
                 "execution_policy".to_string(),
                 self.execution_policy.clone(),
+            );
+            object.insert(
+                "heartbeat".to_string(),
+                heartbeat_projection(self.heartbeat_path.as_deref()),
             );
             object.insert("intelligence".to_string(), self.intelligence_snapshot());
             object.insert(
@@ -1935,6 +1939,42 @@ fn error_status(error: &str) -> u16 {
     }
 }
 
+fn heartbeat_projection(path: Option<&Path>) -> Value {
+    let Some(path) = path else {
+        return json!({"path": null, "last_written_at": null, "age_ms": null, "freshness": "missing"});
+    };
+    let path_value = path.to_string_lossy().to_string();
+    let Ok(contents) = fs::read_to_string(path) else {
+        return json!({"path": path_value, "last_written_at": null, "age_ms": null, "freshness": "missing", "freshness_threshold_ms": 30000});
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&contents) else {
+        return json!({"path": path_value, "last_written_at": null, "age_ms": null, "freshness": "unknown", "freshness_threshold_ms": 30000});
+    };
+    let last_written_at = value
+        .get("last_written_at")
+        .or_else(|| value.get("timestamp"))
+        .or_else(|| value.get("heartbeat_at"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let age_ms = fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| modified.elapsed().ok())
+        .map(|elapsed| elapsed.as_millis());
+    let freshness = match age_ms {
+        Some(age) if age <= 30_000 => "fresh",
+        Some(_) => "stale",
+        None => "unknown",
+    };
+    json!({
+        "path": path_value,
+        "last_written_at": last_written_at,
+        "age_ms": age_ms,
+        "freshness": freshness,
+        "freshness_threshold_ms": 30000,
+    })
+}
+
 fn percent_decode(value: &str) -> Result<String, String> {
     let bytes = value.as_bytes();
     let mut output = Vec::with_capacity(bytes.len());
@@ -2101,7 +2141,23 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     });
     let mut stdin_closed = false;
+    let heartbeat_interval = env::var("NARADA_RUNTIME_HEARTBEAT_INTERVAL_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_millis(10_000));
+    let mut last_heartbeat = Instant::now();
     loop {
+        if heartbeat_interval > Duration::ZERO && last_heartbeat.elapsed() >= heartbeat_interval {
+            let _ = runtime.write_heartbeat("alive", "runtime_heartbeat");
+            if let Some(authority) = runtime.authority.as_mut() {
+                let _ = authority.heartbeat(&now_iso(), Some(std::process::id() as i64));
+            }
+            if let Ok(mut value) = health_snapshot.lock() {
+                *value = runtime.health(None);
+            }
+            last_heartbeat = Instant::now();
+        }
         while let Ok(control_request) = control_rx.try_recv() {
             match control_request {
                 ControlRequest::Json(request) => {

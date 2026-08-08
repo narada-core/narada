@@ -49,6 +49,7 @@ test('native Rust NARS serves health, WebSocket control, and artifact HTTP contr
       NARADA_SITE_ROOT: siteRoot,
       NARADA_MCP_SCOPE: 'none',
       NARADA_NATIVE_PROVIDER_MODE: 'echo',
+      NARADA_RUNTIME_HEARTBEAT_INTERVAL_MS: '20',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -76,7 +77,9 @@ test('native Rust NARS serves health, WebSocket control, and artifact HTTP contr
     assert.match(started.event_endpoint, /^ws:\/\/127\.0\.0\.1:\d+\/events$/);
     const healthResponse = await fetch(started.health_endpoint);
     assert.equal(healthResponse.status, 200);
-    assert.equal((await healthResponse.json()).runtime_engine_kind, 'rust');
+    const health = await healthResponse.json();
+    assert.equal(health.runtime_engine_kind, 'rust');
+    assert.equal(health.heartbeat.freshness, 'fresh');
     const plainEventsUrl = new URL(started.event_endpoint);
     plainEventsUrl.protocol = 'http:';
     const plainEventsResponse = await fetch(plainEventsUrl);

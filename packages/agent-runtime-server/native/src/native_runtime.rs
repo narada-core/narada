@@ -397,7 +397,7 @@ impl RuntimeRequestRegistry {
             "completed" | "rejected" | "failed" => Some(next_state.to_string()),
             _ => None,
         };
-        Some(json!({
+        let event = json!({
             "schema": "narada.nars.runtime_request_state.v1",
             "event": "runtime_request_state_transition",
             "timestamp": now_iso(),
@@ -408,9 +408,29 @@ impl RuntimeRequestRegistry {
             "request_state": record.state,
             "terminal_state": record.terminal_state,
             "transport": "jsonl_stdio",
-        }))
+        });
+        if record.terminal_state.is_some() {
+            self.prune_terminal();
+        }
+        Some(event)
     }
 
+    fn prune_terminal(&mut self) {
+        let mut terminal_count = self
+            .records
+            .iter()
+            .filter(|record| matches!(record.state.as_str(), "completed" | "rejected" | "failed"))
+            .count();
+        while terminal_count > 100 {
+            let Some(index) = self.records.iter().position(|record| {
+                matches!(record.state.as_str(), "completed" | "rejected" | "failed")
+            }) else {
+                break;
+            };
+            self.records.remove(index);
+            terminal_count -= 1;
+        }
+    }
     fn snapshot(&self) -> Value {
         let state_names = [
             "received",
@@ -438,11 +458,14 @@ impl RuntimeRequestRegistry {
             .filter(|record| !matches!(record.state.as_str(), "completed" | "rejected" | "failed"))
             .count();
         let terminal_count = self.records.len().saturating_sub(active_count);
-        let refs = self
+        let active_records = self
             .records
             .iter()
-            .rev()
-            .take(100)
+            .filter(|record| !matches!(record.state.as_str(), "completed" | "rejected" | "failed"))
+            .collect::<Vec<_>>();
+        let active_start = active_records.len().saturating_sub(100);
+        let mut refs = active_records[active_start..]
+            .iter()
             .map(|record| {
                 json!({
                     "runtime_request_id": record.runtime_request_id,
@@ -453,6 +476,26 @@ impl RuntimeRequestRegistry {
                 })
             })
             .collect::<Vec<_>>();
+        let terminal_capacity = 100usize.saturating_sub(refs.len());
+        if terminal_capacity > 0 {
+            let terminal_records = self
+                .records
+                .iter()
+                .filter(|record| {
+                    matches!(record.state.as_str(), "completed" | "rejected" | "failed")
+                })
+                .collect::<Vec<_>>();
+            let terminal_start = terminal_records.len().saturating_sub(terminal_capacity);
+            refs.extend(terminal_records[terminal_start..].iter().map(|record| {
+                json!({
+                    "runtime_request_id": record.runtime_request_id,
+                    "request_id": record.request_id,
+                    "method": record.method,
+                    "request_state": record.state,
+                    "terminal_state": record.terminal_state,
+                })
+            }));
+        }
         json!({
             "schema": "narada.nars.runtime_request_state.v1",
             "request_count": self.records.len(),
@@ -463,7 +506,7 @@ impl RuntimeRequestRegistry {
             "terminal_request_count": terminal_count,
             "pending_operation_count": 0,
             "state_counts": state_counts,
-            "request_refs": refs.into_iter().rev().collect::<Vec<_>>(),
+            "request_refs": refs,
         })
     }
 }
@@ -677,6 +720,7 @@ impl NativeRuntime {
                 .heartbeat(&now_iso(), Some(std::process::id() as i64))
                 .map_err(|error| error.to_string())?;
         }
+        let mut terminal_transition_recorded = false;
         let result = match method.as_deref() {
             Some("runtime.intelligence.reconfigure") => {
                 self.reconfigure_intelligence(request_id, &request)
@@ -700,7 +744,15 @@ impl NativeRuntime {
                 }
             }
             Some("session.cancel") => self.cancel(request_id),
-            Some("session.close") => self.close(request_id),
+            Some("session.close") => {
+                request_events.extend(self.append_runtime_request_transition(
+                    &runtime_request_id,
+                    "completed",
+                    true,
+                )?);
+                terminal_transition_recorded = true;
+                self.close(request_id)
+            }
             Some("session.command.execute") => self.command(request_id, &request),
             Some("session.submit") => self.submit(request_id, &request),
             _ => self.reject(request_id, method.as_deref(), "unsupported_session_control"),
@@ -714,11 +766,13 @@ impl NativeRuntime {
                 } else {
                     "completed"
                 };
-                request_events.extend(self.append_runtime_request_transition(
-                    &runtime_request_id,
-                    terminal_state,
-                    persist_request_lifecycle || terminal_state != "completed",
-                )?);
+                if !terminal_transition_recorded {
+                    request_events.extend(self.append_runtime_request_transition(
+                        &runtime_request_id,
+                        terminal_state,
+                        persist_request_lifecycle || terminal_state != "completed",
+                    )?);
+                }
                 request_events.append(&mut values);
                 request_events.extend(self.poll_subscription_events());
                 Ok(request_events)
@@ -739,7 +793,7 @@ impl NativeRuntime {
         let Some(event) = self.request_registry.transition(runtime_request_id, state) else {
             return Ok(Vec::new());
         };
-        if !persist || self.closed {
+        if !persist || self.supervisor.core().lifecycle_state() == "closed" {
             return Ok(Vec::new());
         }
         Ok(vec![self

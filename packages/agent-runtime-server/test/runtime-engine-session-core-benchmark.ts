@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,7 @@ type Engine = 'node' | 'bun' | 'rust';
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const runtimeEntrypoint = fileURLToPath(new URL('../dist/bin/narada-agent-runtime-server.js', import.meta.url));
+const runtimeMemoryProbe = fileURLToPath(new URL('./fixtures/runtime-memory-probe.cjs', import.meta.url));
 const nativeBinary = join(
   packageRoot,
   'native',
@@ -44,11 +45,35 @@ function percentile(values: number[], fraction: number): number {
 
 const memoryMetric = process.platform === 'win32' ? 'private_memory_bytes' : 'rss_bytes';
 
-function sampleProcessMemoryBytes(pid: number): number | null {
+type ProcessMemorySample = {
+  private_memory_bytes: number | null;
+  working_set_bytes: number | null;
+  virtual_memory_bytes: number | null;
+};
+
+type RuntimeMemorySample = {
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers: number;
+};
+
+type MemorySample = {
+  process: ProcessMemorySample | null;
+  runtime: RuntimeMemorySample | null;
+};
+
+function finiteNumber(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function sampleProcessMemory(pid: number): ProcessMemorySample | null {
   const numericPid = Number.isInteger(pid) && pid > 0 ? String(pid) : null;
   if (!numericPid) return null;
   if (process.platform === 'win32') {
-    const command = `$p=Get-Process -Id ${numericPid} -ErrorAction SilentlyContinue; if ($p) { [Console]::Write($p.PrivateMemorySize64) }`;
+    const command = '$p=Get-Process -Id ' + numericPid + ' -ErrorAction SilentlyContinue; if ($p) { [Console]::Write(([PSCustomObject]@{ private_memory_bytes=$p.PrivateMemorySize64; working_set_bytes=$p.WorkingSet64; virtual_memory_bytes=$p.VirtualMemorySize64 } | ConvertTo-Json -Compress)) }';
     for (const shell of ['powershell.exe', 'pwsh.exe']) {
       const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', command], {
         encoding: 'utf8',
@@ -56,39 +81,92 @@ function sampleProcessMemoryBytes(pid: number): number | null {
         timeout: 2_000,
         windowsHide: true,
       });
-      const bytes = Number.parseInt(String(result.stdout ?? '').trim(), 10);
-      if (Number.isFinite(bytes) && bytes > 0) return bytes;
+      try {
+        const value: any = JSON.parse(String(result.stdout ?? '').trim());
+        const sample = {
+          private_memory_bytes: finiteNumber(value?.private_memory_bytes),
+          working_set_bytes: finiteNumber(value?.working_set_bytes),
+          virtual_memory_bytes: finiteNumber(value?.virtual_memory_bytes),
+        };
+        if (sample.private_memory_bytes || sample.working_set_bytes || sample.virtual_memory_bytes) return sample;
+      } catch {
+        // Try the next available PowerShell host.
+      }
     }
     return null;
   }
-  const result = spawnSync('ps', ['-o', 'rss=', '-p', numericPid], {
+  const result = spawnSync('ps', ['-o', 'rss=,vsz=', '-p', numericPid], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
     timeout: 2_000,
   });
-  const kilobytes = Number.parseInt(String(result.stdout ?? '').trim(), 10);
-  return Number.isFinite(kilobytes) && kilobytes > 0 ? kilobytes * 1024 : null;
-}
-
-function memorySummary(samples: number[]) {
-  if (samples.length === 0) {
-    return {
-      memory_metric: memoryMetric,
-      memory_samples: 0,
-      memory_p50_mb: null,
-      memory_p95_mb: null,
-      memory_mean_mb: null,
-    };
-  }
+  const [rssKilobytes, virtualKilobytes] = String(result.stdout ?? '').trim().split(/\s+/).map(Number);
   return {
-    memory_metric: memoryMetric,
-    memory_samples: samples.length,
-    memory_p50_mb: Number((percentile(samples, 0.5) / (1024 * 1024)).toFixed(1)),
-    memory_p95_mb: Number((percentile(samples, 0.95) / (1024 * 1024)).toFixed(1)),
-    memory_mean_mb: Number((samples.reduce((sum, value) => sum + value, 0) / samples.length / (1024 * 1024)).toFixed(1)),
+    private_memory_bytes: null,
+    working_set_bytes: finiteNumber(rssKilobytes) === null ? null : rssKilobytes * 1024,
+    virtual_memory_bytes: finiteNumber(virtualKilobytes) === null ? null : virtualKilobytes * 1024,
   };
 }
 
+function readRuntimeMemory(path: string): RuntimeMemorySample | null {
+  try {
+    const value: any = JSON.parse(readFileSync(path, 'utf8'));
+    const rss = finiteNumber(value?.rss);
+    const heapTotal = finiteNumber(value?.heapTotal);
+    const heapUsed = finiteNumber(value?.heapUsed);
+    const external = finiteNumber(value?.external);
+    const arrayBuffers = finiteNumber(value?.arrayBuffers);
+    if (rss === null || heapTotal === null || heapUsed === null || external === null || arrayBuffers === null) return null;
+    return { rss, heapTotal, heapUsed, external, arrayBuffers };
+  } catch {
+    return null;
+  }
+}
+
+function present(values: Array<number | null>): number[] {
+  return values.filter((value): value is number => value !== null);
+}
+
+function mbStats(values: number[]) {
+  if (values.length === 0) return { samples: 0, p50_mb: null, p95_mb: null, mean_mb: null };
+  return {
+    samples: values.length,
+    p50_mb: Number((percentile(values, 0.5) / (1024 * 1024)).toFixed(1)),
+    p95_mb: Number((percentile(values, 0.95) / (1024 * 1024)).toFixed(1)),
+    mean_mb: Number((values.reduce((sum, value) => sum + value, 0) / values.length / (1024 * 1024)).toFixed(1)),
+  };
+}
+
+function memorySummary(samples: MemorySample[]) {
+  const privateMemory = mbStats(present(samples.map((sample) => sample.process?.private_memory_bytes ?? null)));
+  const workingSet = mbStats(present(samples.map((sample) => sample.process?.working_set_bytes ?? null)));
+  const virtualMemory = mbStats(present(samples.map((sample) => sample.process?.virtual_memory_bytes ?? null)));
+  const runtimeRss = mbStats(present(samples.map((sample) => sample.runtime?.rss ?? null)));
+  const runtimeHeapTotal = mbStats(present(samples.map((sample) => sample.runtime?.heapTotal ?? null)));
+  const runtimeHeapUsed = mbStats(present(samples.map((sample) => sample.runtime?.heapUsed ?? null)));
+  const runtimeExternal = mbStats(present(samples.map((sample) => sample.runtime?.external ?? null)));
+  const runtimeArrayBuffers = mbStats(present(samples.map((sample) => sample.runtime?.arrayBuffers ?? null)));
+  return {
+    memory_metric: memoryMetric,
+    memory_samples: privateMemory.samples,
+    memory_p50_mb: privateMemory.p50_mb,
+    memory_p95_mb: privateMemory.p95_mb,
+    memory_mean_mb: privateMemory.mean_mb,
+    process_memory: {
+      private_memory_bytes: privateMemory,
+      working_set_bytes: workingSet,
+      virtual_memory_bytes: virtualMemory,
+    },
+    runtime_memory: {
+      metric: 'process.memoryUsage',
+      rss_bytes: runtimeRss,
+      heap_total_bytes: runtimeHeapTotal,
+      heap_used_bytes: runtimeHeapUsed,
+      external_bytes: runtimeExternal,
+      array_buffers_bytes: runtimeArrayBuffers,
+    },
+  };
+}
 async function seedIntelligenceRegistry(siteRoot: string): Promise<string> {
   const dbPath = join(siteRoot, '.ai', 'intelligence-registry.db');
   await mkdir(join(siteRoot, '.ai'), { recursive: true });
@@ -157,7 +235,7 @@ async function seedIntelligenceRegistry(siteRoot: string): Promise<string> {
   return dbPath;
 }
 
-function environmentFor(siteRoot: string, registryDbPath: string, engine: Engine): NodeJS.ProcessEnv {
+function environmentFor(siteRoot: string, registryDbPath: string, engine: Engine, memoryReportPath?: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     NARADA_SITE_ROOT: siteRoot,
@@ -178,6 +256,8 @@ function environmentFor(siteRoot: string, registryDbPath: string, engine: Engine
     NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
     NARADA_RUNTIME_ENGINE: engine,
   };
+  if (memoryReportPath) environment.NARADA_RUNTIME_BENCHMARK_MEMORY_REPORT = memoryReportPath;
+  else delete environment.NARADA_RUNTIME_BENCHMARK_MEMORY_REPORT;
   delete environment.NARADA_RUNTIME_DELEGATE;
   if (engine === 'rust') {
     environment.NARADA_RUNTIME_SERVER_SCRIPT = runtimeEntrypoint;
@@ -189,21 +269,29 @@ function environmentFor(siteRoot: string, registryDbPath: string, engine: Engine
   return environment;
 }
 
+function runtimeArgs(engine: Engine, includeMemoryProbe = false): string[] {
+  const preload = includeMemoryProbe && engine === 'node'
+    ? ['--require', runtimeMemoryProbe]
+    : includeMemoryProbe && engine === 'bun'
+      ? ['--preload', runtimeMemoryProbe]
+      : [];
+  return [
+    ...preload,
+    ...(engine === 'rust' ? [] : [runtimeEntrypoint]),
+    '--raw-jsonl',
+    '--no-health',
+    '--no-events',
+    '--identity',
+    'narada.test',
+  ];
+}
+
 async function runOnce(engine: Engine): Promise<number> {
   const siteRoot = await mkdtemp(join(tmpdir(), `narada-session-benchmark-${engine}-`));
   try {
     const registryDbPath = await seedIntelligenceRegistry(siteRoot);
     const command = engine === 'node' ? process.execPath : engine === 'bun' ? bunCommand : nativeBinary;
-    const args = [
-      ...(engine === 'rust' ? [] : [runtimeEntrypoint]),
-      '--raw-jsonl',
-      '--no-health',
-      '--no-events',
-      '--identity',
-      'narada.test',
-      '--session',
-      `session-benchmark-${engine}`,
-    ];
+    const args = [...runtimeArgs(engine), '--session', 'session-benchmark-' + engine];
     return await new Promise<number>((resolve, reject) => {
       const startedAt = performance.now();
       const child = spawn(command, args, {
@@ -242,32 +330,24 @@ async function runOnce(engine: Engine): Promise<number> {
 
 // Memory runs hold the same session open after the final pre-close control and sample before close.
 // Keeping this pass separate prevents the OS sampler from inflating latency measurements.
-async function runMemoryOnce(engine: Engine): Promise<number | null> {
+async function runMemoryOnce(engine: Engine): Promise<MemorySample | null> {
   const siteRoot = await mkdtemp(join(tmpdir(), 'narada-session-benchmark-memory-' + engine + '-'));
   try {
     const registryDbPath = await seedIntelligenceRegistry(siteRoot);
     const command = engine === 'node' ? process.execPath : engine === 'bun' ? bunCommand : nativeBinary;
-    const args = [
-      ...(engine === 'rust' ? [] : [runtimeEntrypoint]),
-      '--raw-jsonl',
-      '--no-health',
-      '--no-events',
-      '--identity',
-      'narada.test',
-      '--session',
-      'session-benchmark-memory-' + engine,
-    ];
-    return await new Promise<number | null>((resolve, reject) => {
+    const reportPath = join(siteRoot, 'runtime-memory.json');
+    const args = [...runtimeArgs(engine, true), '--session', 'session-benchmark-memory-' + engine];
+    return await new Promise<MemorySample | null>((resolve, reject) => {
       const child = spawn(command, args, {
         cwd: packageRoot,
-        env: environmentFor(siteRoot, registryDbPath, engine),
+        env: environmentFor(siteRoot, registryDbPath, engine, reportPath),
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       });
       let stderr = '';
       let stdoutBytes = 0;
       let stdoutBuffer = '';
-      let memorySample: number | null = null;
+      let memorySample: MemorySample | null = null;
       let sampled = false;
       const timer = setTimeout(() => {
         child.kill();
@@ -278,7 +358,7 @@ async function runMemoryOnce(engine: Engine): Promise<number | null> {
       const sampleAndClose = () => {
         if (sampled) return;
         sampled = true;
-        memorySample = sampleProcessMemoryBytes(child.pid ?? -1);
+        memorySample = { process: sampleProcessMemory(child.pid ?? -1), runtime: readRuntimeMemory(reportPath) };
         if (!child.stdin.destroyed) {
           child.stdin.write(JSON.stringify(closeRequest) + '\n');
           child.stdin.end();
@@ -353,7 +433,7 @@ async function measure(engine: Engine) {
 
 async function measureMemory(engine: Engine) {
   for (let index = 0; index < warmups; index += 1) await runMemoryOnce(engine);
-  const samples: number[] = [];
+  const samples: MemorySample[] = [];
   for (let index = 0; index < memoryIterations; index += 1) {
     const sample = await runMemoryOnce(engine);
     if (sample !== null) samples.push(sample);

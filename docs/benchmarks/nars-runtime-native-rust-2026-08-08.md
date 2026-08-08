@@ -2,7 +2,7 @@
 
 Date: 2026-08-08  
 Checkout: `narada` main, native Rust release binary  
-Samples: 30 measured runs, 3 warmups; 30 private-memory samples
+Samples: 30 measured runs, 3 warmups; 30 process-memory and runtime-heap samples
 
 The control workload exercised one real session per run:
 
@@ -12,11 +12,21 @@ The control workload exercised one real session per run:
 
 | Engine | p50 | p95 | Mean | Private memory p50 | Private memory p95 |
 |---|---:|---:|---:|---:|---:|
-| Node | 631.875 ms | 663.990 ms | 637.360 ms | 116.4 MB | 117.0 MB |
-| Bun | 483.358 ms | 506.887 ms | 484.318 ms | 588.5 MB | 652.0 MB |
-| Native Rust | 138.069 ms | 145.300 ms | 138.906 ms | 1.2 MB | 1.2 MB |
+| Node | 626.808 ms | 666.099 ms | 628.358 ms | 116.3 MB | 117.2 MB |
+| Bun | 524.995 ms | 657.573 ms | 535.273 ms | 582.9 MB | 625.8 MB |
+| Native Rust | 138.567 ms | 146.173 ms | 139.597 ms | 1.2 MB | 1.2 MB |
 
-Rust is 78.1% below Node p50 and 71.4% below Bun p50 for this workload. The memory sampler is Windows `PrivateMemorySize64`; values are process samples, not a claim about total system footprint.
+Rust is 77.9% below Node p50 and 73.6% below Bun p50 for this workload. The private-memory sampler is Windows PrivateMemorySize64; values are process samples, not a claim about resident memory or total system footprint.
+
+### Memory decomposition
+
+| Engine | Working set p50 | Working set p95 | Runtime RSS p50 | Runtime heap used p50 | Runtime heap total p50 |
+|---|---:|---:|---:|---:|---:|
+| Node | 113.9 MB | 114.5 MB | 113.9 MB | 30.0 MB | 55.1 MB |
+| Bun | 132.7 MB | 135.4 MB | 132.7 MB | 11.9 MB | 10.9 MB |
+| Native Rust | 5.5 MB | 5.5 MB | — | — | — |
+
+Working set is resident memory (WorkingSet64); runtime fields come from a benchmark-only preload calling process.memoryUsage(). Bun's private-memory gap is therefore mostly nonresident/private allocation accounting: roughly 583 MB private versus 133 MB resident. Heap values are runtime-specific (V8 versus JavaScriptCore compatibility reporting), so compare them directionally rather than as identical heap definitions.
 
 ## Process-boundary compatibility fixture
 

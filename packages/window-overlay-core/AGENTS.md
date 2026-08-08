@@ -108,15 +108,30 @@ axis. A successful focus request records one shared owner and keeps it stable fo
 transition window; it does not hide or stop sibling overlays. Surface projection uses a named
 mutex and atomic JSON replacement.
 
-The header's tile control uses the clicked overlay as the stable anchor. It enumerates other
-visible overlay windows, orders them by their current distance from the anchor, and emits one
-short-lived position command per sibling. Each sibling applies and persists only its own command;
-the anchor is not moved. The initial tile is adjacent to the anchor in the direction with available
-space, then fills a compact grid. A sibling that is below and left of the anchor therefore moves
-up and right into the first adjacent tile when that side has room. Tiling never changes presence,
-layer, focus, or document state.
+The header's tile control replaces itself in place with a five-button cross. While the cross is
+open, the neighboring Presence and Layer actions retain their header slots but remain hidden
+until collapse. The five cross buttons are intentionally compact (14x14 at 10pt) inside the
+48px cross footprint's 16px cells, leaving only a 2px visual gap. Its accented center button is intentionally unlabeled; the border is the control affordance. It moves the pointer to the current control and means
+`auto`; its four arrow buttons mean `right`, `left`, `below`, and `above`. The clicked overlay remains the stable anchor; an explicit direction is
+authoritative for that operation and returns `no_fit` without commands when the requested side
+cannot accommodate the siblings. `auto` preserves an aligned existing side when possible and
+otherwise uses the deterministic direction rules below. The control enumerates other visible
+overlay windows on the shared surface, orders them deterministically by current distance and id,
+and emits one short-lived position command per sibling. Each command uses schema
+`narada.window_surface_overlay.tile_command.v1`, carries a request id and anchor id, and is
+consumed once by the target host. Each sibling applies and persists only its own command as a
+`free` position, then removes the command; the anchor is never moved.
 
-## Focus Contract
+If siblings already form an aligned side around the anchor, that side is preserved. Otherwise a
+single sibling uses relative placement: an overlapping sibling is placed below when its top edge
+is at or below the anchor, or above when its top edge is above; a laterally separated lower-left
+sibling prefers right then below, and a lower-right sibling prefers left then below. Fallback order
+is right, left, below, then above, subject to work-area fit. Larger sets use a deterministic compact
+grid. Grid capacities are calculated from the actual anchor edges, native window dimensions, and
+DPI-normalized monitor work area; positions are clamped only as a safety boundary. If all native-sized
+siblings cannot fit without overlap, layout returns `no_fit` and no commands are emitted. Tiling
+never changes presence, layer, focus, or document state.
+
 
 Programmatic lifecycle operations preserve the current foreground window. The contract is about
 the Windows foreground HWND; it does not guarantee the focused control, caret position, browser
@@ -178,7 +193,8 @@ Run the package-local checks for any source change:
 Run the Windows live check when changing PowerShell/WPF behavior, lifecycle, visibility, refresh,
 positioning, or focus:
 
-- `pnpm --filter @narada-core/window-overlay-core test:live`.
+- `pnpm --filter @narada-core/window-overlay-core test:live`;
+- focused tiling verification: `pnpm exec node --import tsx --test --test-name-pattern "live tiling" src/window-overlay-live.e2e.test.ts`. This exercises native UIAutomation, repeated clicks, refresh, re-anchoring, restart persistence, and cleanup.
 
 The live test requires an interactive Windows desktop, creates temporary WPF windows, may change
 the foreground window during its explicit-focus case, and must clean up all hosts and temporary

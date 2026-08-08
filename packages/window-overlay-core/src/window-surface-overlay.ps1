@@ -18,6 +18,7 @@ $refreshPath = Get-OverlayPath 'refresh.signal'
 $focusPath = Get-OverlayPath 'focus.signal'
 $restartCommandPath = Get-OverlayPath 'restart.command.json'
 $actionStatePath = Get-OverlayPath 'action-state.json'
+$tileCommandPath = Get-OverlayPath 'tile.command.json'
 . (Join-Path $PSScriptRoot 'WindowSurfaceOverlayCoordinator.ps1')
 $visibilityStatePath = Get-OverlayPath 'visibility.state.json'
 $surfaceRoot = Split-Path -Parent -Path $StateRoot
@@ -36,6 +37,7 @@ $script:SurfaceRevision = $null
 $script:FocusLeaseUntil = [DateTime]::MinValue
 $script:LaunchPreservedForeground = [IntPtr]::Zero
 $script:LaunchForegroundRestoreAttempts = 0
+$script:lastTileRequestId = $null
 $actionRunnerPath = Join-Path $PSScriptRoot 'Invoke-WindowSurfaceOverlayAction.ps1'
 $hostStderrPath = Get-OverlayPath 'host.stderr.log'
 $script:OverlayWindowTitlePrefix = 'Narada Overlay: '
@@ -57,8 +59,8 @@ function Write-JsonFile([string]$path, [object]$value) {
 . (Join-Path $PSScriptRoot 'WindowSurfaceOverlayPosition.ps1')
 
 function Get-Preferences {
-    $value = Read-JsonFile $preferencesPath ([pscustomobject]@{ position = $null; opacity = 1.0; layer = 'topmost'; pinned = $true })
-    $layer = if ($value.layer -in @('normal', 'topmost')) { [string]$value.layer } elseif ([bool]($value.pinned ?? $true)) { 'topmost' } else { 'normal' }
+    $value = Read-JsonFile $preferencesPath ([pscustomobject]@{ position = $null; opacity = 1.0; layer = 'topmost' })
+    $layer = if ($value.layer -in @('normal', 'topmost')) { [string]$value.layer } else { 'topmost' }
     [pscustomobject]@{
         position = Read-OverlayPositionPreference $value
         opacity = [double]($value.opacity ?? 1.0)
@@ -67,20 +69,31 @@ function Get-Preferences {
 }
 function Save-Preferences([object]$currentWindow) {
     $position = $script:PositionPreference
-    $monitor = Get-OverlayMonitor
-    if ($null -ne $monitor) {
-        $dimensions = Get-OverlayWindowDimensions $currentWindow
-        $position = Get-NearestOverlayPositionPreference $currentWindow.Left $currentWindow.Top $dimensions.width $dimensions.height $monitor.work_area
+    if ($null -eq $position -or $position.kind -ne 'free') {
+        $monitor = Get-OverlayMonitor
+        if ($null -ne $monitor) {
+            $dimensions = Get-OverlayWindowDimensions $currentWindow
+            $position = Get-NearestOverlayPositionPreference $currentWindow.Left $currentWindow.Top $dimensions.width $dimensions.height $monitor.work_area
+        }
     }
-    if ($null -eq $position -or $position.kind -ne 'anchor') { $position = New-OverlayPositionPreference }
+    if ($null -eq $position -or $position.kind -notin @('anchor', 'free')) { $position = New-OverlayPositionPreference }
     $script:PositionPreference = $position
-    Write-OverlaySurfaceJsonAtomic $preferencesPath ([ordered]@{
-        schema = Get-OverlayPositionPreferencesSchema
-        position = [ordered]@{
+    $positionValue = if ($position.kind -eq 'free') {
+        [ordered]@{
+            kind = 'free'
+            left = [double]$currentWindow.Left
+            top = [double]$currentWindow.Top
+        }
+    } else {
+        [ordered]@{
             anchor = $position.anchor
             inset_x = [double]$position.inset_x
             inset_y = [double]$position.inset_y
         }
+    }
+    Write-OverlaySurfaceJsonAtomic $preferencesPath ([ordered]@{
+        schema = Get-OverlayPositionPreferencesSchema
+        position = $positionValue
         opacity = [double]$currentWindow.Opacity
         layer = if ($currentWindow.Topmost) { 'topmost' } else { 'normal' }
     })
@@ -88,6 +101,7 @@ function Save-Preferences([object]$currentWindow) {
 
 function Drag-OverlayAndPersistPosition {
     try { [void]$window.DragMove() } catch {}
+    $script:PositionPreference = $null
     try { Save-Preferences $window } catch {}
 }
 
@@ -177,6 +191,98 @@ function New-OverlayPresenceMenu {
     Add-OverlaySurfaceDefaultMenuChoice $surfaceMenu 'Hidden' 'hidden'
     [void]$menu.Items.Add($surfaceMenu)
     return $menu
+}
+
+function Invoke-OverlayTilingSelection([string]$Direction) {
+    try {
+        Invoke-OverlaySurfaceTiling -SurfaceRoot $surfaceRoot -CurrentId $Id -CurrentWindow $window -PreferredDirection $Direction | Out-Null
+    } catch {} finally {
+        Close-OverlayTilingCross
+    }
+}
+
+function Close-OverlayTilingCross {
+    if ($script:TileCross) { $script:TileCross.Visibility = [Windows.Visibility]::Collapsed }
+    if ($script:PresenceButton) { $script:PresenceButton.Visibility = [Windows.Visibility]::Visible }
+    if ($script:TileButton) { $script:TileButton.Visibility = [Windows.Visibility]::Visible }
+    if ($script:LayerButton) { $script:LayerButton.Visibility = [Windows.Visibility]::Visible }
+    if ($script:OverlayInteractionLayer) { $script:OverlayInteractionLayer.IsHitTestVisible = $false }
+    $script:TilingCrossOpen = $false
+}
+
+function Move-OverlayCursorTo([object]$Element) {
+    try {
+        $point = $Element.PointToScreen([Windows.Point]::new([double]$Element.ActualWidth / 2, [double]$Element.ActualHeight / 2))
+        [NaradaWindowSurfaceOverlayNative]::SetCursorPos(([int][Math]::Round($point.X)), ([int][Math]::Round($point.Y))) | Out-Null
+    } catch {}
+}
+
+function Open-OverlayTilingCross {
+    if ($null -eq $script:TileCross -or $null -eq $script:TileButton) { return }
+    try {
+        $window.UpdateLayout()
+        $origin = $script:TileButton.TranslatePoint([Windows.Point]::new(0, 0), $script:OverlayInteractionLayer)
+        $centerX = [double]$origin.X + ([double]$script:TileButton.ActualWidth / 2)
+        $centerY = [double]$origin.Y + ([double]$script:TileButton.ActualHeight / 2)
+        $script:PresenceButton.Visibility = [Windows.Visibility]::Hidden
+        # Preserve the header slot while the cross is open so WPF cannot reflow the window geometry.
+        $script:TileButton.Visibility = [Windows.Visibility]::Hidden
+        $script:LayerButton.Visibility = [Windows.Visibility]::Hidden
+        $script:OverlayInteractionLayer.IsHitTestVisible = $true
+        $script:TileCross.Visibility = [Windows.Visibility]::Visible
+        $script:TilingCrossOpen = $true
+        $script:TileCross.UpdateLayout()
+        [Windows.Controls.Canvas]::SetLeft($script:TileCross, $centerX - ([double]$script:TileCross.ActualWidth / 2))
+        [Windows.Controls.Canvas]::SetTop($script:TileCross, $centerY - ([double]$script:TileCross.ActualHeight / 2))
+        $script:OverlayInteractionLayer.UpdateLayout()
+        Move-OverlayCursorTo $script:TileCross
+    } catch {
+        Close-OverlayTilingCross
+    }
+}
+
+function Toggle-OverlayTilingCross {
+    if ($script:TilingCrossOpen) { Close-OverlayTilingCross } else { Open-OverlayTilingCross }
+}
+
+function New-OverlayTilingCross {
+    $cross = New-Object Windows.Controls.Grid
+    $cross.Width = 48
+    $cross.Height = 48
+    $cross.Background = [Windows.Media.Brushes]::Transparent
+    $cross.HorizontalAlignment = 'Left'
+    $cross.VerticalAlignment = 'Top'
+    $cross.Visibility = [Windows.Visibility]::Collapsed
+    foreach ($index in 0..2) {
+        $row = New-Object Windows.Controls.RowDefinition
+        $row.Height = [Windows.GridLength]::new(16)
+        [void]$cross.RowDefinitions.Add($row)
+        $column = New-Object Windows.Controls.ColumnDefinition
+        $column.Width = [Windows.GridLength]::new(16)
+        [void]$cross.ColumnDefinitions.Add($column)
+    }
+    $above = Add-Button $cross '↑' 'Place siblings above this anchor' { Invoke-OverlayTilingSelection 'above' } -icon
+    $left = Add-Button $cross '←' 'Place siblings to the left of this anchor' { Invoke-OverlayTilingSelection 'left' } -icon
+    $center = Add-Button $cross '' 'Automatic: preserve current arrangement' { Invoke-OverlayTilingSelection 'auto' } -tone 'accent' -icon
+    $right = Add-Button $cross '→' 'Place siblings to the right of this anchor' { Invoke-OverlayTilingSelection 'right' } -icon
+    $below = Add-Button $cross '↓' 'Place siblings below this anchor' { Invoke-OverlayTilingSelection 'below' } -icon
+    $crossButtonSize = 14
+    $crossButtonFontSize = 10
+    foreach ($crossButton in @($above, $left, $center, $right, $below)) {
+        $crossButton.Width = $crossButtonSize
+        $crossButton.Height = $crossButtonSize
+        $crossButton.MinWidth = $crossButtonSize
+        $crossButton.FontSize = $crossButtonFontSize
+        $crossButton.Margin = New-Object Windows.Thickness(0)
+        $crossButton.HorizontalAlignment = 'Center'
+        $crossButton.VerticalAlignment = 'Center'
+    }
+    [Windows.Controls.Grid]::SetRow($above, 0); [Windows.Controls.Grid]::SetColumn($above, 1)
+    [Windows.Controls.Grid]::SetRow($left, 1); [Windows.Controls.Grid]::SetColumn($left, 0)
+    [Windows.Controls.Grid]::SetRow($center, 1); [Windows.Controls.Grid]::SetColumn($center, 1)
+    [Windows.Controls.Grid]::SetRow($right, 1); [Windows.Controls.Grid]::SetColumn($right, 2)
+    [Windows.Controls.Grid]::SetRow($below, 2); [Windows.Controls.Grid]::SetColumn($below, 1)
+    return $cross
 }
 
 function Get-Document {
@@ -362,11 +468,11 @@ public static class NaradaWindowSurfaceOverlayNative {
     }
 
     public sealed class MonitorSnapshot {
-        public string Device;
-        public int WorkLeft;
-        public int WorkTop;
-        public int WorkRight;
-        public int WorkBottom;
+        public string Device { get; set; }
+        public int WorkLeft { get; set; }
+        public int WorkTop { get; set; }
+        public int WorkRight { get; set; }
+        public int WorkBottom { get; set; }
     }
 
     [DllImport("user32.dll")]
@@ -399,6 +505,9 @@ public static class NaradaWindowSurfaceOverlayNative {
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
     public static IntPtr FindTopLevelWindowForProcess(uint targetProcessId) {
         IntPtr found = IntPtr.Zero;
         EnumWindows((hWnd, lParam) => {
@@ -407,6 +516,24 @@ public static class NaradaWindowSurfaceOverlayNative {
             if (processId == targetProcessId && IsWindowVisible(hWnd)) {
                 found = hWnd;
                 return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    public static IntPtr FindOverlayWindowForProcess(uint targetProcessId, string titlePrefix) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((hWnd, lParam) => {
+            uint processId;
+            GetWindowThreadProcessId(hWnd, out processId);
+            if (processId == targetProcessId && IsWindowVisible(hWnd)) {
+                var title = new StringBuilder(256);
+                GetWindowText(hWnd, title, title.Capacity);
+                if (title.ToString().StartsWith(titlePrefix ?? String.Empty, StringComparison.Ordinal)) {
+                    found = hWnd;
+                    return false;
+                }
             }
             return true;
         }, IntPtr.Zero);
@@ -442,6 +569,9 @@ public static class NaradaWindowSurfaceOverlayNative {
 
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX monitorInfo);
@@ -482,6 +612,7 @@ public static class NaradaWindowSurfaceOverlayNative {
     }
 }
 '@
+. (Join-Path $PSScriptRoot 'WindowSurfaceOverlayTiling.ps1')
 
 function Get-OverlayWindowHandle {
     if ($null -eq $window) { return [IntPtr]::Zero }
@@ -568,7 +699,7 @@ function Get-OverlayMonitor([switch]$UseCursor) {
     $native = [NaradaWindowSurfaceOverlayNative]::ReadMonitor($monitorHandle)
     if ($null -eq $native) { return $null }
     $dpi = [NaradaWindowSurfaceOverlayNative]::GetEffectiveDpi($monitorHandle, $windowHandle)
-    $scale = [Math]::Max(1, ([double]$dpi / 96.0))
+    $scale = [Math]::Max([double]1, ([double]$dpi / [double]96.0))
     [pscustomobject]@{
         device = [string]$native.Device
         scale = $scale
@@ -689,6 +820,12 @@ $script:PresenceButton.FontSize = 12
 $script:PresenceButton.Width = 20
 $script:PresenceButton.Height = 20
 $script:PresenceButton.MinWidth = 20
+$script:TileButton = Add-Button $headerActions '⊞' 'Open tiling direction controls' { Toggle-OverlayTilingCross } -icon
+$script:TileButton.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI Symbol')
+$script:TileButton.FontSize = 12
+$script:TileButton.Width = 20
+$script:TileButton.Height = 20
+$script:TileButton.MinWidth = 20
 $script:LayerButton = Add-Button $headerActions '⇧' 'Layer: Above other windows' { $window.Topmost = -not $window.Topmost; $script:ZOrderState = if ($window.Topmost) { 'topmost' } else { 'normal' }; Update-OverlayLayerButton; Set-OverlayVisibility; Save-Preferences $window } -icon
 $script:LayerButton.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI Symbol')
 $script:LayerButton.FontSize = 12
@@ -736,6 +873,25 @@ $documentActions = New-Object Windows.Controls.WrapPanel
 $documentActions.Orientation = 'Horizontal'
 $documentActions.HorizontalAlignment = 'Right'
 $footer.Children.Add($documentActions) | Out-Null
+$script:OverlayInteractionLayer = New-Object Windows.Controls.Canvas
+[Windows.Controls.Grid]::SetRowSpan($script:OverlayInteractionLayer, 3)
+[Windows.Controls.Panel]::SetZIndex($script:OverlayInteractionLayer, 1000)
+$script:OverlayInteractionLayer.Background = [Windows.Media.Brushes]::Transparent
+$script:OverlayInteractionLayer.IsHitTestVisible = $false
+$root.Children.Add($script:OverlayInteractionLayer) | Out-Null
+$script:TileCross = New-OverlayTilingCross
+$script:OverlayInteractionLayer.Children.Add($script:TileCross) | Out-Null
+$script:TilingCrossOpen = $false
+$script:OverlayInteractionLayer.Add_MouseLeftButtonDown({
+    if (-not $script:TilingCrossOpen) { return }
+    $point = $_.GetPosition($script:TileCross)
+    $insideCross = $point.X -ge 0 -and $point.X -le $script:TileCross.ActualWidth `
+        -and $point.Y -ge 0 -and $point.Y -le $script:TileCross.ActualHeight
+    if (-not $insideCross) {
+        Close-OverlayTilingCross
+        $_.Handled = $true
+    }
+})
 $border.Add_MouseLeftButtonDown({ if ($_.ButtonState -eq [Windows.Input.MouseButtonState]::Pressed) { Drag-OverlayAndPersistPosition } })
 
 function Render-Document([object]$document) {
@@ -823,11 +979,43 @@ function Restore-OverlayPosition([switch]$UseCursor) {
     if ($position.kind -eq 'absolute') {
         $position = Get-NearestOverlayPositionPreference $position.left $position.top $dimensions.width $dimensions.height $monitor.work_area
     }
+    if ($position.kind -eq 'free') {
+        $resolved = Resolve-OverlayPosition $position $dimensions.width $dimensions.height $monitor.work_area
+        $window.Left = $resolved.left
+        $window.Top = $resolved.top
+        $script:PositionPreference = [pscustomobject]@{
+            kind = 'free'
+            left = [double]$resolved.left
+            top = [double]$resolved.top
+        }
+        return
+    }
     if ($position.kind -ne 'anchor') { $position = New-OverlayPositionPreference }
     $resolved = Resolve-OverlayPosition $position $dimensions.width $dimensions.height $monitor.work_area
     $window.Left = $resolved.left
     $window.Top = $resolved.top
     $script:PositionPreference = $position
+}
+
+function Apply-OverlayTileCommand {
+    $command = Read-OverlaySurfaceJson $tileCommandPath $null
+    if ($null -eq $command -or $command.schema -ne $script:OverlayTileCommandSchema -or $null -eq $command.target) { return }
+    $requestId = [string]$command.request_id
+    if ([string]::IsNullOrWhiteSpace($requestId) -or $requestId -eq $script:lastTileRequestId) { return }
+    try {
+        $targetLeft = [double]$command.target.left
+        $targetTop = [double]$command.target.top
+        $script:PositionPreference = [pscustomobject]@{
+            kind = 'free'
+            left = $targetLeft
+            top = $targetTop
+        }
+        $window.Left = $targetLeft
+        $window.Top = $targetTop
+        $script:lastTileRequestId = $requestId
+        Save-Preferences $window
+        Remove-Item -LiteralPath $tileCommandPath -Force -ErrorAction SilentlyContinue
+    } catch {}
 }
 
 $window.Add_Closed({
@@ -841,7 +1029,7 @@ $window.Add_Closed({
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 })
 $window.Add_LocationChanged({
-    if ($script:PositionHydrated) {
+    if ($script:PositionHydrated -and ($null -eq $script:PositionPreference -or $script:PositionPreference.kind -ne 'free')) {
         try {
             $monitor = Get-OverlayMonitor
             if ($null -ne $monitor) {
@@ -893,7 +1081,7 @@ $timer.Add_Tick({
 $timer.Start()
 $visibilityTimer = New-Object Windows.Threading.DispatcherTimer
 $visibilityTimer.Interval = [TimeSpan]::FromMilliseconds(250)
-$visibilityTimer.Add_Tick({ Set-OverlayVisibility })
+$visibilityTimer.Add_Tick({ Apply-OverlayTileCommand; Set-OverlayVisibility })
 $visibilityTimer.Start()
 $actionTimer = New-Object Windows.Threading.DispatcherTimer
 $actionTimer.Interval = [TimeSpan]::FromMilliseconds(250)

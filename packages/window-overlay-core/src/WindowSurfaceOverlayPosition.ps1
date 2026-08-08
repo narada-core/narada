@@ -33,6 +33,13 @@ function New-OverlayPositionPreference([string]$anchor = 'top-right', [double]$i
 function Read-OverlayPositionPreference([object]$value) {
     $position = if ($null -ne $value) { $value.position } else { $null }
     if ($null -ne $position) {
+        if ([string]$position.kind -eq 'free' -and $null -ne $position.left -and $null -ne $position.top) {
+            return [pscustomobject]@{
+                kind = 'free'
+                left = ConvertTo-OverlayPositionNumber $position.left
+                top = ConvertTo-OverlayPositionNumber $position.top
+            }
+        }
         return New-OverlayPositionPreference ([string]$position.anchor) $position.inset_x $position.inset_y
     }
 
@@ -92,6 +99,9 @@ function Get-NearestOverlayPositionPreference([double]$left, [double]$top, [doub
 
 function Resolve-OverlayPosition([object]$preference, [double]$width, [double]$height, [object]$workArea) {
     $position = $preference
+    if ($null -ne $position -and $position.kind -eq 'free') {
+        return Clamp-OverlayPosition $position.left $position.top $width $height $workArea
+    }
     if ($null -eq $position -or $position.kind -ne 'anchor') {
         $position = New-OverlayPositionPreference
     }

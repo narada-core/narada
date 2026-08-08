@@ -179,6 +179,7 @@ test('derives the Windows user-local AppData root when carriers omit LOCALAPPDAT
 test('PowerShell host owns presentation mechanics, not provider data logic', async () => {
   const source = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
   const positionSource = await readFile(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url), 'utf8');
+  const tilingSource = await readFile(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url), 'utf8');
   const coordinatorSource = await readFile(new URL('./WindowSurfaceOverlayCoordinator.ps1', import.meta.url), 'utf8');
   assert.match(source, /PresentationFramework/);
   assert.match(source, /ShowInTaskbar/);
@@ -191,11 +192,43 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /\$titleText\.Foreground = Get-ToneBrush/);
   assert.match(source, /\$script:PresenceButton\.FontSize = 12/);
   assert.match(source, /\$script:LayerButton\.FontSize = 12/);
+  assert.match(source, /\$script:TileButton/);
+  assert.match(source, /Invoke-OverlaySurfaceTiling/);
   assert.match(source, /New-OverlayPresenceMenu/);
+  assert.match(source, /New-OverlayTilingCross/);
+  assert.match(source, /Toggle-OverlayTilingCross/);
+  assert.match(source, /OverlayInteractionLayer/);
+  assert.match(source, /OverlayInteractionLayer\.Add_MouseLeftButtonDown/);
+  assert.match(source, /GetPosition\(\$script:TileCross\)/);
+  assert.match(source, /Close-OverlayTilingCross/);
+  assert.match(source, /SetCursorPos/);
+  assert.match(source, /\$script:PresenceButton\.Visibility = \[Windows\.Visibility\]::Hidden/);
+  assert.match(source, /\$script:LayerButton\.Visibility = \[Windows\.Visibility\]::Hidden/);
+  assert.match(source, /\$script:PresenceButton\.Visibility = \[Windows\.Visibility\]::Visible/);
+  assert.match(source, /\$script:LayerButton\.Visibility = \[Windows\.Visibility\]::Visible/);
+  assert.match(source, /PreferredDirection/);
+  assert.match(source, /Automatic: preserve current arrangement/);
+  assert.match(source, /Place siblings above this anchor/);
+  assert.match(source, /Place siblings below this anchor/);
+  assert.match(source, /Place siblings to the left of this anchor/);
+  assert.match(source, /Place siblings to the right of this anchor/);
+  assert.match(source, /center = Add-Button \$cross '' 'Automatic: preserve current arrangement'/);
+  assert.match(source, /-tone 'accent' -icon/);
+  assert.match(source, /\$crossButtonSize = 14/);
+  assert.match(source, /\$crossButtonFontSize = 10/);
+  assert.match(source, /\$crossButton\.HorizontalAlignment = 'Center'/);
+  assert.match(source, /\$crossButton\.VerticalAlignment = 'Center'/);
+  assert.match(source, /\$cross\.Width = 48/);
+  assert.match(source, /\$cross\.Height = 48/);
+  assert.match(source, /\[Windows\.GridLength\]::new\(16\)/);
+  assert.doesNotMatch(source, /New-OverlayTilingMenu/);
   assert.match(source, /Layer: Above other windows/);
   assert.match(source, /\$window\.Topmost = \$preferences\.layer -eq 'topmost'/);
-  assert.doesNotMatch(source, /\$window\.Topmost = \$preferences\.pinned/);
+  assert.doesNotMatch(source, /\bpinned\b/i);
   assert.match(source, /Get-OverlayPresencePolicyLabel/);
+  assert.match(tilingSource, /narada\.window_surface_overlay\.tile_command\.v1/);
+  assert.match(tilingSource, /Get-OverlayTileLayout/);
+  assert.match(tilingSource, /GetWindowRect/);
   assert.match(coordinatorSource, /presence\.policy\.json/);
   assert.match(source, /CornerRadius\(10\)/);
   assert.match(source, /ControlTemplate/);
@@ -240,9 +273,14 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /WindowSurfaceOverlayPosition\.ps1/);
   assert.match(source, /MonitorFromPoint/);
   assert.match(source, /GetDpiForMonitor/);
+  assert.match(source, /Math\]::Max\(\[double\]1, \(\[double\]\$dpi \/ \[double\]96\.0\)/);
+  assert.match(source, /public int WorkRight \{ get; set; \}/);
   assert.match(source, /Get-OverlayMonitor/);
   assert.match(source, /Get-NearestOverlayPositionPreference/);
   assert.match(source, /Restore-OverlayPosition/);
+  assert.match(source, /if \(\$position\.kind -eq 'free'\)/);
+  assert.match(source, /\$script:PositionPreference = \[pscustomobject\]@\{\s+kind = 'free'/);
+  assert.match(source, /FindOverlayWindowForProcess/);
   assert.match(source, /Add_LocationChanged/);
   assert.match(source, /Drag-OverlayAndPersistPosition/);
   assert.match(positionSource, /narada\.window_surface_overlay\.preferences\.v3/);
@@ -252,6 +290,8 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(positionSource, /bottom-right/);
   assert.match(positionSource, /Clamp-OverlayPosition/);
   assert.match(positionSource, /Read-OverlayPositionPreference/);
+  assert.match(positionSource, /kind -eq 'free'/);
+  assert.match(source, /PositionPreference = \$null/);
   assert.doesNotMatch(source, /\$window\.ShowDialog\(\)/);
   assert.match(source, /Start-RestartCommand/);
   assert.match(source, /Apply-ActionState/);
@@ -273,9 +313,11 @@ test('PowerShell position helper anchors, clamps, and migrates legacy coordinate
     $topRight = Resolve-OverlayPosition (New-OverlayPositionPreference 'top-right' 20 20) 360 200 $work
     $bottomLeft = Resolve-OverlayPosition (New-OverlayPositionPreference 'bottom-left' 30 40) 360 200 $work
     $clamped = Resolve-OverlayPosition (New-OverlayPositionPreference 'top-left' 9999 9999) 360 200 $work
+    $freeRaw = Read-OverlayPositionPreference ([pscustomobject]@{ position = [pscustomobject]@{ kind = 'free'; left = 500; top = 300 } })
+    $free = Resolve-OverlayPosition $freeRaw 360 200 $work
     $legacyRaw = Read-OverlayPositionPreference ([pscustomobject]@{ left = 900; top = 20 })
     $legacy = Get-NearestOverlayPositionPreference $legacyRaw.left $legacyRaw.top 360 200 $work
-    [pscustomobject]@{ schema = Get-OverlayPositionPreferencesSchema; topRight = $topRight; bottomLeft = $bottomLeft; clamped = $clamped; legacy = $legacy } | ConvertTo-Json -Compress -Depth 6
+    [pscustomobject]@{ schema = Get-OverlayPositionPreferencesSchema; topRight = $topRight; bottomLeft = $bottomLeft; clamped = $clamped; free = $freeRaw; freeResolved = $free; legacy = $legacy } | ConvertTo-Json -Compress -Depth 6
   `;
   const output = execFileSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' });
   const result = JSON.parse(output.trim()) as {
@@ -283,13 +325,298 @@ test('PowerShell position helper anchors, clamps, and migrates legacy coordinate
     topRight: { left: number; top: number };
     bottomLeft: { left: number; top: number };
     clamped: { left: number; top: number };
+    free: { kind: string; left: number; top: number };
+    freeResolved: { left: number; top: number };
     legacy: { kind: string; anchor: string; inset_x: number; inset_y: number };
   };
   assert.equal(result.schema, 'narada.window_surface_overlay.preferences.v3');
   assert.deepEqual(result.topRight, { left: 900, top: 20 });
   assert.deepEqual(result.bottomLeft, { left: 30, top: 480 });
   assert.deepEqual(result.clamped, { left: 920, top: 520 });
+  assert.deepEqual(result.free, { kind: 'free', left: 500, top: 300 });
+  assert.deepEqual(result.freeResolved, { left: 500, top: 300 });
   assert.deepEqual(result.legacy, { kind: 'anchor', anchor: 'top-right', inset_x: 20, inset_y: 20 });
+});
+
+test('PowerShell tiling keeps the clicked overlay as anchor and moves a lower-left sibling up and right', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1280.0; bottom = 720.0 }
+    $anchor = [pscustomobject]@{ id = 'anchor'; left = 500.0; top = 300.0; width = 360.0; height = 200.0; is_anchor = $true }
+    $sibling = [pscustomobject]@{ id = 'lower-left'; left = 100.0; top = 600.0; width = 360.0; height = 200.0; is_anchor = $false }
+    $first = @(Get-OverlayTileLayout -Anchor $anchor -Others @($sibling) -WorkArea $work)
+    $reanchored = [pscustomobject]@{ id = 'lower-left'; left = $first[1].left; top = $first[1].top; width = 360.0; height = 200.0; is_anchor = $true }
+    $original = [pscustomobject]@{ id = 'anchor'; left = $first[0].left; top = $first[0].top; width = 360.0; height = 200.0; is_anchor = $false }
+    [pscustomobject]@{ first = $first; second = @(Get-OverlayTileLayout -Anchor $reanchored -Others @($original) -WorkArea $work) } | ConvertTo-Json -Compress -Depth 5
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as {
+    first: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+    second: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+  };
+  assert.deepEqual(result.first, [
+    { id: 'anchor', left: 500, top: 300, is_anchor: true },
+    { id: 'lower-left', left: 868, top: 300, is_anchor: false },
+  ]);
+  assert.deepEqual(result.second, [
+    { id: 'lower-left', left: 868, top: 300, is_anchor: true },
+    { id: 'anchor', left: 500, top: 300, is_anchor: false },
+  ]);
+});
+
+test('PowerShell tiling prefers below for a lower sibling when the toward-anchor side does not fit', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1920.0; bottom = 1080.0 }
+    $anchor = [pscustomobject]@{ id = 'anchor'; left = 1000.0; top = 300.0; width = 540.0; height = 217.0; is_anchor = $true }
+    $sibling = [pscustomobject]@{ id = 'lower-left'; left = 800.0; top = 520.0; width = 540.0; height = 287.0; is_anchor = $false }
+    @(Get-OverlayTileLayout -Anchor $anchor -Others @($sibling) -WorkArea $work) | ConvertTo-Json -Compress -Depth 5
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+  assert.deepEqual(result, [
+    { id: 'anchor', left: 1000, top: 300, is_anchor: true },
+    { id: 'lower-left', left: 1000, top: 525, is_anchor: false },
+  ]);
+});
+
+test('PowerShell tiling places an overlapping sibling below instead of falling left', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1920.0; bottom = 1080.0 }
+    $anchor = [pscustomobject]@{ id = 'anchor'; left = 1400.0; top = 300.0; width = 500.0; height = 260.0; is_anchor = $true }
+    $sibling = [pscustomobject]@{ id = 'under'; left = 1400.0; top = 300.0; width = 420.0; height = 220.0; is_anchor = $false }
+    @(Get-OverlayTileLayout -Anchor $anchor -Others @($sibling) -WorkArea $work) | ConvertTo-Json -Compress -Depth 5
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+  assert.deepEqual(result, [
+    { id: 'anchor', left: 1400, top: 300, is_anchor: true },
+    { id: 'under', left: 1400, top: 568, is_anchor: false },
+  ]);
+});
+
+test('PowerShell tiling preserves vertical stacking when re-anchoring near an edge', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1920.0; bottom = 1080.0 }
+    $anchor = [pscustomobject]@{ id = 'operator'; left = 1400.0; top = 300.0; width = 500.0; height = 260.0; is_anchor = $true }
+    $sibling = [pscustomobject]@{ id = 'quota'; left = 1500.0; top = 600.0; width = 420.0; height = 220.0; is_anchor = $false }
+    $first = @(Get-OverlayTileLayout -Anchor $anchor -Others @($sibling) -WorkArea $work)
+    $reanchored = [pscustomobject]@{ id = 'quota'; left = $first[1].left; top = $first[1].top; width = 420.0; height = 220.0; is_anchor = $true }
+    $other = [pscustomobject]@{ id = 'operator'; left = $first[0].left; top = $first[0].top; width = 500.0; height = 260.0; is_anchor = $false }
+    [pscustomobject]@{ first = $first; second = @(Get-OverlayTileLayout -Anchor $reanchored -Others @($other) -WorkArea $work) } | ConvertTo-Json -Compress -Depth 5
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as {
+    first: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+    second: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+  };
+  assert.deepEqual(result.first, [
+    { id: 'operator', left: 1400, top: 300, is_anchor: true },
+    { id: 'quota', left: 1400, top: 568, is_anchor: false },
+  ]);
+  assert.deepEqual(result.second, [
+    { id: 'quota', left: 1400, top: 568, is_anchor: true },
+    { id: 'operator', left: 1400, top: 300, is_anchor: false },
+  ]);
+});
+test('PowerShell tiling covers cardinal, diagonal, overlap, and deterministic multi-sibling layouts', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1920.0; bottom = 1080.0 }
+    $anchor = [pscustomobject]@{ id = 'anchor'; left = 700.0; top = 350.0; width = 320.0; height = 200.0; is_anchor = $true }
+    function Get-SingleLayout([string]$id, [double]$left, [double]$top) {
+      $item = [pscustomobject]@{ id = $id; left = $left; top = $top; width = 320.0; height = 200.0; is_anchor = $false }
+      [pscustomobject]@{ id = $id; layout = @(Get-OverlayTileLayout -Anchor $anchor -Others @($item) -WorkArea $work) }
+    }
+    $singles = @(
+      (Get-SingleLayout 'right' 1100.0 350.0),
+      (Get-SingleLayout 'left' 200.0 350.0),
+      (Get-SingleLayout 'below' 700.0 700.0),
+      (Get-SingleLayout 'above' 700.0 100.0),
+      (Get-SingleLayout 'lower-left' 300.0 700.0),
+      (Get-SingleLayout 'lower-right' 1100.0 700.0),
+      (Get-SingleLayout 'upper-left' 300.0 100.0),
+      (Get-SingleLayout 'upper-right' 1100.0 100.0),
+      (Get-SingleLayout 'overlap' 700.0 350.0)
+    )
+    $multiOthers = @(
+      [pscustomobject]@{ id = 'one'; left = 100.0; top = 100.0; width = 320.0; height = 200.0; is_anchor = $false },
+      [pscustomobject]@{ id = 'two'; left = 1100.0; top = 100.0; width = 320.0; height = 200.0; is_anchor = $false },
+      [pscustomobject]@{ id = 'three'; left = 100.0; top = 800.0; width = 320.0; height = 200.0; is_anchor = $false }
+    )
+    $multi = @(Get-OverlayTileLayout -Anchor $anchor -Others $multiOthers -WorkArea $work)
+    $multiRepeat = @(Get-OverlayTileLayout -Anchor $anchor -Others $multiOthers -WorkArea $work)
+    [pscustomobject]@{ singles = $singles; multi = $multi; multiRepeat = $multiRepeat } | ConvertTo-Json -Compress -Depth 8
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as {
+    singles: Array<{ id: string; layout: Array<{ id: string; left: number; top: number; is_anchor: boolean }> }>;
+    multi: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+    multiRepeat: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+  };
+  const expectedSiblingPositions: Record<string, { left: number; top: number }> = {
+    right: { left: 1028, top: 350 },
+    left: { left: 372, top: 350 },
+    below: { left: 700, top: 558 },
+    above: { left: 700, top: 142 },
+    'lower-left': { left: 1028, top: 350 },
+    'lower-right': { left: 372, top: 350 },
+    'upper-left': { left: 1028, top: 350 },
+    'upper-right': { left: 372, top: 350 },
+    overlap: { left: 700, top: 558 },
+  };
+  for (const scenario of result.singles) {
+    assert.deepEqual(scenario.layout[0], { id: 'anchor', left: 700, top: 350, is_anchor: true });
+    assert.deepEqual(scenario.layout[1], { id: scenario.id, ...expectedSiblingPositions[scenario.id], is_anchor: false });
+  }
+  assert.deepEqual(result.multi, result.multiRepeat, 'multi-sibling tiling must be deterministic for identical input');
+  assert.equal(result.multi.length, 4);
+  assert.equal(result.multi.filter((item) => item.is_anchor).length, 1);
+  assert.deepEqual(result.multi[0], { id: 'anchor', left: 700, top: 350, is_anchor: true });
+  const boxes = result.multi.map((item) => ({ ...item, width: 320, height: 200 }));
+  for (const box of boxes) {
+    assert.ok(box.left >= 0 && box.top >= 0);
+    assert.ok(box.left + box.width <= 1920 && box.top + box.height <= 1080);
+  }
+  for (let first = 0; first < boxes.length; first += 1) {
+    for (let second = first + 1; second < boxes.length; second += 1) {
+      const a = boxes[first];
+      const b = boxes[second];
+      assert.equal(
+        a.left < b.left + b.width && a.left + a.width > b.left && a.top < b.top + b.height && a.top + a.height > b.top,
+        false,
+        `multi-sibling layout overlaps ${a.id} and ${b.id}: ${JSON.stringify(result.multi)}`,
+      );
+    }
+  }
+});
+
+test('PowerShell tiling keeps dense grids in bounds and reports impossible layouts without overlap', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1920.0; bottom = 1080.0 }
+    $anchor = [pscustomobject]@{ id = 'anchor'; left = 700.0; top = 350.0; width = 320.0; height = 200.0; is_anchor = $true }
+    $denseOthers = @(1..6 | ForEach-Object {
+      [pscustomobject]@{ id = "dense-$_"; left = 100.0 + ($_ * 13); top = 100.0 + ($_ * 17); width = 320.0; height = 200.0; is_anchor = $false }
+    })
+    $dense = @(Get-OverlayTileLayout -Anchor $anchor -Others $denseOthers -WorkArea $work)
+    $tightWork = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1000.0; bottom = 800.0 }
+    $tightAnchor = [pscustomobject]@{ id = 'tight-anchor'; left = 350.0; top = 250.0; width = 600.0; height = 400.0; is_anchor = $true }
+    $tightSibling = [pscustomobject]@{ id = 'tight-sibling'; left = 350.0; top = 250.0; width = 600.0; height = 400.0; is_anchor = $false }
+    $impossible = @(Get-OverlayTileLayout -Anchor $tightAnchor -Others @($tightSibling) -WorkArea $tightWork)
+    [pscustomobject]@{ dense = $dense; impossible = $impossible } | ConvertTo-Json -Compress -Depth 8
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as {
+    dense: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+    impossible: Array<{ id: string; left: number; top: number; is_anchor: boolean }>;
+  };
+  assert.equal(result.dense.length, 7);
+  assert.equal(result.dense[0].id, 'anchor');
+  const denseBoxes = result.dense.map((item) => ({ ...item, width: 320, height: 200 }));
+  for (const box of denseBoxes) {
+    assert.ok(box.left >= 0 && box.top >= 0);
+    assert.ok(box.left + box.width <= 1920 && box.top + box.height <= 1080);
+  }
+  for (let first = 0; first < denseBoxes.length; first += 1) {
+    for (let second = first + 1; second < denseBoxes.length; second += 1) {
+      const a = denseBoxes[first];
+      const b = denseBoxes[second];
+      assert.equal(
+        a.left < b.left + b.width && a.left + a.width > b.left && a.top < b.top + b.height && a.top + a.height > b.top,
+        false,
+        `dense layout overlaps ${a.id} and ${b.id}: ${JSON.stringify(result.dense)}`,
+      );
+    }
+  }
+  assert.deepEqual(result.impossible, []);
+});
+
+test('PowerShell tiling honors an explicit sibling direction and refuses an impossible preference', { skip: process.platform !== 'win32' }, () => {
+  const positionPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const tilingPath = fileURLToPath(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url));
+  const escapePowerShellPath = (value: string) => value.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapePowerShellPath(positionPath)}'
+    . '${escapePowerShellPath(tilingPath)}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1920.0; bottom = 1080.0 }
+    $anchor = [pscustomobject]@{ id = 'anchor'; left = 700.0; top = 350.0; width = 320.0; height = 200.0; is_anchor = $true }
+    $item = [pscustomobject]@{ id = 'sibling'; left = 700.0; top = 350.0; width = 320.0; height = 200.0; is_anchor = $false }
+    $directions = @('right', 'left', 'below', 'above') | ForEach-Object {
+      [pscustomobject]@{ direction = $_; layout = @(Get-OverlayTileLayout -Anchor $anchor -Others @($item) -WorkArea $work -PreferredDirection $_) }
+    }
+    $tightWork = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1000.0; bottom = 800.0 }
+    $tightAnchor = [pscustomobject]@{ id = 'tight-anchor'; left = 350.0; top = 250.0; width = 600.0; height = 400.0; is_anchor = $true }
+    $tightSibling = [pscustomobject]@{ id = 'tight-sibling'; left = 350.0; top = 250.0; width = 600.0; height = 400.0; is_anchor = $false }
+    $noFit = @(Get-OverlayTileLayout -Anchor $tightAnchor -Others @($tightSibling) -WorkArea $tightWork -PreferredDirection 'right')
+    [pscustomobject]@{ directions = $directions; no_fit_count = $noFit.Count } | ConvertTo-Json -Compress -Depth 8
+  `;
+  const output = execFileSync(process.env.NARADA_POWERSHELL || 'pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' }).trim();
+  const result = JSON.parse(output) as {
+    directions: Array<{ direction: string; layout: Array<{ id: string; left: number; top: number; is_anchor: boolean }> }>;
+    no_fit_count: number;
+  };
+  const expected: Record<string, { left: number; top: number }> = {
+    right: { left: 1028, top: 350 },
+    left: { left: 372, top: 350 },
+    below: { left: 700, top: 558 },
+    above: { left: 700, top: 142 },
+  };
+  for (const scenario of result.directions) {
+    assert.deepEqual(scenario.layout[0], { id: 'anchor', left: 700, top: 350, is_anchor: true });
+    assert.deepEqual(scenario.layout[1], { id: 'sibling', ...expected[scenario.direction], is_anchor: false });
+  }
+  assert.equal(result.no_fit_count, 0);
+});
+
+test('tiling command consumption is durable, one-shot, and orthogonal to visibility axes', async () => {
+  const host = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
+  const tiling = await readFile(new URL('./WindowSurfaceOverlayTiling.ps1', import.meta.url), 'utf8');
+  assert.match(tiling, /OverlayTileCommandSchema/);
+  assert.ok(tiling.includes('request_id = $requestId'));
+  assert.ok(tiling.includes('anchor_id = $CurrentId'));
+  assert.ok(tiling.includes('preferred_direction = $PreferredDirection'));
+  assert.match(tiling, /Write-OverlaySurfaceJsonAtomic/);
+  assert.ok(host.includes('$script:lastTileRequestId'));
+  assert.ok(host.includes('requestId -eq $script:lastTileRequestId'));
+  assert.ok(host.includes("kind = 'free'"));
+  assert.ok(host.includes('Save-Preferences $window'));
+  assert.ok(host.includes('Remove-Item -LiteralPath $tileCommandPath'));
+  assert.ok(host.includes('$visibilityTimer.Add_Tick({ Apply-OverlayTileCommand; Set-OverlayVisibility })'));
+  assert.doesNotMatch(tiling, /Set-OverlayVisibility|Set-OverlayFocus|Topmost/);
 });
 
 test('re-render replaces document actions instead of appending duplicates', async () => {

@@ -13,6 +13,7 @@ if (-not (Test-Path $hostScript)) { throw 'window_surface_overlay_host_script_mi
 New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
 $pidPath = Join-Path $StateRoot 'overlay.pid'
 $refreshPath = Join-Path $StateRoot 'refresh.signal'
+$tileCommandPath = Join-Path $StateRoot 'tile.command.json'
 $visibilityPolicyPath = Join-Path $StateRoot 'visibility.policy'
 $hostStdoutPath = Join-Path $StateRoot 'host.stdout.log'
 $hostStderrPath = Join-Path $StateRoot 'host.stderr.log'
@@ -64,6 +65,7 @@ if ($existing) {
     }
     Stop-HostForPolicyChange $existing
 }
+Remove-Item $tileCommandPath -Force -ErrorAction SilentlyContinue
 Set-Content -Path $visibilityPolicyPath -Value $effectivePolicy
 Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $effectivePolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder 'topmost' -Focus 'inactive'
 if (Test-Path $pidPath) { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue }

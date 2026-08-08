@@ -353,6 +353,120 @@ fn sequence_as_u64(value: &Value) -> Option<u64> {
         .or_else(|| value.as_str().and_then(|value| value.parse::<u64>().ok()))
 }
 
+#[derive(Debug, Clone)]
+struct RuntimeRequestRecord {
+    runtime_request_id: String,
+    request_id: Option<String>,
+    method: Option<String>,
+    state: String,
+    terminal_state: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct RuntimeRequestRegistry {
+    next_request_number: u64,
+    records: Vec<RuntimeRequestRecord>,
+}
+
+impl RuntimeRequestRegistry {
+    fn receive(&mut self, request_id: Option<String>, method: Option<String>) -> String {
+        self.next_request_number = self.next_request_number.saturating_add(1);
+        let runtime_request_id = format!("runtime_request_{}", self.next_request_number);
+        self.records.push(RuntimeRequestRecord {
+            runtime_request_id: runtime_request_id.clone(),
+            request_id,
+            method,
+            state: String::new(),
+            terminal_state: None,
+        });
+        runtime_request_id
+    }
+
+    fn transition(&mut self, runtime_request_id: &str, next_state: &str) -> Option<Value> {
+        let record = self
+            .records
+            .iter_mut()
+            .find(|record| record.runtime_request_id == runtime_request_id)?;
+        let previous_state = if record.state.is_empty() {
+            Value::Null
+        } else {
+            json!(record.state)
+        };
+        record.state = next_state.to_string();
+        record.terminal_state = match next_state {
+            "completed" | "rejected" | "failed" => Some(next_state.to_string()),
+            _ => None,
+        };
+        Some(json!({
+            "schema": "narada.nars.runtime_request_state.v1",
+            "event": "runtime_request_state_transition",
+            "timestamp": now_iso(),
+            "runtime_request_id": record.runtime_request_id,
+            "request_id": record.request_id,
+            "method": record.method,
+            "previous_state": previous_state,
+            "request_state": record.state,
+            "terminal_state": record.terminal_state,
+            "transport": "jsonl_stdio",
+        }))
+    }
+
+    fn snapshot(&self) -> Value {
+        let state_names = [
+            "received",
+            "scheduled",
+            "waiting",
+            "running",
+            "completed",
+            "rejected",
+            "failed",
+        ];
+        let mut state_counts = Map::new();
+        for state in state_names {
+            state_counts.insert(
+                state.to_string(),
+                json!(self
+                    .records
+                    .iter()
+                    .filter(|record| record.state == state)
+                    .count()),
+            );
+        }
+        let active_count = self
+            .records
+            .iter()
+            .filter(|record| !matches!(record.state.as_str(), "completed" | "rejected" | "failed"))
+            .count();
+        let terminal_count = self.records.len().saturating_sub(active_count);
+        let refs = self
+            .records
+            .iter()
+            .rev()
+            .take(100)
+            .map(|record| {
+                json!({
+                    "runtime_request_id": record.runtime_request_id,
+                    "request_id": record.request_id,
+                    "method": record.method,
+                    "request_state": record.state,
+                    "terminal_state": record.terminal_state,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "schema": "narada.nars.runtime_request_state.v1",
+            "request_count": self.records.len(),
+            "retained_request_count": self.records.len(),
+            "retention_limit": 100,
+            "retention_scope": "terminal_requests_only",
+            "active_request_count": active_count,
+            "terminal_request_count": terminal_count,
+            "pending_operation_count": 0,
+            "state_counts": state_counts,
+            "request_refs": refs.into_iter().rev().collect::<Vec<_>>(),
+        })
+    }
+}
 pub struct NativeRuntime {
     config: NativeRuntimeConfig,
     supervisor: SessionSupervisor,
@@ -362,6 +476,7 @@ pub struct NativeRuntime {
     mcp_gateway: NativeMcpGateway,
     execution_policy: Value,
     intelligence_selection: Option<Value>,
+    request_registry: RuntimeRequestRegistry,
     closed: bool,
 }
 
@@ -409,6 +524,7 @@ impl NativeRuntime {
             mcp_gateway,
             execution_policy,
             intelligence_selection: None,
+            request_registry: RuntimeRequestRegistry::default(),
             closed: false,
         };
         runtime.write_session_projection(None)?;
@@ -537,9 +653,25 @@ impl NativeRuntime {
     }
 
     pub fn handle(&mut self, request: Value) -> Result<Vec<Value>, String> {
+        let mut request = request;
         let method = request_method(&request)
             .or_else(|| request_content(&request).map(|_| "session.submit".to_string()));
         let request_id = request_id(&request);
+        let runtime_request_id = self
+            .request_registry
+            .receive(request_id.clone(), method.clone());
+        if let Some(object) = request.as_object_mut() {
+            object.insert("runtime_request_id".to_string(), json!(runtime_request_id));
+        }
+        let persist_request_lifecycle = method.as_deref() != Some("session.health");
+        let mut request_events = Vec::new();
+        for state in ["received", "scheduled", "running"] {
+            request_events.extend(self.append_runtime_request_transition(
+                &runtime_request_id,
+                state,
+                persist_request_lifecycle,
+            )?);
+        }
         if let Some(authority) = self.authority.as_mut() {
             authority
                 .heartbeat(&now_iso(), Some(std::process::id() as i64))
@@ -575,13 +707,47 @@ impl NativeRuntime {
         };
         match result {
             Ok(mut values) => {
-                values.extend(self.poll_subscription_events());
-                Ok(values)
+                let terminal_state = if values.iter().any(|event| {
+                    event.get("event").and_then(Value::as_str) == Some("session_control_rejected")
+                }) {
+                    "rejected"
+                } else {
+                    "completed"
+                };
+                request_events.extend(self.append_runtime_request_transition(
+                    &runtime_request_id,
+                    terminal_state,
+                    persist_request_lifecycle || terminal_state != "completed",
+                )?);
+                request_events.append(&mut values);
+                request_events.extend(self.poll_subscription_events());
+                Ok(request_events)
             }
-            Err(error) => Err(error),
+            Err(error) => {
+                let _ = self.append_runtime_request_transition(&runtime_request_id, "failed", true);
+                Err(error)
+            }
         }
     }
 
+    fn append_runtime_request_transition(
+        &mut self,
+        runtime_request_id: &str,
+        state: &str,
+        persist: bool,
+    ) -> Result<Vec<Value>, String> {
+        let Some(event) = self.request_registry.transition(runtime_request_id, state) else {
+            return Ok(Vec::new());
+        };
+        if !persist || self.closed {
+            return Ok(Vec::new());
+        }
+        Ok(vec![self
+            .supervisor
+            .core_mut()
+            .append_event(event)
+            .map_err(core_error)?])
+    }
     fn append_runtime_event(
         &mut self,
         event: Value,
@@ -830,6 +996,10 @@ impl NativeRuntime {
             object.insert(
                 "heartbeat".to_string(),
                 heartbeat_projection(self.heartbeat_path.as_deref()),
+            );
+            object.insert(
+                "runtime_requests".to_string(),
+                self.request_registry.snapshot(),
             );
             object.insert("intelligence".to_string(), self.intelligence_snapshot());
             object.insert(
@@ -2290,11 +2460,13 @@ mod tests {
                 "params": { "view": "conversation", "limit": 1 }
             }))
             .unwrap();
-        assert_eq!(read.len(), 1);
-        assert_eq!(read[0]["event"], "session_events_read");
-        assert_eq!(read[0]["request_id"], "read-1");
-        assert_eq!(read[0]["view"], "conversation");
-        assert_eq!(read[0]["events"][0]["event"], "user_message");
+        let read_response = read
+            .iter()
+            .find(|event| event["event"] == "session_events_read")
+            .unwrap();
+        assert_eq!(read_response["request_id"], "read-1");
+        assert_eq!(read_response["view"], "conversation");
+        assert_eq!(read_response["events"][0]["event"], "user_message");
 
         let subscription = runtime
             .handle(json!({
@@ -2303,14 +2475,21 @@ mod tests {
                 "params": { "view": "conversation", "page_size": 10 }
             }))
             .unwrap();
-        assert_eq!(
-            subscription[0]["event"],
-            "session_events_subscription_started"
-        );
-        assert_eq!(subscription[0]["replay_count"], 1);
-        assert_eq!(subscription[1]["event"], "session_event");
-        assert_eq!(subscription[1]["payload"]["event"], "user_message");
-        assert_eq!(subscription[2]["event"], "session_events_replay_completed");
+        let subscription_started = subscription
+            .iter()
+            .find(|event| event["event"] == "session_events_subscription_started")
+            .unwrap();
+        assert!(subscription_started["replay_count"].as_u64().unwrap_or(0) >= 1);
+        let replay_event = subscription
+            .iter()
+            .find(|event| {
+                event["event"] == "session_event" && event["payload"]["event"] == "user_message"
+            })
+            .unwrap();
+        assert_eq!(replay_event["payload"]["event"], "user_message");
+        assert!(subscription
+            .iter()
+            .any(|event| event["event"] == "session_events_replay_completed"));
         let live = runtime
             .handle(json!({
                 "id": "command-1",

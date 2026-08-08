@@ -9,7 +9,7 @@ where a Site runs.
 
 | Path | Status | Use |
 | --- | --- | --- |
-| Published `@narada-core/cli` through npm or pnpm | Supported | Normal installation on a developer machine or server |
+| Self-contained CLI artifact from `https://narada.systems/install.sh` | Supported | Normal installation on a developer machine or server |
 | Narada repository checkout with `pnpm install` and a local build | Supported for development | Working on Narada itself |
 | `linux-user` Site | Supported target | Personal workstation or non-root user service |
 | `linux-system` Site | Supported target | Headless machine or system service |

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * @deprecated This CLI is deprecated. Please use the @narada-core/cli package instead.
- * Install: npm install -g @narada-core/cli
+ * Install:
+ *   Windows: irm https://narada.systems/install.ps1 | iex
+ *   macOS / Linux: curl -fsSL https://narada.systems/install.sh | bash
  * Usage: narada <command>
  */
 import { resolve } from "node:path";
@@ -26,9 +28,11 @@ function printDeprecationWarning(): void {
   stderr.write("║  DEPRECATION WARNING                                           ║\n");
   stderr.write("║                                                                ║\n");
   stderr.write("║  This CLI is deprecated and will be removed in a future        ║\n");
-  stderr.write("║  version. Please use the @narada-core/cli package:                 ║\n");
+  stderr.write("║  version. Please use the @narada-core/cli package:             ║\n");
   stderr.write("║                                                                ║\n");
-  stderr.write("║    npm install -g @narada-core/cli                                 ║\n");
+  stderr.write("║    Windows: irm https://narada.systems/install.ps1 | iex       ║\n");
+  stderr.write("║    macOS / Linux:                                              ║\n");
+  stderr.write("║    curl -fsSL https://narada.systems/install.sh | bash         ║\n");
   stderr.write("║    narada <command>                                            ║\n");
   stderr.write("║                                                                ║\n");
   stderr.write("╚════════════════════════════════════════════════════════════════╝\n");

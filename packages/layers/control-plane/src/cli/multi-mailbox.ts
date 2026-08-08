@@ -58,9 +58,11 @@ function printDeprecationWarning(): void {
   stderr.write("║  DEPRECATION WARNING                                           ║\n");
   stderr.write("║                                                                ║\n");
   stderr.write("║  This CLI is deprecated and will be removed in a future        ║\n");
-  stderr.write("║  version. Please use the @narada-core/cli package:                 ║\n");
+  stderr.write("║  version. Please use the @narada-core/cli package:             ║\n");
   stderr.write("║                                                                ║\n");
-  stderr.write("║    npm install -g @narada-core/cli                                 ║\n");
+  stderr.write("║    Windows: irm https://narada.systems/install.ps1 | iex       ║\n");
+  stderr.write("║    macOS / Linux:                                              ║\n");
+  stderr.write("║    curl -fsSL https://narada.systems/install.sh | bash         ║\n");
   stderr.write("║    narada <command>                                            ║\n");
   stderr.write("║                                                                ║\n");
   stderr.write("╚════════════════════════════════════════════════════════════════╝\n");

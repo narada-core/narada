@@ -77,43 +77,43 @@ Benchmarks fail CI if:
 
 ## Baseline Management
 
-Baselines are stored in `.benchmarks/baselines/`:
+`pnpm benchmark` writes results to `benchmark-results.json` in the repo root.
 
-```
-.benchmarks/
-├── baselines/
-│   ├── latest.json       # Most recent baseline
-│   ├── 0.1.0.json        # Version-specific baseline
-│   └── 0.2.0.json
-```
+`pnpm benchmark:compare [current.json] [baseline.json]` compares a results file
+with a baseline. Defaults:
 
-Update baseline (main branch only):
+- current: `benchmark-results.json`
+- baseline: `.benchmarks/baselines/latest.json`
+
+To create or update a baseline, copy the latest results:
+
 ```bash
-pnpm benchmark:compare --update
-```
-
-Compare with baseline:
-```bash
-pnpm benchmark:compare
+mkdir -p .benchmarks/baselines
+cp benchmark-results.json .benchmarks/baselines/latest.json
+# or for a version-specific baseline:
+cp benchmark-results.json .benchmarks/baselines/0.x.x.json
 ```
 
 ## Profiling
 
-Generate CPU profiles:
+Generate a CPU profile for the sync operation:
 
 ```bash
-# Profile sync operations
-node --inspect scripts/profile.ts 5000 sync
-
-# Profile normalization
-node --inspect scripts/profile.ts 5000 normalization
+node --inspect scripts/profile.ts [duration-ms]
 ```
 
-View profiles in Chrome DevTools:
+Example (profile for 5 seconds):
+
+```bash
+node --inspect scripts/profile.ts 5000
+```
+
+The script writes a `.cpuprofile` file that can be loaded in Chrome DevTools:
+
 1. Open Chrome DevTools
 2. Performance tab
 3. Load Profile
-4. Select `.cpuprofile` file
+4. Select the `.cpuprofile` file
 
 ## System Requirements
 

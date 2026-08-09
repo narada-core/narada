@@ -1,10 +1,11 @@
 {
-  "schema": "narada.agent_carrier.launch_packet_contract.v0",
-  "contract_id": "agent_carrier.launch_packet.v0",
-  "status": "superseded",
-  "superseded_by": "docs/product/agent-carrier-launch-packet.v1.json",
+  "schema": "narada.agent_carrier.launch_packet_contract.v1",
+  "contract_id": "agent_carrier.launch_packet.v1",
+  "status": "canonical",
+  "supersedes": "docs/product/agent-carrier-launch-packet.v0.json",
   "concept_ref": "docs/concepts/agent-carrier.md",
-  "purpose": "Stable launch packet contract for carrier implementations that embody one durable Agent in one bounded Session.",
+  "orientation_contract_ref": "packages/orientation-manifest",
+  "purpose": "Launch one admitted Agent embodiment into one exact Carrier Session with one immutable Orientation Manifest generation.",
   "carrier_kinds": [
     {
       "kind": "codex_carrier",
@@ -14,7 +15,7 @@
     {
       "kind": "claude_code_carrier",
       "substrate_relation": "wraps_claude_code_cli",
-      "native_execution_policy_requirement": "represent_session_and_startup_context_without_native_tool_execution_until_policy_is_admitted"
+      "native_execution_policy_requirement": "represent_admission_and_orientation_without_native_tool_execution_until_policy_is_admitted"
     },
     {
       "kind": "kimi_carrier",
@@ -37,8 +38,12 @@
     "site_root",
     "runtime_kind",
     "carrier_session_id",
+    "carrier_session_admission_receipt",
+    "embodiment_admission",
+    "orientation_manifest_id",
     "agent_start_event_id",
     "startup_command",
+    "startup_sequence",
     "required_environment",
     "tool_approval_policy",
     "native_execution_policy",
@@ -47,7 +52,9 @@
     "not_claimed"
   ],
   "optional_fields": [
-    "startup_sequence",
+    "carrier_session_activation_receipt",
+    "orientation_delivery_receipt",
+    "orientation_manifest",
     "startup_first_work_orientation",
     "pc_runtime_ref",
     "operator_surface_ref",
@@ -59,12 +66,12 @@
     "agent_id": {
       "type": "string",
       "authority": "durable_agent_identity_authority",
-      "rule": "Must be mechanically bound before substrate handoff; carrier evidence is not identity authority."
+      "rule": "Compatibility display key; exact identity authority is the revisioned agent_identity reference inside the admission receipt."
     },
     "site_root": {
       "type": "string",
       "authority": "site_locus",
-      "rule": "Scopes Site law and runtime state; must not imply source Site state import."
+      "rule": "Scopes Site law and runtime state; it does not import another Site's authority."
     },
     "runtime_kind": {
       "type": "string",
@@ -74,12 +81,29 @@
     "carrier_session_id": {
       "type": "string",
       "authority": "carrier_session_authority",
-      "rule": "Correlates this bounded Session with runtime, restart, transcript, and PC/runtime evidence."
+      "rule": "Must exactly equal the admitted Carrier Session coordinate."
+    },
+    "carrier_session_admission_receipt": {
+      "type": "object",
+      "schema": "narada.carrier_session.admission_receipt.v0",
+      "authority": "carrier_session_authority",
+      "rule": "Owner-issued receipt for this exact Site, Agent identity revision, Carrier Session, authority epoch, Carrier kind, and policy readback."
+    },
+    "embodiment_admission": {
+      "type": "object",
+      "schema": "narada.agent_start.embodiment_admission.v1",
+      "authority": "agent_start_projection_of_owner_receipt",
+      "rule": "A bounded launch projection with owner_token_exposed=false; it cannot replace or broaden the receipt."
+    },
+    "orientation_manifest_id": {
+      "type": "string",
+      "authority": "orientation_manifest_compiler_generation",
+      "rule": "Names one persisted immutable generation bound to the exact admission receipt; latest-generation lookup is forbidden."
     },
     "agent_start_event_id": {
       "type": "string",
-      "authority": "agent_context_start_session_or_carrier_start_event",
-      "rule": "Start event must exist before interactive substrate handoff."
+      "authority": "agent_context_downstream_trace",
+      "rule": "Records materialization after admission; it neither creates nor substitutes for admission."
     },
     "startup_command": {
       "type": "object",
@@ -87,61 +111,31 @@
         "name": "agent_context_startup_sequence",
         "arguments": {}
       },
-      "rule": "Startup is a named MCP affordance that performs launcher/site identity hydration plus advisory checkpoint continuity; it is not a request for shell discovery."
+      "rule": "Reads the exact receipt-bound manifest id projected in the Carrier environment; it never recompiles or chooses a checkpoint."
     },
     "startup_sequence": {
       "type": "array",
       "required_first_steps": [
         {
-          "tool": "agent_context_hydrate_current",
+          "tool": "agent_context_startup_sequence",
           "arguments": {},
-          "rule": "Hydrate launcher, Site, and identity evidence only."
-        },
-        {
-          "tool": "agent_context_memory.plan_hydration",
-          "arguments": {
-            "named_agent_id": {
-              "from_step": "agent_context_hydrate_current",
-              "field": "agent_id"
-            },
-            "requested_by": "startup-sequence"
-          },
-          "optional_next": {
-            "tool": "agent_context_memory.read_checkpoint_summary",
-            "arguments": {
-              "checkpoint_id": {
-                "from_step": "agent_context_memory.plan_hydration",
-                "field": "selectedCheckpoint.checkpointId"
-              }
-            },
-            "rule": "Read only when a local checkpoint candidate is selected; the summary is advisory continuity."
-          },
-          "rule": "Plan local checkpoint continuity from the verified hydrate-current agent_id without mutating runtime."
+          "source": "carrier-entry-procedure",
+          "semantics": "retrieve_exact_receipt_bound_orientation_manifest",
+          "mutation": false
         }
       ],
-      "optional_after_continuity": {
+      "optional_after_orientation": {
         "tool": "narada_task_read_or_narada_task_work_next",
-        "rule": "Builder and other role launches may append first-work orientation after continuity hydration. Explicit task handoffs use narada_task_read with a concrete task_number. Generic orientation uses narada_task_work_next with claim=false. Startup orientation is advisory and must not silently claim work."
+        "rule": "Read-only first-work orientation may follow admitted manifest delivery. Explicit task handoffs use narada_task_read; generic discovery uses narada_task_work_next with claim=false."
       },
-      "rule": "Checkpoint continuity is an explicit advisory phase after launcher evidence hydration; summaries remain checkpoint memory, not task, inbox, operator-surface, or live runtime authority. First-work orientation, when present, is a read/peek affordance over governed task surfaces and is not task activation authority."
+      "rule": "Continuity may enter startup only when an exact continuity projection was already selected and bound into this manifest generation. Diagnostic hydration and ambient latest checkpoint selection are not startup steps."
     },
     "startup_first_work_orientation": {
       "type": "object",
       "schema": "narada.agent_start.first_work_orientation.v0",
       "authority": "carrier_launch_packet_advisory_context",
       "allowed_modes": ["explicit_task_handoff", "work_next_peek"],
-      "required_keys": [
-        "target_locus",
-        "agent_id",
-        "role",
-        "mode",
-        "read_tool",
-        "claim_guidance",
-        "mutation_attempted",
-        "claim_attempted",
-        "publish_or_deploy_authority_admitted"
-      ],
-      "rule": "Provides startup onboarding without chat dependence. It may point to narada_task_read for an explicit handoff target or narada_task_work_next with claim=false for role-local discovery. It does not claim tasks, publish, deploy, grant credentials, or import another Site's authority."
+      "rule": "Read-only work orientation after manifest delivery; it does not claim, activate, publish, deploy, or grant credentials."
     },
     "required_environment": {
       "type": "object",
@@ -149,15 +143,18 @@
         "NARADA_AGENT_ID",
         "NARADA_AGENT_START_EVENT_ID",
         "NARADA_CARRIER_SESSION_ID",
+        "NARADA_CARRIER_SESSION_ADMISSION_RECEIPT",
+        "NARADA_ORIENTATION_MANIFEST_ID",
+        "NARADA_SITE_ID",
         "NARADA_SITE_ROOT",
         "NARADA_AGENT_CONTEXT_DB"
       ],
-      "rule": "MCP children inherit these bindings from the carrier process environment."
+      "rule": "Environment transports exact admitted bindings into MCP children; matching values do not themselves create authority."
     },
     "tool_approval_policy": {
       "type": "object",
       "required_keys": ["approved_servers", "withheld_servers", "rationale"],
-      "rule": "Approves only admitted MCP/tool surfaces; must distinguish startup hydration, task lifecycle, policy-aware shell MCP, and withheld surfaces."
+      "rule": "Approves only admitted MCP/tool surfaces, including policy-aware shell MCP when separately allowed, and does not convert availability into action authority."
     },
     "native_execution_policy": {
       "type": "object",
@@ -167,25 +164,23 @@
     "launch_result_path": {
       "type": "string",
       "authority": "carrier_trace_evidence",
-      "rule": "Durable packet path is authoritative over terminal/TUI copy truncation."
+      "rule": "Durable packet path is authoritative over terminal or TUI copy truncation."
     },
     "result_sentinel": {
       "type": "string",
       "rule": "Copy-safe marker proving the launch result packet ended."
     },
-    "pc_runtime_ref": {
-      "type": "object",
-      "authority": "pc_site_runtime",
-      "rule": "Host process/window/restart facts remain PC-locus evidence, not Narada proper authority."
-    },
     "not_claimed": {
       "type": "array",
       "required_items": [
+        "orientation_delivery_authority",
+        "carrier_activation_without_activation_receipt",
+        "later_action_admission",
         "task_activation_authority",
         "credential_access",
         "source_site_runtime_state_import"
       ],
-      "rule": "Launch packets must say what they do not prove."
+      "rule": "The launch packet states what admission and orientation do not prove."
     }
   },
   "anti_collapse_rules": [
@@ -193,22 +188,26 @@
     "session_is_not_agent",
     "substrate_is_not_agent",
     "operator_surface_is_not_carrier",
+    "launch_packet_is_not_carrier_session_authority",
     "launch_packet_is_evidence_not_activation_authority",
+    "start_event_is_trace_not_admission",
+    "orientation_manifest_is_not_action_admission",
+    "manifest_readback_is_not_delivery_receipt",
+    "diagnostic_hydration_is_not_admitted_startup",
     "native_shell_access_is_not_policy_aware_shell_mcp",
     "pc_runtime_materialization_is_not_narada_proper_authority"
   ],
   "locus_responsibilities": {
     "narada_proper": [
       "carrier_concept",
+      "admission_and_orientation_contracts",
       "launch_packet_contract",
-      "package_api",
-      "adapter_semantics",
+      "agent_start_adapter_semantics",
       "cross_carrier_tests"
     ],
     "user_site": [
       "local_adoption_preferences",
       "operator_friction_evidence",
-      "package_lift_proposals",
       "temporary_compatibility_projections"
     ],
     "pc_site": [
@@ -220,7 +219,7 @@
     ]
   },
   "version_compatibility": {
-    "version": 0,
-    "rule": "New optional fields may be added compatibly; required field changes require a new contract version."
+    "version": 1,
+    "rule": "New optional fields may be added compatibly; required field or authority-semantic changes require a new contract version."
   }
 }

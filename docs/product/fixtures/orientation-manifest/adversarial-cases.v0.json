@@ -1,0 +1,437 @@
+{
+  "schema": "narada.orientation_manifest.adversarial_cases.v0",
+  "status": "precontract_falsification_fixture",
+  "concept_ref": "docs/concepts/orientation-manifest.md",
+  "source_map_ref": "docs/product/orientation-manifest-source-map.v0.md",
+  "purpose": "Challenge embodiment admission, manifest assembly, delivery, and later action admission without turning this fixture into the v0 production schema.",
+  "authority_decision": {
+    "owner": "site_selected_carrier_session_authority",
+    "authority_key": "authority_scope+site_ref+carrier_session_id",
+    "agent_cardinality": "explicit_site_policy",
+    "orientation_compiler_authority": "none",
+    "agent_context_authority": "none"
+  },
+  "invariants": [
+    "exact_agent_identity_readback_required",
+    "exact_carrier_session_admission_receipt_required",
+    "authority_epoch_must_match",
+    "runtime_binding_required_for_activation",
+    "assembly_is_read_only",
+    "manifest_is_bound_to_one_carrier_session",
+    "residuals_are_never_silently_coerced",
+    "capability_projection_is_not_authority",
+    "grants_are_revalidated_at_action_admission",
+    "continuity_selection_is_explicit_and_subject_bound",
+    "agent_session_cardinality_is_policy_not_ontology"
+  ],
+  "cases": [
+    {
+      "case_id": "healthy_exact_binding",
+      "challenge": "All required sources and exact binding evidence agree.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_healthy_1",
+        "authority_epoch": 4,
+        "admission_receipt": "carrier-admission:carrier_healthy_1:4",
+        "runtime_bindings": ["runtime:codex:019c0000-0000-7000-8000-000000000001"],
+        "assembly_policy": "orientation-policy:builder:3",
+        "required_sources": "present_current_compatible",
+        "continuity_ref": "checkpoint:builder:chk_exact_1",
+        "grant_posture": "live_revalidation_available"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "active",
+        "manifest_readiness": "ready",
+        "delivery": "deliverable",
+        "action_admission": "separate_required",
+        "reason_codes": [],
+        "required_residuals": [],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "missing_required_law_projection",
+      "challenge": "The admission exists, but the required Site law receipt cannot be read.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_4",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_builder_4:1",
+        "assembly_policy": "orientation-policy:builder:3",
+        "law_projection": {
+          "criticality": "required",
+          "projection_status": "unavailable"
+        }
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["required_law_projection_unavailable"],
+        "required_residuals": ["law_source_unavailable"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "conflicting_identity_revisions",
+      "challenge": "Two required projections claim different current revisions from the same Agent identity authority.",
+      "given": {
+        "site_ref": "site:narada",
+        "carrier_session_id": "carrier_identity_conflict_1",
+        "authority_epoch": 3,
+        "admission_receipt": "carrier-admission:carrier_identity_conflict_1:3",
+        "identity_projections": [
+          {
+            "source_authority_ref": "agent-identity:narada",
+            "artifact_ref": "agent:narada:narada.builder",
+            "revision": "17"
+          },
+          {
+            "source_authority_ref": "agent-identity:narada",
+            "artifact_ref": "agent:narada:narada.builder",
+            "revision": "18"
+          }
+        ]
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["source_revision_conflict"],
+        "required_residuals": ["agent_identity_revision_ambiguous"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "stale_grant_projection",
+      "challenge": "An optional capability is projected, but its referenced grant is stale at assembly time.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_5",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_builder_5:1",
+        "capability_projection": "git.publish",
+        "grant_projection": {
+          "criticality": "optional",
+          "projection_status": "stale",
+          "artifact_ref": "grant:narada.builder:git.publish"
+        }
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "active",
+        "manifest_readiness": "degraded",
+        "delivery": "deliverable",
+        "action_admission": "refused",
+        "reason_codes": ["grant_live_revalidation_required"],
+        "required_residuals": ["stale_grant_projection"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "grant_revoked_after_manifest_delivery",
+      "challenge": "A grant was current when the manifest was delivered and was revoked before the occupant proposed an action.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_6",
+        "authority_epoch": 2,
+        "manifest_generation": "orientation:carrier_builder_6:2:1",
+        "manifest_grant_revision": "grant-rev-21",
+        "live_grant_revision": "grant-rev-22",
+        "live_grant_status": "revoked",
+        "proposed_action": "git.publish"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "active",
+        "manifest_readiness": "ready",
+        "delivery": "historical_only",
+        "action_admission": "refused",
+        "reason_codes": ["grant_revoked_after_manifest"],
+        "required_residuals": [],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "resume_requires_exact_checkpoint",
+      "challenge": "Resume mode requires continuity, but the caller supplies no checkpoint and asks for the latest.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.architect@8",
+        "carrier_session_id": "carrier_architect_resume_1",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_architect_resume_1:1",
+        "assembly_policy": {
+          "resume_mode": "exact_handoff_required"
+        },
+        "requested_checkpoint": "latest",
+        "available_checkpoints": [
+          "checkpoint:architect:chk_8",
+          "checkpoint:architect:chk_9"
+        ]
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["exact_continuity_reference_required"],
+        "required_residuals": ["continuity_selection_ambiguous"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "parallel_sessions_explicitly_allowed",
+      "challenge": "One Agent has two active Carrier Sessions under an explicit plural-embodiment policy.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.architect@8",
+        "existing_session_id": "carrier_architect_1",
+        "proposed_session_id": "carrier_architect_2",
+        "admission_policy": {
+          "session_cardinality": "multiple",
+          "max_active_sessions": 2
+        },
+        "exact_runtime_binding_for_proposed_session": true
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "active",
+        "manifest_readiness": "ready",
+        "delivery": "deliverable",
+        "action_admission": "separate_required",
+        "reason_codes": [],
+        "required_residuals": [],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "singleton_policy_refuses_second_session",
+      "challenge": "A second session is proposed where explicit Site policy admits only one active session.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.resident@5",
+        "existing_session_id": "carrier_resident_1",
+        "proposed_session_id": "carrier_resident_2",
+        "admission_policy": {
+          "session_cardinality": "singleton"
+        }
+      },
+      "expected": {
+        "session_admission": "refused",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "not_assembled",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["session_cardinality_policy_refused"],
+        "required_residuals": ["existing_active_session"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "ambient_latest_identity_fallback",
+      "challenge": "No admission receipt or exact environment binding exists, but a latest checkpoint and latest start event name an Agent.",
+      "given": {
+        "site_ref": "site:narada",
+        "carrier_session_id": "carrier_unbound_1",
+        "admission_receipt": null,
+        "exact_agent_ref": null,
+        "latest_checkpoint_agent": "narada.builder",
+        "latest_start_event_agent": "narada.architect"
+      },
+      "expected": {
+        "session_admission": "refused",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "not_assembled",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": [
+          "exact_admission_receipt_required",
+          "ambient_identity_fallback_forbidden"
+        ],
+        "required_residuals": ["agent_identity_unresolved"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "wrong_agent_handoff",
+      "challenge": "The exact admission is for Builder, while the requested continuation belongs to Architect.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_2",
+        "authority_epoch": 2,
+        "admission_receipt": "carrier-admission:carrier_builder_2:2",
+        "continuity_ref": "checkpoint:architect:chk_architect_9",
+        "continuity_subject": "agent:narada:narada.architect@8"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["continuity_subject_mismatch"],
+        "required_residuals": ["incompatible_continuity_subject"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "ambiguous_runtime_binding",
+      "challenge": "A starting admission exists, but two live vendor-session handles fit the Carrier evidence.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_3",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_builder_3:1",
+        "runtime_binding_candidates": [
+          "runtime:codex:019c0000-0000-7000-8000-000000000010",
+          "runtime:codex:019c0000-0000-7000-8000-000000000011"
+        ],
+        "required_sources": "present_current_compatible"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "blocked",
+        "manifest_readiness": "ready",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["runtime_binding_ambiguous"],
+        "required_residuals": ["multiple_runtime_binding_candidates"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "optional_continuity_exceeds_packet_budget",
+      "challenge": "Optional historical continuity exceeds the assembly policy budget while all required orientation remains available.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_budget_1",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_builder_budget_1:1",
+        "assembly_policy": {
+          "max_rendered_bytes": 65536,
+          "continuity_criticality": "optional"
+        },
+        "required_rendered_bytes": 18000,
+        "optional_continuity_bytes": 90000
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "active",
+        "manifest_readiness": "degraded",
+        "delivery": "deliverable",
+        "action_admission": "separate_required",
+        "reason_codes": ["optional_entry_omitted_for_budget"],
+        "required_residuals": ["continuity_omission_with_source_ref"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "assembly_attempts_checkpoint_write",
+      "challenge": "A source adapter tries to create a startup checkpoint while compiling orientation.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_builder_mutation_1",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_builder_mutation_1:1",
+        "adapter": "continuity",
+        "attempted_operation": "insert_agent_checkpoint"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["assembly_source_mutation_forbidden"],
+        "required_residuals": ["continuity_adapter_violated_read_only_boundary"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "manifest_reused_for_new_session",
+      "challenge": "A valid manifest for a closed Carrier Session is presented to a newly admitted session for the same Agent.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "manifest_generation": "orientation:carrier_builder_old:4:2",
+        "manifest_carrier_session_id": "carrier_builder_old",
+        "manifest_authority_epoch": 4,
+        "current_carrier_session_id": "carrier_builder_new",
+        "current_authority_epoch": 1,
+        "current_admission_receipt": "carrier-admission:carrier_builder_new:1"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "not_attempted",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["manifest_session_binding_mismatch"],
+        "required_residuals": ["superseded_manifest_generation"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "stale_authority_epoch",
+      "challenge": "The manifest references an earlier authority epoch after the same Carrier Session was fenced and re-admitted.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.resident@5",
+        "carrier_session_id": "carrier_resident_recovered_1",
+        "manifest_authority_epoch": 2,
+        "current_authority_epoch": 3,
+        "current_admission_receipt": "carrier-admission:carrier_resident_recovered_1:3"
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "blocked",
+        "manifest_readiness": "blocked",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["authority_epoch_fenced"],
+        "required_residuals": ["stale_admission_receipt"],
+        "source_mutation": false
+      }
+    },
+    {
+      "case_id": "runtime_binding_crosses_site_boundary",
+      "challenge": "The observed runtime binding belongs to a Carrier Session admitted by another Site.",
+      "given": {
+        "site_ref": "site:narada",
+        "agent_ref": "agent:narada:narada.builder@17",
+        "carrier_session_id": "carrier_narada_builder_1",
+        "authority_epoch": 1,
+        "admission_receipt": "carrier-admission:carrier_narada_builder_1:1",
+        "runtime_binding": {
+          "runtime_ref": "runtime:codex:019c0000-0000-7000-8000-000000000099",
+          "owning_site_ref": "site:other"
+        }
+      },
+      "expected": {
+        "session_admission": "admitted",
+        "session_activation": "refused",
+        "manifest_readiness": "ready",
+        "delivery": "withheld",
+        "action_admission": "not_applicable",
+        "reason_codes": ["runtime_binding_site_mismatch"],
+        "required_residuals": ["cross_site_runtime_binding"],
+        "source_mutation": false
+      }
+    }
+  ]
+}

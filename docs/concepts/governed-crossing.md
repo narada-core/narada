@@ -70,6 +70,7 @@ Repeated governed crossings stabilize into Narada machinery:
 | Signal wants receiving-locus attention | Site pub/sub |
 | Site relation wants continuity evidence | Site relation ledger / provenance lineage |
 | Local friction wants reusable doctrine | Inhabited Evolution |
+| Replaceable intelligence wants to inhabit a durable Agent office | Agent Embodiment Admission Crossing + [`Orientation Manifest`](orientation-manifest.md) (target shape) |
 
 ## Minimal Rules
 

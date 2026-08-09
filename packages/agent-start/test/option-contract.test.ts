@@ -16,6 +16,7 @@ import {
   stripInheritedIntelligenceLaunchContextEnvironment,
 } from '../src/carrier-launch-adapter.js';
 import { loadIntelligenceLaunchContext } from '../src/intelligence-launch-context.js';
+import { CARRIER_SESSION_ADMISSION_RECEIPT_SCHEMA } from '@narada-core/orientation-manifest';
 
 const require: any = createRequire(import.meta.url);
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
@@ -44,6 +45,44 @@ const baseArgs: any = [
 const baseTestEnv: any = {
   KIMI_CODE_API_KEY: 'test-key',
 };
+
+function launchAdmissionReceipt({
+  siteId,
+  sessionId,
+  carrierKind,
+  agentId = identity,
+}: any) {
+  return {
+    schema: CARRIER_SESSION_ADMISSION_RECEIPT_SCHEMA,
+    receipt_id: 'test-admission:' + sessionId,
+    decision: 'admitted',
+    state: 'starting',
+    coordinate: {
+      authority_scope: 'test-owner',
+      site_ref: 'site:' + siteId,
+      carrier_session_id: sessionId,
+      authority_epoch: 1,
+    },
+    agent_identity: {
+      source_authority_ref: 'test-agent-identity:' + siteId,
+      artifact_ref: 'agent:' + agentId,
+      revision: 'fixture-1',
+      local_agent_id: agentId,
+      canonical_agent_id: agentId,
+    },
+    carrier_kind: carrierKind,
+    admission_policy: {
+      source_authority_ref: 'test-site-policy:' + siteId,
+      artifact_ref: 'carrier-admission:test',
+      revision: '1',
+    },
+    issued_at: '2026-08-08T12:00:00.000Z',
+    valid_until: null,
+    authority_readback_ref: 'test-carrier-session-authority:' + sessionId,
+    evidence_refs: ['test:owner-issued-admission'],
+    reason_codes: [],
+  };
+}
 
 function run(extraArgs: any = [], extraEnv: any = {}) : any{
   return runHiddenPostureCommandSync(process.execPath, [...baseArgs, ...withDefaultMcpScopeNone(extraArgs)], {
@@ -154,6 +193,34 @@ function runOk(extraArgs: any = [], extraEnv: any = {}) : any{
   const result: any = run(extraArgs, extraEnv);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return JSON.parse(result.stdout);
+}
+
+function parseFirstJsonObject(value: any) : any{
+  const text: any = String(value ?? '');
+  const start: any = text.indexOf('{');
+  if (start < 0) throw new Error('json_object_not_found');
+  let depth: any = 0;
+  let inString: any = false;
+  let escaped: any = false;
+  for (let index: any = start; index < text.length; index += 1) {
+    const character: any = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character === '{') depth += 1;
+    if (character === '}') {
+      depth -= 1;
+      if (depth === 0) return JSON.parse(text.slice(start, index + 1));
+    }
+  }
+  throw new Error('json_object_incomplete');
 }
 
 function runWithIdentityOk(identityValue: any, extraArgs: any = [], extraEnv: any = {}) : any{
@@ -1093,6 +1160,26 @@ test('site-tools-root option is visible in dry-run output', () => {
   assert.equal(output.site_tools_root, siteToolsRoot);
 });
 
+test('site-tools-root cannot replace the canonical Agent Context session-start adapter', () => {
+  const siteToolsRoot = mkdtempSync(join(tmpdir(), 'agent-start-site-tools-'));
+  const replacementDir = join(siteToolsRoot, 'agent-context');
+  mkdirSync(replacementDir, { recursive: true });
+  writeFileSync(
+    join(replacementDir, 'session-start.ts'),
+    "throw new Error('site_local_agent_context_override_loaded');\n",
+    'utf8',
+  );
+  const output: any = runOk([
+    '--carrier',
+    'agent-cli',
+    '--runtime',
+    'narada-agent-runtime-server',
+    '--site-tools-root',
+    siteToolsRoot,
+  ]);
+  assert.equal(output.site_tools_root, siteToolsRoot);
+});
+
 test('agent-tui selects the NARS runtime server and exposes attach discovery', () => {
   const output: any = runOk(['--carrier', 'agent-tui', '--runtime', 'narada-agent-runtime-server'], agentTuiEnv());
   assert.equal(output.runtime_args.includes('--interactive-loop'), false);
@@ -1218,6 +1305,81 @@ test('admission options expose admission result without launching', () => {
 
 test('direct codex carrier exec records AiProcessInvocation launch and exit evidence', () => {
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-direct-codex-ai-invocation-'));
+  writeFileSync(join(siteRoot, 'AGENTS.md'), '# Direct Codex fixture Site\n', 'utf8');
+  writeMinimalMcpFabric(siteRoot, 'narada-test-agent-context');
+  const fakeCodexScript: any = join(siteRoot, 'fake-codex.js');
+  writeFileSync(fakeCodexScript, 'process.exit(0);\n', 'utf8');
+  const carrierSessionId: any = 'carrier_direct_codex_fixture';
+  const admissionReceipt: any = launchAdmissionReceipt({
+    siteId: 'narada',
+    sessionId: carrierSessionId,
+    carrierKind: 'codex',
+  });
+
+  const result: any = runHiddenPostureCommandSync(process.execPath, [
+    '--import',
+    tsxLoaderPath,
+    launcherPath,
+    identity,
+    '--site-root',
+    siteRoot,
+    '--target-site-root',
+    siteRoot,
+    '--target-site-id',
+    'narada',
+    '--carrier-session-id',
+    carrierSessionId,
+    '--runtime',
+    'codex',
+    '--mcp-scope',
+    'local-site',
+    '--exec',
+    '--json',
+  ], {
+    cwd: siteRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...baseTestEnv,
+      NARADA_CODEX_CLI_SCRIPT: fakeCodexScript,
+      NARADA_LAUNCH_CARRIER_SESSION_ADMISSION_RECEIPT: JSON.stringify(admissionReceipt),
+    },
+    posture: 'test_child',
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const launchOutput: any = parseFirstJsonObject(result.stdout);
+  assert.equal(launchOutput.embodiment_admission.status, 'admitted');
+  assert.equal(launchOutput.embodiment_admission.required, true);
+  assert.equal(
+    launchOutput.embodiment_admission.source,
+    'external_carrier_session_authority_receipt',
+  );
+  assert.equal(launchOutput.embodiment_admission.receipt_ref, admissionReceipt.receipt_id);
+  assert.equal(
+    launchOutput.embodiment_admission.orientation_manifest_id,
+    launchOutput.orientation_manifest.manifest_id,
+  );
+  assert.equal(launchOutput.embodiment_admission.owner_token_exposed, false);
+  assert.equal(
+    launchOutput.required_environment.NARADA_ORIENTATION_MANIFEST_ID,
+    launchOutput.orientation_manifest.manifest_id,
+  );
+  assert.deepEqual(
+    JSON.parse(launchOutput.required_environment.NARADA_CARRIER_SESSION_ADMISSION_RECEIPT),
+    admissionReceipt,
+  );
+  const root: any = join(siteRoot, '.ai', 'runtime', 'ai-process-invocation');
+  const entries: any = readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((entry: any) => entry.isFile() && entry.name.endsWith('.json'));
+  const artifacts: any = entries.map((entry: any) => JSON.parse(readFileSync(join(entry.parentPath, entry.name), 'utf8')));
+  assert.equal(artifacts.some((artifact: any) => artifact.event === 'launch' && artifact.projection === 'direct-carrier'), true);
+  assert.equal(artifacts.some((artifact: any) => artifact.event === 'exit' && artifact.projection === 'direct-carrier'), true);
+});
+
+test('direct carrier exec refuses to let process creation stand in for embodiment admission', () => {
+  const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-direct-carrier-without-admission-'));
+  writeFileSync(join(siteRoot, 'AGENTS.md'), '# Direct carrier refusal fixture Site\n', 'utf8');
   writeMinimalMcpFabric(siteRoot, 'narada-test-agent-context');
   const fakeCodexScript: any = join(siteRoot, 'fake-codex.js');
   writeFileSync(fakeCodexScript, 'process.exit(0);\n', 'utf8');
@@ -1231,6 +1393,10 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
     siteRoot,
     '--target-site-root',
     siteRoot,
+    '--target-site-id',
+    'narada',
+    '--carrier-session-id',
+    'carrier_direct_without_admission',
     '--runtime',
     'codex',
     '--mcp-scope',
@@ -1240,17 +1406,21 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
   ], {
     cwd: siteRoot,
     encoding: 'utf8',
-    env: { ...process.env, ...baseTestEnv, NARADA_CODEX_CLI_SCRIPT: fakeCodexScript },
+    env: {
+      ...process.env,
+      ...baseTestEnv,
+      NARADA_CODEX_CLI_SCRIPT: fakeCodexScript,
+      NARADA_LAUNCH_CARRIER_SESSION_ADMISSION_RECEIPT: '',
+      NARADA_CARRIER_SESSION_ADMISSION_RECEIPT: '',
+    },
     posture: 'test_child',
   });
 
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const root: any = join(siteRoot, '.ai', 'runtime', 'ai-process-invocation');
-  const entries: any = readdirSync(root, { recursive: true, withFileTypes: true })
-    .filter((entry: any) => entry.isFile() && entry.name.endsWith('.json'));
-  const artifacts: any = entries.map((entry: any) => JSON.parse(readFileSync(join(entry.parentPath, entry.name), 'utf8')));
-  assert.equal(artifacts.some((artifact: any) => artifact.event === 'launch' && artifact.projection === 'direct-carrier'), true);
-  assert.equal(artifacts.some((artifact: any) => artifact.event === 'exit' && artifact.projection === 'direct-carrier'), true);
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /carrier_session_authority_required: direct carriers must supply/,
+  );
 });
 
 test('opencode runtime is admitted by the contract', () => {

@@ -133,6 +133,7 @@ Cross-cutting runtime, contract, MCP, carrier, NARS, agent, operator, and UI pac
 | `@narada-core/invokable-intelligence-resolver` | `packages/invokable-intelligence-resolver` | Deterministic hierarchical resolver: cumulative hard eligibility across target/User/Host loci, preference ranking with stable tie-breakers, explainable plans and typed refusals (#2182) |
 | `@narada-core/invokable-intelligence-management` | `packages/invokable-intelligence-management` | Intelligence catalog/policy management: `narada-intelligence` CLI, host-agnostic MCP tools, idempotent legacy provider-registry migration, temporary read-only compat projection (#2183) |
 | `@narada-core/invokable-intelligence-runtime` | `packages/invokable-intelligence-runtime` | Local invocation gateway and evidence recorder: per-invocation resolution, injected adapter dispatch, Intent→Plan→Attempt→Evidence persistence with replay/restart idempotency, legacy binding bridge (#2184) |
+| `@narada-core/orientation-manifest` | `packages/orientation-manifest` | Storage-neutral Carrier Session admission/delivery/activation receipt contracts and pure, bounded Orientation Manifest compilation |
 
 Operator-facing browser UI stack:
 
@@ -708,6 +709,7 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 | [`docs/concepts/authority-revealing-inversion.md`](docs/concepts/authority-revealing-inversion.md) | Authority-revealing review lens | Reviewing artifact-first proposals |
 | [`docs/concepts/capa-operation.md`](docs/concepts/capa-operation.md) | Corrective/preventive action | Handling recurrence-risk incidents |
 | [`docs/concepts/agent-carrier.md`](docs/concepts/agent-carrier.md) | Agent Carrier concept and launch packet contract | Understanding how carriers embody agents without owning authority |
+| [`docs/concepts/orientation-manifest.md`](docs/concepts/orientation-manifest.md) | Orientation Manifest target-shape conjecture | Designing error-correctable entry orientation for replaceable Agent occupants without collapsing projections into authority |
 | [`docs/concepts/nars-runtime-contract.md`](docs/concepts/nars-runtime-contract.md) | NARS runtime contract | Implementing or verifying runtime-server package authority, canonical entrypoint, compatibility shims, lifecycle hooks, and carrier adapters |
 | [`docs/concepts/site-operating-loop-runtime-contract.md`](docs/concepts/site-operating-loop-runtime-contract.md) | Site Operating Loop runtime contract | Implementing or verifying generic Site loop runtime hosting, triggers, control, event subscription, and Site-owned loop module boundaries |
 | [`docs/concepts/reactor-pattern.md`](docs/concepts/reactor-pattern.md) | Reactor pattern for chat/agent reactions | Designing a component that evaluates facts and proposes effects |

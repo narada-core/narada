@@ -49,6 +49,12 @@ await runProcessTests([
     timeoutMs: 15000,
   },
   {
+    label: 'orientation-admission-contract',
+    args: ['--import', 'tsx', '--test', 'test/orientation-admission.test.ts'],
+    cwd: packageRoot,
+    timeoutMs: 15000,
+  },
+  {
     label: 'launch-result-contract',
     args: ['--import', 'tsx', '--test', 'test/launch-result-contract.test.ts'],
     cwd: packageRoot,

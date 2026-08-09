@@ -674,6 +674,94 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
     status: z.ZodLiteral<"materialized">;
     handoff: z.ZodObject<{
@@ -1335,6 +1423,94 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
     status: z.ZodLiteral<"materialized">;
     handoff: z.ZodObject<{
@@ -1996,6 +2172,94 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough">>, z.ZodObject<{
     status: z.ZodLiteral<"dry_run">;
     handoff: z.ZodOptional<z.ZodObject<{
@@ -2657,6 +2921,94 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
     status: z.ZodLiteral<"dry_run">;
     handoff: z.ZodOptional<z.ZodObject<{
@@ -3318,6 +3670,94 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
     status: z.ZodLiteral<"dry_run">;
     handoff: z.ZodOptional<z.ZodObject<{
@@ -3979,6 +4419,94 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough">>]>;
 export type AgentStartResultV0 = z.infer<typeof AgentStartResultV0Schema>;
 export type AgentStartSessionRef = z.infer<typeof sessionRefShape>;
@@ -4656,6 +5184,94 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough"> | z.objectInputType<{
     status: z.ZodLiteral<"dry_run">;
     handoff: z.ZodOptional<z.ZodObject<{
@@ -5317,6 +5933,94 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough">, z.objectOutputType<{
     status: z.ZodLiteral<"materialized">;
     handoff: z.ZodObject<{
@@ -5978,6 +6682,94 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough"> | z.objectOutputType<{
     status: z.ZodLiteral<"dry_run">;
     handoff: z.ZodOptional<z.ZodObject<{
@@ -6639,6 +7431,94 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
             }, z.ZodTypeAny, "passthrough">>>>;
         }, z.ZodTypeAny, "passthrough">>>>;
     }, z.ZodTypeAny, "passthrough">>>>;
+    embodiment_admission: z.ZodOptional<z.ZodObject<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        schema: z.ZodLiteral<"narada.agent_start.embodiment_admission.v1">;
+        status: z.ZodEnum<["admitted", "not_materialized"]>;
+        required: z.ZodBoolean;
+        source: z.ZodString;
+        authority_owner: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        receipt_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        coordinate: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            authority_scope: z.ZodString;
+            site_ref: z.ZodString;
+            carrier_session_id: z.ZodString;
+            authority_epoch: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>>>;
+        agent_identity: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        carrier_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        admission_policy: z.ZodOptional<z.ZodNullable<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
+        authority_readback_ref: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        orientation_manifest_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        owner_token_exposed: z.ZodLiteral<false>;
+    }, z.ZodTypeAny, "passthrough">>>;
 }, z.ZodTypeAny, "passthrough">>;
 export declare function assertAgentStartResultV0(value: unknown): AgentStartResultV0;
 export declare function resolveAgentStartSessionProjection(value: unknown): AgentStartSessionProjection | null;

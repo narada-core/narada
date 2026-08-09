@@ -53,11 +53,24 @@ const checks: any = [
   },
   {
     id: 'agent_bootstrap',
-    claim: 'Agent startup and rehydration are exposed through agent-context MCP bootstrap/hydrate tools.',
+    claim: 'Agent Context startup delivers an exact admitted Orientation Manifest generation through the sole registrar-bound surface; diagnostic hydration is separate.',
     evidence: [
-      fileContains('AGENTS.md', ['agent_context_hydrate_current', 'agent_context_show_bootstrap']),
-      fileContains('tools/agent-context/agent-context-mcp-server.ts', ['agent_context_hydrate_current', 'agent_context_show_bootstrap']),
-      fileExists('tools/agent-context/session-start.ts'),
+      fileContains('docs/concepts/orientation-manifest.md', [
+        'An **Orientation Manifest** is an immutable, bounded, source-indexed projection',
+        'Agent Context facade | Temporary compatibility and diagnostic projection',
+        'No `latest`, nearest-process, display-label, or conversational fallback',
+      ]),
+      registrySurface('narada-proper-agent-context.local', [
+        'agent_context_hydrate_current',
+        'agent_context_startup_sequence',
+      ]),
+      fileContains('packages/agent-context-tools/src/session-start.ts', [
+        'the only registrar-bound agent-context surface',
+        "export * from '@narada-core/agent-context-mcp/session-start'",
+      ]),
+      fileContains('packages/agent-context-tools/src/agent-context-mcp-server.ts', [
+        'legacy_agent_context_server_retired',
+      ]),
     ],
   },
   {

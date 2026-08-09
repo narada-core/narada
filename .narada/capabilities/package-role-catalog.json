@@ -50,10 +50,9 @@
       "package": "@narada-core/agent-context-tools",
       "path": "packages/agent-context-tools",
       "roles": [
-        "mcp_boundary",
-        "runtime_authority"
+        "cli_exposure"
       ],
-      "posture": "agent_context_mcp_tools_runtime"
+      "posture": "non_authoritative_site_context_utilities_with_canonical_agent_context_session_start_reexport"
     },
     {
       "package": "@narada-core/agent-identity",
@@ -560,6 +559,15 @@
         "descriptor_contract"
       ],
       "posture": "operator_surface_runtime_contracts"
+    },
+    {
+      "package": "@narada-core/orientation-manifest",
+      "path": "packages/orientation-manifest",
+      "roles": [
+        "descriptor_contract",
+        "domain_model"
+      ],
+      "posture": "storage_neutral_receipt_contracts_and_pure_orientation_compiler"
     },
     {
       "package": "@narada-core/ops-kit",

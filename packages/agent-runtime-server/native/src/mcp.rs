@@ -64,7 +64,7 @@ struct WorkerMcpProjection {
 const WORKER_STARTUP_TOOLS: &[&str] = &[
     "agent_context_startup_sequence",
     "agent_context_whoami",
-    "agent_context_show_bootstrap",
+    "agent_context_hydrate_current",
     "agent_context_doctrinal_grounding",
 ];
 const WORKER_OUTPUT_TOOLS: &[&str] = &[

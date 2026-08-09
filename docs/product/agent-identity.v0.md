@@ -128,7 +128,7 @@ When only a current compatibility command needs a named agent, `agent_id` remain
 | [`Runtime Identity Binding`](../concepts/runtime-identity-binding.md) | Runtime bindings connect volatile handles to durable identity evidence without making handles authoritative. |
 | [`Site Qualification Policy`](site-qualification-policy.md) | Qualification records bind principal, role, Site, work class, law, capability class, and evidence. Agent Identity may reference them. |
 | [`Canonical Capability Consent Registry`](../concepts/canonical-capability-consent-registry.md) | Capability grants remain separate authority records; Agent Identity may reference active grants. |
-| [`Agent Carrier Launch Packet`](agent-carrier-launch-packet.v0.json) | Launch packets carry `agent_id` as compatibility identity plus `carrier_session_id` as bounded session evidence. |
+| [`Agent Carrier Launch Packet`](agent-carrier-launch-packet.v1.json) | Launch packets carry `agent_id` as a compatibility display key plus an owner-issued admission receipt and exact Orientation Manifest id for one Carrier Session. |
 
 ## Fixtures
 

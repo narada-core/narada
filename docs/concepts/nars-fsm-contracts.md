@@ -159,14 +159,6 @@ Schema: `narada.operator_surface_carrier.lifecycle_state.v1`.
 
 New surface launch evidence follows `requested -> launching -> claim_written -> resolving -> resolved -> binding -> bound -> verified`. Resume follows `requested -> resuming -> verified` when one live binding is found. A missing, stale, or ambiguous claim/window is `failed` or `refused`; the launcher never treats a title as identity proof. Dry-run is `requested -> planning -> planned`. Claim, resolver, and launcher evidence carry state and history.
 
-## Agent-Context MCP Transport Session
-
-Owner: `@narada-core/agent-context-tools`, `agent-context-mcp-server.mjs`.
-
-Schema: `narada.agent_context_mcp.session_state.v1`.
-
-The stdio protocol session follows `created -> initializing -> initialized -> serving -> closing -> closed`. Malformed input or protocol ordering failure enters `failed`; failed sessions may only close. `tools/list` and `tools/call` are admitted only in `serving`. The server exposes state and history through `agent_context_doctor`, and `shutdown` closes the session after acknowledging the request.
-
 ## Runtime Request Lifecycle
 
 Owner: `@narada-core/agent-runtime-server`, JSONL runtime control service.

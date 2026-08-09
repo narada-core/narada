@@ -24,9 +24,13 @@ describe('agent carrier concept and launch packet contract', () => {
   });
 
   it('defines a carrier launch packet contract across Codex, Claude Code, Kimi, and Narada-native carriers', () => {
-    const contract = JSON.parse(readFileSync(join(root, 'docs/product/agent-carrier-launch-packet.v0.json'), 'utf8'));
+    const predecessor = JSON.parse(readFileSync(join(root, 'docs/product/agent-carrier-launch-packet.v0.json'), 'utf8'));
+    const contract = JSON.parse(readFileSync(join(root, 'docs/product/agent-carrier-launch-packet.v1.json'), 'utf8'));
 
-    expect(contract.schema).toBe('narada.agent_carrier.launch_packet_contract.v0');
+    expect(predecessor.status).toBe('superseded');
+    expect(predecessor.superseded_by).toBe('docs/product/agent-carrier-launch-packet.v1.json');
+    expect(contract.schema).toBe('narada.agent_carrier.launch_packet_contract.v1');
+    expect(contract.status).toBe('canonical');
     expect(contract.concept_ref).toBe('docs/concepts/agent-carrier.md');
     expect(contract.carrier_kinds.map((carrier: { kind: string }) => carrier.kind)).toEqual([
       'codex_carrier',
@@ -38,6 +42,9 @@ describe('agent carrier concept and launch packet contract', () => {
     for (const required of [
       'agent_id',
       'carrier_session_id',
+      'carrier_session_admission_receipt',
+      'embodiment_admission',
+      'orientation_manifest_id',
       'agent_start_event_id',
       'startup_command',
       'required_environment',
@@ -50,18 +57,18 @@ describe('agent carrier concept and launch packet contract', () => {
       expect(contract.required_fields).toContain(required);
     }
     expect(contract.field_contract.startup_command.required_shape.name).toBe('agent_context_startup_sequence');
-    expect(contract.optional_fields).toContain('startup_sequence');
-    expect(contract.field_contract.startup_sequence.required_first_steps[0].tool).toBe('agent_context_hydrate_current');
-    expect(contract.field_contract.startup_sequence.required_first_steps[1].tool).toBe('agent_context_memory.plan_hydration');
-    expect(contract.field_contract.startup_sequence.required_first_steps[1].arguments.named_agent_id.field).toBe('agent_id');
-    expect(contract.field_contract.startup_sequence.required_first_steps[1].optional_next.tool).toBe('agent_context_memory.read_checkpoint_summary');
-    expect(contract.field_contract.startup_sequence.required_first_steps[1].optional_next.arguments.checkpoint_id.field).toBe('selectedCheckpoint.checkpointId');
-    expect(contract.field_contract.startup_sequence.rule).toContain('explicit advisory phase');
+    expect(contract.field_contract.startup_sequence.required_first_steps).toHaveLength(1);
+    expect(contract.field_contract.startup_sequence.required_first_steps[0].tool).toBe('agent_context_startup_sequence');
+    expect(contract.field_contract.startup_sequence.required_first_steps[0].semantics).toBe('retrieve_exact_receipt_bound_orientation_manifest');
+    expect(contract.field_contract.startup_sequence.rule).toContain('ambient latest checkpoint selection');
     expect(contract.field_contract.required_environment.required_keys).toContain('NARADA_AGENT_ID');
     expect(contract.field_contract.required_environment.required_keys).toContain('NARADA_CARRIER_SESSION_ID');
+    expect(contract.field_contract.required_environment.required_keys).toContain('NARADA_CARRIER_SESSION_ADMISSION_RECEIPT');
+    expect(contract.field_contract.required_environment.required_keys).toContain('NARADA_ORIENTATION_MANIFEST_ID');
     expect(contract.field_contract.native_execution_policy.rule).toContain('Native shell/script access and policy-aware Narada shell MCP are separate capabilities');
     expect(contract.field_contract.tool_approval_policy.rule).toContain('policy-aware shell MCP');
     expect(contract.anti_collapse_rules).toContain('launch_packet_is_evidence_not_activation_authority');
+    expect(contract.anti_collapse_rules).toContain('orientation_manifest_is_not_action_admission');
     expect(contract.anti_collapse_rules).toContain('native_shell_access_is_not_policy_aware_shell_mcp');
     expect(contract.locus_responsibilities.narada_proper).toContain('launch_packet_contract');
     expect(contract.locus_responsibilities.pc_site).toContain('process_and_window_truth');

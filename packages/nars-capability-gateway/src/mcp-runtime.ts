@@ -66,7 +66,7 @@ const MCP_TOOL_NAME_ALIASES: Record<string, string> = Object.freeze({
 const WORKER_MCP_STARTUP_TOOL_NAMES = Object.freeze([
   'agent_context_startup_sequence',
   'agent_context_whoami',
-  'agent_context_show_bootstrap',
+  'agent_context_hydrate_current',
   'agent_context_doctrinal_grounding',
 ]);
 

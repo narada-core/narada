@@ -2,16 +2,13 @@
 /**
  * narada-agent-start
  *
- * Thin carrier for agent-context session start.
+ * Carrier launch orchestrator for one Site-selected Agent embodiment.
  *
- * Authority lives in agent_context_start_session / session-start.ts:
- * - roster validation
- * - agent_start_event materialization
- * - execution/intelligence context materializations
- * - MCP startup sequence
- *
- * The carrier only prepares substrate-local affordances and starts the runtime
- * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
+ * The Site-selected Carrier Session Authority owns admission. This launcher
+ * obtains or validates its exact starting receipt, asks Agent Context to retain
+ * the receipt-bound Orientation Manifest generation as a compatibility
+ * projection, projects that generation into the Carrier entry procedure, and
+ * starts the runtime. Process creation never creates admission authority.
  *
  * Usage:
  *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
@@ -25,6 +22,12 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
+import {
+  adaptNarsSessionAdmissionReceipt,
+  assertAdmissionReceiptForLaunch,
+  canonicalOrientationSiteId,
+  selectLaunchCarrierSessionAdmissionReceipt,
+} from './orientation-admission.js';
 import { buildNarsAttachCommands } from '@narada-core/nars-client-projection-contract';
 import {
   ADMITTED_LAUNCH_SELECTION_KINDS,
@@ -128,12 +131,10 @@ const commonToolsRoot: any = existsSync(join(candidateSiteToolsRoot, 'incubation
   : existsSync(join(siteLocalToolsRoot, 'incubation', 'write-file-utf8.ts'))
     ? siteLocalToolsRoot
     : packagedCommonToolsRoot;
-const explicitAgentContextSessionStartPath: any = args.site_tools_root
-  ? join(candidateSiteToolsRoot, 'agent-context', 'session-start.ts')
-  : null;
-const agentContextSessionStartPath: any = explicitAgentContextSessionStartPath && existsSync(explicitAgentContextSessionStartPath)
-  ? explicitAgentContextSessionStartPath
-  : packagedAgentContextSessionStartPath;
+const agentContextSessionStartPath: any = packagedAgentContextSessionStartPath;
+if (!agentContextSessionStartPath) {
+  throw new Error('canonical_agent_context_session_start_unavailable');
+}
 const writeFileModulePath: any = existsSync(join(commonToolsRoot, 'incubation', 'write-file-utf8.ts'))
   ? join(commonToolsRoot, 'incubation', 'write-file-utf8.ts')
   : packagedWriteFileModulePath;
@@ -600,22 +601,40 @@ if (preflightOnly) {
 let startResult: any;
 let sessionAuthority: any = null;
 let sessionAuthorityAdmission: any = null;
+let carrierSessionAdmissionReceipt: any = null;
+let agentIdentityRef: any = null;
 const sessionAuthorityEnforced: any = runtime === 'narada-agent-runtime-server' && execFlag === true && dryRun !== true;
+const launchMaterializationRequired: any = execFlag === true && dryRun !== true;
 try {
   // Validate roster/role admission without creating a session event before the
   // singleton authority has admitted the principal. This keeps duplicate
   // refusal side-effect free while preserving the existing session-start
   // validation as the source of truth for the role.
-  const validatedStartResult: any = sessionAuthorityEnforced
-    ? materializeAgentSessionStart({
-      siteRoot: sessionSiteRoot,
-      identity,
-      runtime,
-      dbPath,
-      cwd: workspaceRoot,
-      dryRun: true,
-    })
-    : null;
+  const validatedStartResult: any = materializeAgentSessionStart({
+    siteRoot: sessionSiteRoot,
+    identity,
+    runtime,
+    dbPath,
+    cwd: workspaceRoot,
+    dryRun: true,
+  });
+  const orientationSiteId: any = launchMaterializationRequired
+    ? canonicalOrientationSiteId(targetSiteId)
+    : targetSiteId
+      ? canonicalOrientationSiteId(targetSiteId)
+      : null;
+  const resolvedAgentIdentityRef: any = resolveAgentIdentityRef(identity, {
+    role: validatedStartResult.role,
+    site_id: orientationSiteId,
+  });
+  agentIdentityRef = resolvedAgentIdentityRef.status === 'resolved'
+    ? resolvedAgentIdentityRef.value
+    : buildAgentIdentityRefV2({
+      identity_scope: { kind: 'unscoped' },
+      local_agent_id: identity,
+      role: validatedStartResult.role ?? identity,
+      legacy_agent_id: identity,
+    });
   if (sessionAuthorityEnforced) {
     const principal: any = normalizeSessionPrincipal({
       siteId: targetSiteId,
@@ -677,15 +696,60 @@ try {
       replaceAbandoned: Boolean(resumeSessionId),
       recoveryReason: 'operator_requested_resume_after_process_loss',
     });
+    carrierSessionAdmissionReceipt = adaptNarsSessionAdmissionReceipt({
+      authorityRecord: sessionAuthority.inspectSession({
+        principal: sessionAuthorityAdmission.principal,
+      }),
+      admission: sessionAuthorityAdmission,
+      siteId: orientationSiteId,
+      agentId: identity,
+      carrierKind: carrier,
+      runtimeKind: runtime,
+      agentIdentityRef,
+      roleBinding: validatedStartResult.role_binding,
+    });
   }
-  startResult = materializeAgentSessionStart({
-    siteRoot: sessionSiteRoot,
-    identity,
-    runtime,
-    dbPath,
-    cwd: workspaceRoot,
-    dryRun,
-  });
+  if (launchMaterializationRequired && !carrierSessionAdmissionReceipt) {
+    const ownerIssuedReceipt: any = selectLaunchCarrierSessionAdmissionReceipt({
+      explicitReceipt: process.env.NARADA_LAUNCH_CARRIER_SESSION_ADMISSION_RECEIPT,
+      inheritedReceipt: process.env.NARADA_CARRIER_SESSION_ADMISSION_RECEIPT,
+      expectedSessionId: plannedCarrierSessionId,
+    });
+    if (!ownerIssuedReceipt) {
+      throw new Error(
+        'carrier_session_authority_required: direct carriers must supply '
+        + 'NARADA_LAUNCH_CARRIER_SESSION_ADMISSION_RECEIPT for the planned session',
+      );
+    }
+    carrierSessionAdmissionReceipt = assertAdmissionReceiptForLaunch(ownerIssuedReceipt, {
+      siteId: orientationSiteId,
+      agentId: identity,
+      carrierSessionId: plannedCarrierSessionId,
+      carrierKind: carrier,
+      evaluatedAt: new Date().toISOString(),
+    });
+  }
+  if (launchMaterializationRequired) {
+    startResult = materializeAgentSessionStart({
+      siteRoot: sessionSiteRoot,
+      siteId: orientationSiteId,
+      identity,
+      runtime,
+      dbPath,
+      cwd: workspaceRoot,
+      dryRun: false,
+      carrierSessionId: plannedCarrierSessionId,
+      admissionReceipt: carrierSessionAdmissionReceipt,
+    });
+    if (startResult.status !== 'materialized') {
+      throw new Error(
+        'orientation_manifest_blocked:'
+        + (startResult.orientation_manifest?.reason_codes ?? []).join(','),
+      );
+    }
+  } else {
+    startResult = validatedStartResult;
+  }
 } catch (error) {
   try {
     if (sessionAuthorityAdmission && sessionAuthority) {
@@ -1003,6 +1067,12 @@ function mcpEnvironmentValues() : any{
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
     NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,
+    ...(carrierSessionAdmissionReceipt ? {
+      NARADA_CARRIER_SESSION_ADMISSION_RECEIPT: JSON.stringify(carrierSessionAdmissionReceipt),
+    } : {}),
+    ...(startResult.orientation_manifest?.manifest_id ? {
+      NARADA_ORIENTATION_MANIFEST_ID: startResult.orientation_manifest.manifest_id,
+    } : {}),
     ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
     NARADA_SITE_ROOT: sessionSiteRoot,
     NARADA_WORKSPACE_ROOT: workspaceRoot,
@@ -1474,6 +1544,12 @@ const hiddenRuntimeOutputFiles: any = agentStartExecutionPosture.agent_start_exe
 const carrierEnvironment: any = {
   ...(carrierSessionRegistration.environment ?? {}),
   NARADA_RUNTIME_AUTHORITY: runtimeAuthoritySelection.effective,
+  ...(carrierSessionAdmissionReceipt ? {
+    NARADA_CARRIER_SESSION_ADMISSION_RECEIPT: JSON.stringify(carrierSessionAdmissionReceipt),
+  } : {}),
+  ...(startResult.orientation_manifest?.manifest_id ? {
+    NARADA_ORIENTATION_MANIFEST_ID: startResult.orientation_manifest.manifest_id,
+  } : {}),
   ...(carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER
     ? {
         NARADA_RUNTIME_ENGINE: runtimeEngine,
@@ -1502,18 +1578,6 @@ const runtimeEnvironment: any = carrierSpecificEnvironment(carrier, {
   defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
 const siteConfig: any = siteConfigProjection();
-const resolvedAgentIdentityRef: any = resolveAgentIdentityRef(identity, {
-  role: startResult.role,
-  site_id: targetSiteId,
-});
-const agentIdentityRef: any = resolvedAgentIdentityRef.status === 'resolved'
-  ? resolvedAgentIdentityRef.value
-  : buildAgentIdentityRefV2({
-    identity_scope: { kind: 'unscoped' },
-    local_agent_id: identity,
-    role: startResult.role ?? identity,
-    legacy_agent_id: identity,
-  });
 const { requiredEnvironment, wouldSetEnvironment }: any = buildCarrierEnvironmentProjection({
   carrierName: carrier,
   startResult,
@@ -1581,10 +1645,52 @@ const handoffSessionRef: any = narsLaunch?.runtime_session_id
   : carrierSessionRegistration?.carrier_session_id
     ? { id: carrierSessionRegistration.carrier_session_id, kind: 'carrier' }
     : null;
+const orientationStartupSequence: any = [{
+  tool: 'agent_context_startup_sequence',
+  arguments: {},
+  source: 'carrier-entry-procedure',
+  semantics: 'retrieve_exact_receipt_bound_orientation_manifest',
+  mutation: false,
+}];
+const embodimentAdmission: any = carrierSessionAdmissionReceipt
+  ? {
+    schema: 'narada.agent_start.embodiment_admission.v1',
+    status: 'admitted',
+    required: true,
+    source: sessionAuthorityAdmission
+      ? 'nars_session_authority_readback_adapter'
+      : 'external_carrier_session_authority_receipt',
+    authority_owner: carrierSessionAdmissionReceipt.coordinate.authority_scope,
+    receipt_ref: carrierSessionAdmissionReceipt.receipt_id,
+    coordinate: carrierSessionAdmissionReceipt.coordinate,
+    agent_identity: carrierSessionAdmissionReceipt.agent_identity,
+    carrier_kind: carrierSessionAdmissionReceipt.carrier_kind,
+    admission_policy: carrierSessionAdmissionReceipt.admission_policy,
+    authority_readback_ref: carrierSessionAdmissionReceipt.authority_readback_ref,
+    orientation_manifest_id: startResult.orientation_manifest?.manifest_id ?? null,
+    owner_token_exposed: false,
+  }
+  : {
+    schema: 'narada.agent_start.embodiment_admission.v1',
+    status: 'not_materialized',
+    required: launchMaterializationRequired,
+    source: 'dry_run_proposal_validation_only',
+    authority_owner: null,
+    receipt_ref: null,
+    coordinate: null,
+    agent_identity: agentIdentityRef,
+    carrier_kind: carrier,
+    admission_policy: null,
+    authority_readback_ref: null,
+    orientation_manifest_id: null,
+    owner_token_exposed: false,
+  };
 
 const output: any = {
   ...startResult,
   schema: 'narada.agent_start.result.v0',
+  startup_sequence: orientationStartupSequence,
+  embodiment_admission: embodimentAdmission,
   agent_identity_ref: agentIdentityRef,
   runtime_contract_schema: RUNTIME_CONTRACT_SCHEMA,
   operator_surface_kind: carrier,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { join, resolve } from 'path';
+import { isAbsolute, join, resolve } from 'path';
 import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import { validateAgentExecutionPolicy } from '../site-config/agent-execution-policy.js';
 import { taskLifecycleReadinessPaths } from '../task-lifecycle-mcp-resolution.js';
@@ -117,12 +117,43 @@ function taskLifecycleReadiness() : any{
 
 function agentContextReadiness() : any{
   const db: any = join(siteRoot, '.ai', 'state', 'agent-context.sqlite');
-  const server: any = join(siteRoot, 'tools', 'agent-context', 'agent-context-mcp-server.ts');
-  return check('agent_context_readiness', 'Agent context DB and MCP server', 'blocking', existsSync(db) && existsSync(server) ? 'pass' : 'fail', {
+  const registryPath: any = join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json');
+  let surface: any = null;
+  let registryError: any = null;
+  try {
+    const registry: any = JSON.parse(readFileSync(registryPath, 'utf8'));
+    surface = Array.isArray(registry?.surfaces)
+      ? registry.surfaces.find((entry: any) =>
+        entry?.catalog_surface_id === 'agent-context'
+        || entry?.surface_projection?.surface_id === 'agent-context')
+      : null;
+  } catch (error: any) {
+    registryError = error?.message ?? String(error);
+  }
+  const entrypointValue: any = surface?.runtime_binding?.entrypoint;
+  const server: any = typeof entrypointValue === 'string' && entrypointValue.trim()
+    ? (isAbsolute(entrypointValue) ? entrypointValue : resolve(siteRoot, entrypointValue))
+    : null;
+  const exposedTools: any = Array.isArray(surface?.tool_contract?.exposed_tools)
+    ? surface.tool_contract.exposed_tools
+    : [];
+  const requiredTools: any = ['agent_context_hydrate_current', 'agent_context_startup_sequence'];
+  const missingTools: any = requiredTools.filter((tool: any) => !exposedTools.includes(tool));
+  const ready: any = existsSync(db)
+    && Boolean(surface)
+    && Boolean(server && existsSync(server))
+    && missingTools.length === 0;
+  return check('agent_context_readiness', 'Agent context DB and registrar-bound MCP surface', 'blocking', ready ? 'pass' : 'fail', {
     db_path: db,
     db_exists: existsSync(db),
+    registry_path: registryPath,
+    registry_error: registryError,
+    surface_id: surface?.surface_id ?? null,
+    catalog_surface_id: surface?.catalog_surface_id ?? null,
     server_path: server,
-    server_exists: existsSync(server),
+    server_exists: Boolean(server && existsSync(server)),
+    required_tools: requiredTools,
+    missing_tools: missingTools,
   });
 }
 

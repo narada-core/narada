@@ -8,15 +8,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada-core/agent-context-mcp": "workspace:*",
-    "@narada-core/agent-identity": "workspace:*",
-    "@narada-core/agent-start-bootstrap": "workspace:*",
-    "@narada-core/process-launch-posture": "workspace:*",
-    "@narada-core/site-common-tools": "workspace:*",
-    "@narada-core/task-lifecycle-mcp": "workspace:*",
-    "@narada-core/task-lifecycle-tools": "workspace:*"
+    "@narada-core/agent-context-mcp": "workspace:*"
   },
-  "description": "Agent session materialization helpers and the agent-context MCP server implementation",
+  "description": "Non-authoritative Agent Context support utilities and compatibility re-exports",
   "license": "MIT",
   "repository": {
     "type": "git",

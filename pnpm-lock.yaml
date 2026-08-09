@@ -77,6 +77,9 @@ importers:
       '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+      '@narada-core/orientation-manifest':
+        specifier: workspace:*
+        version: link:../../../narada/packages/orientation-manifest
       '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../../narada-core/packages/sqlite
@@ -456,24 +459,6 @@ importers:
       '@narada-core/agent-context-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/agent-context-mcp
-      '@narada-core/agent-identity':
-        specifier: workspace:*
-        version: link:../agent-identity
-      '@narada-core/agent-start-bootstrap':
-        specifier: workspace:*
-        version: link:../agent-start-bootstrap
-      '@narada-core/process-launch-posture':
-        specifier: workspace:*
-        version: link:../process-launch-posture
-      '@narada-core/site-common-tools':
-        specifier: workspace:*
-        version: link:../site-common-tools
-      '@narada-core/task-lifecycle-mcp':
-        specifier: workspace:*
-        version: link:../../../mcp-surfaces/packages/task-lifecycle-mcp
-      '@narada-core/task-lifecycle-tools':
-        specifier: workspace:*
-        version: link:../task-lifecycle-tools
     devDependencies:
       tsx:
         specifier: ^4.21.0
@@ -635,6 +620,9 @@ importers:
       '@narada-core/operator-surface-runtime-contract':
         specifier: workspace:*
         version: link:../operator-surface-runtime-contract
+      '@narada-core/orientation-manifest':
+        specifier: workspace:*
+        version: link:../orientation-manifest
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -1809,6 +1797,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@20.19.39)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/orientation-manifest:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/pc-site-runtime-observer:
     dependencies:

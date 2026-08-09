@@ -16,6 +16,7 @@
     "@narada-core/invokable-intelligence-management": "workspace:*",
     "@narada-core/nars-intelligence-kernel-contract": "workspace:*",
     "@narada-core/operator-surface-runtime-contract": "workspace:*",
+    "@narada-core/orientation-manifest": "workspace:*",
     "@narada-core/carrier-protocol": "workspace:*",
     "@narada-core/carrier-provider-support": "workspace:*",
     "@narada-core/process-launch-posture": "workspace:*",
@@ -45,6 +46,10 @@
     "./launch-result-v0-contract": {
       "types": "./dist/src/launch-result-v0-contract.d.ts",
       "import": "./dist/src/launch-result-v0-contract.js"
+    },
+    "./orientation-admission": {
+      "types": "./dist/src/orientation-admission.d.ts",
+      "import": "./dist/src/orientation-admission.js"
     },
     "./verify-registered-site-launchers": {
       "types": "./dist/bin/verify-registered-site-launchers.d.ts",

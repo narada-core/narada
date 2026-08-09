@@ -123,8 +123,8 @@ Each row names the main invariant, the owning files, the best current proof, the
 ### 1827. MCP fabric handoff
 
 - State: open; worker-facing MCP scope still needs to be bounded by the owning runtime, not by accidental process inheritance.
-- Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/agent-runtime-server/src/session-core-runtime-service.ts`, `packages/agent-context-tools/src/agent-context-mcp-server.ts`.
-- Current evidence: the runtime stack already separates discovery, projection, and session index responsibilities.
+- Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/agent-runtime-server/src/session-core-runtime-service.ts`, and the registrar-bound `mcp-surfaces/packages/agent-context-mcp` adapter. The former Narada-local `packages/agent-context-tools/src/agent-context-mcp-server.ts` path is now an explicit retirement refusal.
+- Current evidence: the runtime stack separates discovery, projection, and session index responsibilities; Agent Context startup is bound to an exact admission receipt and immutable manifest id.
 - Remaining gap: the launcher and delegated worker flows still need explicit proof that MCP exposure is intentional and scoped.
 - Next verification: `pnpm --filter @narada-core/carrier-runtime test` and the worker-delegation/launcher tests that cover scoped MCP startup.
 

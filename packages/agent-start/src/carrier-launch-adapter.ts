@@ -390,7 +390,12 @@ export function buildCarrierEnvironmentProjection({
       ...projectedStartRequiredEnvironment,
       ...commonEnvironment,
     }),
-    wouldSetEnvironment: startResult.would_set_environment
+    wouldSetEnvironment: startResult.status === 'dry_run'
+      ? redactEnvironmentForOutput({
+        ...projectedStartWouldSetEnvironment,
+        ...commonEnvironment,
+      })
+      : startResult.would_set_environment
       ? redactEnvironmentForOutput({
         ...projectedStartWouldSetEnvironment,
         ...commonEnvironment,

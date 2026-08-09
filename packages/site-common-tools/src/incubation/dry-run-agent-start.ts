@@ -269,9 +269,10 @@ console.log(`intelligence_context_materialization: ${icRow.materialization_id}`)
 console.log(`expires_at: ${icRow.expires_at}`);
 console.log(`proposal: ${proposalRow.proposal_id} (${proposalRow.verdict})`);
 console.log(`\nresume_command: ${resumeCommand}`);
-console.log(`\n=== FIRST PROMPT ===`);
-console.log(`Use agent_context_show_bootstrap with event_id ${eventId}.`);
-console.log(`Then reconstruct execution_context, intelligence_context, authority_state, residuals, and recommend one next action.`);
+console.log(`\n=== INCUBATION LIMIT ===`);
+console.log('This fixture does not issue Carrier Session admission or an Orientation Manifest.');
+console.log('Use the canonical Agent Start path to obtain an admitted manifest generation.');
+console.log('The admitted Carrier may then call agent_context_startup_sequence with its exact manifest id.');
 
 function parseArgs(argv: any) : any{
   const result: any = {};

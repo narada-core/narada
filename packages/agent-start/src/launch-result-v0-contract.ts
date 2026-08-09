@@ -36,6 +36,26 @@ const carrierActionsShape = z.object({
 const handoffShape = z.object({
   session_ref: sessionRefShape,
 }).passthrough();
+const embodimentAdmissionShape = z.object({
+  schema: z.literal('narada.agent_start.embodiment_admission.v1'),
+  status: z.enum(['admitted', 'not_materialized']),
+  required: z.boolean(),
+  source: nonEmptyString,
+  authority_owner: optionalString,
+  receipt_ref: optionalString,
+  coordinate: z.object({
+    authority_scope: nonEmptyString,
+    site_ref: nonEmptyString,
+    carrier_session_id: nonEmptyString,
+    authority_epoch: z.number().int().positive(),
+  }).passthrough().nullable().optional(),
+  agent_identity: z.record(z.unknown()).nullable().optional(),
+  carrier_kind: optionalString,
+  admission_policy: z.record(z.unknown()).nullable().optional(),
+  authority_readback_ref: optionalString,
+  orientation_manifest_id: optionalString,
+  owner_token_exposed: z.literal(false),
+}).passthrough();
 
 const commonResultShape = {
   schema: z.literal(AGENT_START_RESULT_SCHEMA),
@@ -57,6 +77,7 @@ const commonResultShape = {
   nars_launch: sessionShape.nullable().optional(),
   carrier_session: sessionShape.nullable().optional(),
   carrier_actions: carrierActionsShape.nullable().optional(),
+  embodiment_admission: embodimentAdmissionShape.optional(),
 };
 
 export const AgentStartResultV0Schema = z.union([

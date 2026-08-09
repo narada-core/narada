@@ -698,6 +698,153 @@
             }
           ]
         },
+        "embodiment_admission": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string",
+              "const": "narada.agent_start.embodiment_admission.v1"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "admitted",
+                "not_materialized"
+              ]
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authority_owner": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "receipt_ref": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coordinate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "authority_scope": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "site_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "carrier_session_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "authority_epoch": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "authority_scope",
+                    "site_ref",
+                    "carrier_session_id",
+                    "authority_epoch"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agent_identity": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "carrier_kind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "admission_policy": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority_readback_ref": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "orientation_manifest_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "owner_token_exposed": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "required",
+            "source",
+            "owner_token_exposed"
+          ],
+          "additionalProperties": true
+        },
         "status": {
           "type": "string",
           "const": "materialized"
@@ -1435,6 +1582,153 @@
               "type": "null"
             }
           ]
+        },
+        "embodiment_admission": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string",
+              "const": "narada.agent_start.embodiment_admission.v1"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "admitted",
+                "not_materialized"
+              ]
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authority_owner": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "receipt_ref": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coordinate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "authority_scope": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "site_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "carrier_session_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "authority_epoch": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "authority_scope",
+                    "site_ref",
+                    "carrier_session_id",
+                    "authority_epoch"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agent_identity": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "carrier_kind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "admission_policy": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority_readback_ref": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "orientation_manifest_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "owner_token_exposed": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "required",
+            "source",
+            "owner_token_exposed"
+          ],
+          "additionalProperties": true
         },
         "status": {
           "type": "string",

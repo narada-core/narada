@@ -147,6 +147,21 @@
       }
     },
     {
+      "component_kind": "site-inbox-mcp",
+      "package": "@narada-core/site-inbox-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "inbox-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "inbox-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-site-inbox", "inbox-protocol-parity", "native-site-inbox-roundtrip"] }
+      }
+    },
+    {
       "component_kind": "mcp-javascript-surface",
       "package": "@narada-core/mcp-surfaces",
       "required": true,

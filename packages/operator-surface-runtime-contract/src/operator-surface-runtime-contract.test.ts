@@ -422,6 +422,8 @@ test('runtime profiles expose coherent user choices over the implementation matr
   assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'agent-context-mcp')?.runtime_engine_kind, 'bun');
   assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'mcp-loader-mcp')?.runtime_engine_kind, 'rust');
   assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'mcp-loader-mcp')?.implementation_status, 'admitted');
+  assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'site-inbox-mcp')?.runtime_engine_kind, 'rust');
+  assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'site-inbox-mcp')?.implementation_status, 'admitted');
 
   const bunSelection = resolveRuntimeProfileSelection({ value: 'BUN' });
   assert.equal(bunSelection.status, 'accepted');
@@ -459,9 +461,9 @@ test('runtime profiles expose coherent user choices over the implementation matr
 
 test('runtime materialization plan is matrix-derived for every admitted profile', () => {
   const expected: Record<string, Record<string, string>> = {
-    native: { 'mcp-runtime-proxy': 'rust', 'mcp-loader-mcp': 'rust', 'filesystem-mcp': 'rust', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'rust', 'catalog-observation-mcp': 'rust', 'operator-routing-mcp': 'rust' },
-    bun: { 'mcp-runtime-proxy': 'bun', 'mcp-loader-mcp': 'bun', 'filesystem-mcp': 'bun', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'bun', 'catalog-observation-mcp': 'bun', 'operator-routing-mcp': 'bun' },
-    'node-compat': { 'mcp-runtime-proxy': 'node', 'mcp-loader-mcp': 'node', 'filesystem-mcp': 'node', 'agent-context-mcp': 'node', 'mcp-registrar': 'node', 'mcp-javascript-surface': 'node', 'structured-command-mcp': 'node', 'catalog-observation-mcp': 'node', 'operator-routing-mcp': 'node' },
+    native: { 'mcp-runtime-proxy': 'rust', 'mcp-loader-mcp': 'rust', 'filesystem-mcp': 'rust', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'rust', 'catalog-observation-mcp': 'rust', 'operator-routing-mcp': 'rust', 'site-inbox-mcp': 'rust' },
+    bun: { 'mcp-runtime-proxy': 'bun', 'mcp-loader-mcp': 'bun', 'filesystem-mcp': 'bun', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'bun', 'catalog-observation-mcp': 'bun', 'operator-routing-mcp': 'bun', 'site-inbox-mcp': 'bun' },
+    'node-compat': { 'mcp-runtime-proxy': 'node', 'mcp-loader-mcp': 'node', 'filesystem-mcp': 'node', 'agent-context-mcp': 'node', 'mcp-registrar': 'node', 'mcp-javascript-surface': 'node', 'structured-command-mcp': 'node', 'catalog-observation-mcp': 'node', 'operator-routing-mcp': 'node', 'site-inbox-mcp': 'node' },
   };
   for (const [profile, components] of Object.entries(expected)) {
     const plan = resolveRuntimeMaterializationPlan(profile);

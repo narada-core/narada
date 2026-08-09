@@ -102,6 +102,21 @@
       }
     },
     {
+      "component_kind": "structured-command-mcp",
+      "package": "@narada-core/structured-command-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "structured-command-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "structured-command-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-structured-command-applet", "structured-command-protocol-parity", "native-structured-command-tests"] }
+      }
+    },
+    {
       "component_kind": "mcp-javascript-surface",
       "package": "@narada-core/mcp-surfaces",
       "required": true,

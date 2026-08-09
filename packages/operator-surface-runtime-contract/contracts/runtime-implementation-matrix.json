@@ -117,6 +117,36 @@
       }
     },
     {
+      "component_kind": "catalog-observation-mcp",
+      "package": "@narada-core/catalog-observation-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "catalog-observation-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "catalog-observation-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-shared-surface", "catalog-observation-protocol-parity", "native-catalog-observation-tests"] }
+      }
+    },
+    {
+      "component_kind": "operator-routing-mcp",
+      "package": "@narada-core/operator-routing-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "operator-routing-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "operator-routing-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-shared-surface", "operator-routing-protocol-parity", "native-operator-routing-tests"] }
+      }
+    },
+    {
       "component_kind": "mcp-javascript-surface",
       "package": "@narada-core/mcp-surfaces",
       "required": true,

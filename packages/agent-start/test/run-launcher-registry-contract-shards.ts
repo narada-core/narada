@@ -1,24 +1,25 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runProcessTests } from './helpers/process-test-runner.js';
+import { runProcessTestMain, type ProcessTestCommand } from './helpers/process-test-runner.js';
 
-const __dirname: any = dirname(fileURLToPath(import.meta.url));
-const packageRoot: any = resolve(__dirname, '..');
-const testFile: any = 'test/launcher-registry-contract.test.ts';
-const source: any = readFileSync(resolve(packageRoot, testFile), 'utf8');
-const testNames: any = [...source.matchAll(/^test\('([^']+)'/gm)].map((match: any) => match[1]);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(__dirname, '..');
+const testFile = 'test/launcher-registry-contract.test.ts';
+const source = readFileSync(resolve(packageRoot, testFile), 'utf8');
+const testNames = [...source.matchAll(/^test\('([^']+)'/gm)]
+  .map((match) => match[1])
+  .filter((name): name is string => name !== undefined);
 
 if (testNames.length === 0) {
-  console.error('No launcher-registry tests found to shard.');
-  process.exit(1);
+  throw new Error('No launcher-registry tests found to shard.');
 }
 
-function escapeRegExp(value: any) : any{
+function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const commands: any = testNames.map((name: any, index: any) => ({
+const commands: ProcessTestCommand[] = testNames.map((name, index) => ({
   label: `launcher-registry:${index + 1}`,
   args: [
     '--import',
@@ -29,10 +30,7 @@ const commands: any = testNames.map((name: any, index: any) => ({
     testFile,
   ],
   cwd: packageRoot,
-  // Shards run concurrently and each re-pays full module load; the cold first
-  // shard starves past 15s on a loaded machine. 45s keeps this an infra ceiling,
-  // not a flake generator.
-  timeoutMs: 45000,
+  timeoutMs: 45_000,
 }));
 
-await runProcessTests(commands);
+await runProcessTestMain(commands, { maxConcurrency: 2 });

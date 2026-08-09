@@ -8,7 +8,9 @@ import {
   CARRIER_SESSION_ADMISSION_RECEIPT_JSON_SCHEMA,
   CARRIER_SESSION_ADMISSION_RECEIPT_SCHEMA,
   CARRIER_SESSION_ORIENTATION_DELIVERY_RECEIPT_JSON_SCHEMA,
+  ORIENTATION_ACKNOWLEDGEMENT_JSON_SCHEMA,
   ORIENTATION_ASSEMBLY_POLICY_SCHEMA,
+  ORIENTATION_BRIEF_JSON_SCHEMA,
   ORIENTATION_COMPILATION_RESULT_JSON_SCHEMA,
   ORIENTATION_MANIFEST_JSON_SCHEMA,
   OrientationContractError,
@@ -29,6 +31,13 @@ import {
   assertOrientationManifestIntegrity,
   compileOrientationManifest,
 } from './compiler.js';
+import {
+  buildOrientationBrief,
+  buildOrientationOccupantBrief,
+  buildOrientationReadyProjection,
+  issueCarrierSessionOrientationAcknowledgement,
+  issueCarrierSessionOrientationDeliveryReceipt,
+} from './ceremony.js';
 
 const NOW = '2026-08-08T12:00:00.000Z';
 const SITE_REF = 'site:narada';
@@ -211,13 +220,17 @@ test('receipt contracts require exact, coherent admission, delivery, and activat
 
   assert.throws(
     () => parseCarrierSessionOrientationDeliveryReceipt({
-      schema: 'narada.carrier_session.orientation_delivery_receipt.v0',
+      schema: 'narada.carrier_session.orientation_delivery_receipt.v1',
       receipt_id: 'delivery:1',
       status: 'delivered',
       coordinate: admission().coordinate,
       admission_receipt_ref: admission().receipt_id,
       manifest_id: null,
       manifest_digest: null,
+      brief_id: null,
+      brief_digest: null,
+      delivery_mode: null,
+      ordinary_work_gate: null,
       delivered_at: null,
       authority_readback_ref: 'carrier-delivery:1',
       evidence_refs: [],
@@ -255,11 +268,134 @@ test('exported receipt schemas use carrier-portable JSON Schema nullability', ()
     CARRIER_SESSION_ADMISSION_RECEIPT_JSON_SCHEMA,
     CARRIER_SESSION_ACTIVATION_RECEIPT_JSON_SCHEMA,
     CARRIER_SESSION_ORIENTATION_DELIVERY_RECEIPT_JSON_SCHEMA,
+    ORIENTATION_BRIEF_JSON_SCHEMA,
+    ORIENTATION_ACKNOWLEDGEMENT_JSON_SCHEMA,
     ORIENTATION_MANIFEST_JSON_SCHEMA,
     ORIENTATION_COMPILATION_RESULT_JSON_SCHEMA,
   ]) {
     visit(schema);
   }
+});
+
+test('bounded brief, delivery, required-read evidence, and acknowledgement form one exact ceremony', () => {
+  const requiredRead = {
+    step_id: 'read:agents:1',
+    ordinal: 1,
+    required: true,
+    source: {
+      source_authority_ref: 'site-law:narada',
+      artifact_ref: 'C:/site/AGENTS.md',
+      revision: 'agents-sha256',
+    },
+    tool: {
+      name: 'fs_read_file_range',
+      arguments: {
+        path: 'C:/site/AGENTS.md',
+        start_line: 1,
+        end_line: 120,
+      },
+    },
+    completion: {
+      kind: 'tool_result_fields',
+      expected_result: {
+        content_sha256: 'agents-sha256',
+        offset: 0,
+      },
+      evidence_fields: ['content_sha256', 'offset', 'returned_lines'],
+    },
+  };
+  const projections = requiredProjections().map((entry) => (
+    entry.entry_kind === 'entry_procedure'
+      ? {
+          ...entry,
+          payload: {
+            required_reads: [requiredRead],
+            steps: ['complete_required_reads', 'acknowledge_orientation'],
+          },
+        }
+      : entry
+  ));
+  const compilation = compileOrientationManifest({
+    admission_receipt: admission(),
+    assembly_policy: policy(),
+    projections,
+    generated_at: NOW,
+  });
+  const brief = buildOrientationBrief({
+    manifest: compilation.manifest,
+    manifestArtifactRef: 'agent-context:orientation-manifests:exact',
+  });
+  assert.equal(brief.inline_bytes <= 3_072, true);
+  assert.equal(brief.required_reads.length, 1);
+  assert.equal(brief.continuity_selection.mode, 'omitted');
+  assert.equal(brief.work_selection.mode, 'omitted');
+  const occupantBrief = buildOrientationOccupantBrief(brief);
+  assert.equal(occupantBrief.schema, 'narada.orientation_occupant_brief.v1');
+  assert.equal(occupantBrief.position.local_agent_id, 'narada.builder');
+  assert.equal(occupantBrief.manifest_readiness, 'ready');
+  assert.equal('readiness' in occupantBrief, false);
+  assert.equal(occupantBrief.required_reads.length, 1);
+  assert.equal('brief_id' in occupantBrief, false);
+  assert.equal('brief_digest' in occupantBrief, false);
+  assert.equal('manifest_ref' in occupantBrief, false);
+  assert.equal('negative_claims' in occupantBrief, false);
+  assert.equal('completion' in occupantBrief.required_reads[0], false);
+  const readyProjection = buildOrientationReadyProjection(brief);
+  assert.equal(readyProjection.schema, 'narada.orientation_ready_projection.v1');
+  assert.equal(readyProjection.orientation_status, 'acknowledged');
+  assert.equal(readyProjection.next_meaningful_call, null);
+  assert.equal('required_reads' in readyProjection, false);
+
+  const delivery = issueCarrierSessionOrientationDeliveryReceipt({
+    admissionReceipt: admission(),
+    brief,
+    deliveredAt: NOW,
+  });
+  assert.equal(delivery.status, 'delivered');
+  assert.equal(
+    delivery.authority_readback_ref,
+    `agent-context:orientation_delivery_receipts:${delivery.receipt_id}`,
+  );
+
+  const completion = {
+    step_id: requiredRead.step_id,
+    tool_name: requiredRead.tool.name,
+    arguments: requiredRead.tool.arguments,
+    result_evidence: {
+      content_sha256: 'agents-sha256',
+      offset: 0,
+      returned_lines: 120,
+    },
+    completed_at: '2026-08-08T12:00:01.000Z',
+    evidence_refs: ['mcp-result:fs-read:1'],
+  };
+  const acknowledgement = issueCarrierSessionOrientationAcknowledgement({
+    admissionReceipt: admission(),
+    deliveryReceipt: delivery,
+    brief,
+    requiredReadCompletions: [completion],
+    acknowledgedAt: '2026-08-08T12:00:02.000Z',
+    authorityReadbackRef: 'agent-context:orientation_acknowledgements:exact',
+  });
+  assert.equal(acknowledgement.status, 'acknowledged');
+  assert.equal(
+    acknowledgement.acknowledgement_semantics,
+    'receipt_and_required_reads_not_comprehension',
+  );
+  assert.equal(acknowledgement.action_admission, 'separate_required');
+
+  assert.throws(
+    () => issueCarrierSessionOrientationAcknowledgement({
+      admissionReceipt: admission(),
+      deliveryReceipt: delivery,
+      brief,
+      requiredReadCompletions: [],
+      acknowledgedAt: '2026-08-08T12:00:02.000Z',
+      authorityReadbackRef: 'agent-context:orientation_acknowledgements:missing',
+    }),
+    (error: unknown) => error instanceof OrientationContractError
+      && error.code === 'required_read_completion_missing',
+  );
 });
 
 test('compiler is deterministic, immutable, source indexed, and action-authority neutral', () => {

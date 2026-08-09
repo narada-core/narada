@@ -11,7 +11,7 @@
  * starts the runtime. Process creation never creates admission authority.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--continuity-checkpoint-id <checkpoint-id>] [--work-task-number <task-number>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
  *   runtime profile selection: --runtime-profile <native|bun|node-compat> (or NARADA_RUNTIME_PROFILE); --runtime-engine remains a compatibility override.
  */
 
@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
+import { issueCarrierSessionOrientationDeliveryReceipt } from '@narada-core/orientation-manifest';
 import {
   adaptNarsSessionAdmissionReceipt,
   assertAdmissionReceiptForLaunch,
@@ -104,6 +105,22 @@ async function resolvePackagedModule(specifier: string): Promise<string | null> 
   }
 }
 
+function optionalCliString(value: unknown, name: string): string | null {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  if (normalized === '') throw new Error(`${name}_must_be_non_empty`);
+  return normalized;
+}
+
+function optionalPositiveInteger(value: unknown, name: string): number | null {
+  if (value === undefined || value === null) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`${name}_must_be_positive_integer`);
+  }
+  return parsed;
+}
+
 function localSiteMcpFabricPath() : any{
   const localLocus: any = (mcpFabric?.locus_fabrics ?? []).find((entry: any) => entry.locus === 'local-site');
   return localLocus?.mcp_dir ?? mcpFabric?.mcp_dir ?? join(workspaceRoot, '.ai', 'mcp');
@@ -139,12 +156,17 @@ const writeFileModulePath: any = existsSync(join(commonToolsRoot, 'incubation', 
   ? join(commonToolsRoot, 'incubation', 'write-file-utf8.ts')
   : packagedWriteFileModulePath;
 const { writeJsonFile }: any = await import(pathToFileURL(writeFileModulePath).href);
-const { beginCodexSessionAdmission, getCodexSessionAdmission, materializeAgentSessionStart }: any = await import(pathToFileURL(agentContextSessionStartPath).href);
+const {
+  beginCodexSessionAdmission,
+  getCodexSessionAdmission,
+  materializeAgentSessionStart,
+  recordOrientationDeliveryReceipt,
+}: any = await import(pathToFileURL(agentContextSessionStartPath).href);
 const localMcpFabricModulePath: any = join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.ts');
 const mcpFabricModulePath: any = existsSync(localMcpFabricModulePath)
   ? localMcpFabricModulePath
   : packagedMcpFabricModulePath;
-const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex }: any = await import(pathToFileURL(mcpFabricModulePath).href);
+const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex, projectFabricForKimi }: any = await import(pathToFileURL(mcpFabricModulePath).href);
 const runtimeInput: any = args.runtime ?? null;
 const runtimeEngineInput: any = args.runtime_engine ?? null;
 const runtimeProfileInput: any = args.runtime_profile ?? null;
@@ -223,6 +245,14 @@ const workspaceRoot: any = resolveNaradaSitePaths({
 const userSiteRoot: any = resolveUserSiteRoot();
 loadSiteEnvFiles(sessionSiteRoot, { siteNaradaRoot, processEnv: process.env });
 const dbPath: any = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
+const exactContinuityCheckpointId: any = optionalCliString(
+  args.continuity_checkpoint_id,
+  'continuity_checkpoint_id',
+);
+const exactWorkTaskNumber: any = optionalPositiveInteger(
+  args.work_task_number,
+  'work_task_number',
+);
 const require: any = createRequire(import.meta.url);
 const naradaPackages: any = createNaradaPackageResolver({
   naradaProperRoot: NARADA_PROPER_ROOT,
@@ -236,6 +266,7 @@ const ADMITTED_RUNTIME_SUBSTRATE_KINDS: any = Object.freeze(RUNTIME_SUBSTRATE_KI
 const TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA: any = 'narada.tool_fabric_adapter_kind.v1';
 const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS: any = Object.freeze([
   'codex-native-mcp',
+  'kimi-project-mcp',
   'narada-agent-runtime-server-mcp-client',
   'pi-extension-mcp-bridge',
   'claude-code-native-mcp',
@@ -363,6 +394,101 @@ function materializeAgentTuiMcpConfig() : any{
     writeFileSync(configPath, serialized, 'utf8');
   }
   return configPath;
+}
+
+function materializeKimiMcpConfig() : any {
+  if (carrier !== 'kimi') return null;
+  const configPath: any = join(workspaceRoot, '.kimi-code', 'mcp.json');
+  const ownershipKey: any = createHash('sha256')
+    .update(resolve(workspaceRoot))
+    .digest('hex')
+    .slice(0, 20);
+  const ownershipPath: any = join(
+    sessionSiteRoot,
+    '.ai',
+    'runtime',
+    'kimi-mcp-projection',
+    `${ownershipKey}.json`,
+  );
+  const projected: any = projectFabricForKimi(mcpFabric);
+  const projectedServers: any = projected?.mcpServers ?? {};
+  if (Object.keys(projectedServers).length === 0) {
+    throw new Error('kimi_orientation_mcp_projection_empty');
+  }
+
+  let existingConfig: any = {};
+  if (existsSync(configPath)) {
+    try {
+      existingConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch (error) {
+      throw new Error(
+        `kimi_project_mcp_config_invalid:${configPath}:`
+        + (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  }
+  if (!existingConfig || typeof existingConfig !== 'object' || Array.isArray(existingConfig)) {
+    throw new Error(`kimi_project_mcp_config_invalid:${configPath}:object_required`);
+  }
+
+  let priorOwnership: any = null;
+  if (existsSync(ownershipPath)) {
+    try {
+      priorOwnership = JSON.parse(readFileSync(ownershipPath, 'utf8'));
+    } catch (error) {
+      throw new Error(
+        `kimi_project_mcp_ownership_invalid:${ownershipPath}:`
+        + (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  }
+  const priorOwnedNames: any = new Set(
+    Array.isArray(priorOwnership?.owned_server_names)
+      ? priorOwnership.owned_server_names.map(String)
+      : [],
+  );
+  const mergedServers: any = {
+    ...(existingConfig.mcpServers && typeof existingConfig.mcpServers === 'object'
+      && !Array.isArray(existingConfig.mcpServers)
+      ? existingConfig.mcpServers
+      : {}),
+  };
+  for (const name of priorOwnedNames) delete mergedServers[name];
+  for (const [name, server] of Object.entries(projectedServers)) {
+    if (Object.prototype.hasOwnProperty.call(mergedServers, name)) {
+      throw new Error(`kimi_project_mcp_server_ownership_conflict:${name}:${configPath}`);
+    }
+    mergedServers[name] = server;
+  }
+  const nextConfig: any = {
+    ...existingConfig,
+    mcpServers: mergedServers,
+  };
+  const ownership: any = {
+    schema: 'narada.agent_start.kimi_mcp_projection.v1',
+    workspace_root: workspaceRoot,
+    site_root: sessionSiteRoot,
+    config_path: configPath,
+    owned_server_names: Object.keys(projectedServers).sort(),
+    carrier_session_id: carrierSessionRegistration.carrier_session_id,
+    generated_at: new Date().toISOString(),
+  };
+  if (execFlag && !dryRun) {
+    mkdirSync(dirname(configPath), { recursive: true });
+    mkdirSync(dirname(ownershipPath), { recursive: true });
+    writeJsonFileAtomically(configPath, nextConfig);
+    writeJsonFileAtomically(ownershipPath, ownership);
+  }
+  return {
+    status: execFlag && !dryRun ? 'materialized' : 'planned',
+    config_path: configPath,
+    ownership_path: ownershipPath,
+    server_count: Object.keys(projectedServers).length,
+    owned_server_names: ownership.owned_server_names,
+    preserved_server_names: Object.keys(mergedServers)
+      .filter((name) => !Object.prototype.hasOwnProperty.call(projectedServers, name))
+      .sort(),
+  };
 }
 
 function agentTuiTerminalEnvironment() : any{
@@ -603,6 +729,8 @@ let sessionAuthority: any = null;
 let sessionAuthorityAdmission: any = null;
 let carrierSessionAdmissionReceipt: any = null;
 let agentIdentityRef: any = null;
+let orientationDeliveryReceipt: any = null;
+let orientationEntryArtifacts: any = null;
 const sessionAuthorityEnforced: any = runtime === 'narada-agent-runtime-server' && execFlag === true && dryRun !== true;
 const launchMaterializationRequired: any = execFlag === true && dryRun !== true;
 try {
@@ -740,6 +868,8 @@ try {
       dryRun: false,
       carrierSessionId: plannedCarrierSessionId,
       admissionReceipt: carrierSessionAdmissionReceipt,
+      exactCheckpointId: exactContinuityCheckpointId,
+      exactWorkTaskNumber,
     });
     if (startResult.status !== 'materialized') {
       throw new Error(
@@ -747,6 +877,21 @@ try {
         + (startResult.orientation_manifest?.reason_codes ?? []).join(','),
       );
     }
+    if (!startResult.orientation_brief) {
+      throw new Error('orientation_brief_missing_after_materialization');
+    }
+    const entryPaths: any = orientationEntryArtifactPaths(plannedCarrierSessionId);
+    orientationDeliveryReceipt = issueCarrierSessionOrientationDeliveryReceipt({
+      admissionReceipt: carrierSessionAdmissionReceipt,
+      brief: startResult.orientation_brief,
+      deliveredAt: startResult.orientation_brief.generated_at,
+      evidenceRefs: [entryPaths.packet_path, entryPaths.kimi_agent_file],
+    });
+    orientationEntryArtifacts = materializeOrientationEntryArtifacts({
+      paths: entryPaths,
+      brief: startResult.orientation_brief,
+      deliveryReceipt: orientationDeliveryReceipt,
+    });
   } else {
     startResult = validatedStartResult;
   }
@@ -816,10 +961,77 @@ try {
   }, null, 2));
   process.exit(1);
 }
+const orientationRequiredEnvironmentValue: '0' | '1' = startResult.orientation_brief ? '1' : '0';
 
 function kimiSessionDir(identity: any) : any{
   const cwdHash: any = createHash('md5').update(workspaceRoot).digest('hex');
   return join(homedir(), '.kimi', 'sessions', cwdHash, identity);
+}
+
+function orientationEntryArtifactPaths(carrierSessionId: string) {
+  const artifactRoot = join(
+    sessionSiteRoot,
+    '.ai',
+    'runtime',
+    'orientation-entry',
+    identityToken(carrierSessionId),
+  );
+  return {
+    artifact_root: artifactRoot,
+    packet_path: join(artifactRoot, 'entry.json'),
+    acknowledgement_path: join(artifactRoot, 'acknowledgement.json'),
+    kimi_agent_file: join(artifactRoot, 'kimi-agent.md'),
+  };
+}
+
+function materializeOrientationEntryArtifacts({
+  paths,
+  brief,
+  deliveryReceipt,
+}: any) {
+  mkdirSync(paths.artifact_root, { recursive: true });
+  const packet = {
+    schema: 'narada.carrier_entry.orientation_packet.v1',
+    ordinary_work_gate: 'acknowledgement_required',
+    canonical_read_tool: 'agent_orientation_read',
+    acknowledgement_projection: {
+      schema: 'narada.carrier_entry.orientation_acknowledgement_projection_ref.v1',
+      relative_path: 'acknowledgement.json',
+      posture: 'derived_readback_of_canonical_acknowledgement',
+    },
+    orientation_brief: brief,
+    delivery_receipt: deliveryReceipt,
+  };
+  writeJsonFileAtomically(paths.packet_path, packet);
+  const kimiAgentMarkdown = [
+    '# Narada Carrier Entry',
+    '',
+    `You occupy the admitted Agent position ${brief.agent_identity.local_agent_id}.`,
+    'Your first turn is an enforced orientation bootstrap, not ordinary work.',
+    'Call `agent_orientation_read({})` immediately and execute each returned',
+    '`next_call` exactly. Treat every continuation as opaque: never inspect or',
+    'alter it. Stop only when `status=ready` and `ordinary_work_gate=open`.',
+    'Agent Context retains required-read and acknowledgement evidence. Readiness',
+    'proves delivery and completed reads, not comprehension or',
+    'authority for any later action.',
+    '',
+    'Do not discuss or perform selected work during bootstrap. If either',
+    '`agent_orientation_read` is unavailable, report an invalid Carrier launch and do not',
+    'substitute shell or direct file discovery.',
+    '',
+    'The first read returns one thin inline occupant brief containing identity,',
+    'entry-time continuity and work selections, executable reads, and one canonical',
+    '`manifest_ref`. This agent file is only a bootstrap instruction, not another',
+    'orientation authority.',
+    '',
+  ].join('\n');
+  writeFileSync(paths.kimi_agent_file, kimiAgentMarkdown, 'utf8');
+  return {
+    ...paths,
+    packet_schema: packet.schema,
+    packet_bytes: Buffer.byteLength(JSON.stringify(packet), 'utf8'),
+    kimi_agent_bytes: Buffer.byteLength(kimiAgentMarkdown, 'utf8'),
+  };
 }
 
 function stableNodeInstallDir() : any{
@@ -1073,11 +1285,62 @@ function mcpEnvironmentValues() : any{
     ...(startResult.orientation_manifest?.manifest_id ? {
       NARADA_ORIENTATION_MANIFEST_ID: startResult.orientation_manifest.manifest_id,
     } : {}),
+    ...(startResult.orientation_brief ? {
+      NARADA_ORIENTATION_BRIEF: JSON.stringify(startResult.orientation_brief),
+    } : {}),
+    ...(orientationDeliveryReceipt ? {
+      NARADA_ORIENTATION_DELIVERY_RECEIPT: JSON.stringify(orientationDeliveryReceipt),
+    } : {}),
+    ...(orientationEntryArtifacts?.packet_path ? {
+      NARADA_ORIENTATION_ENTRY_FILE: orientationEntryArtifacts.packet_path,
+    } : {}),
+    NARADA_ORIENTATION_REQUIRED: orientationRequiredEnvironmentValue,
     ...(targetSiteId ? { NARADA_SITE_ID: targetSiteId } : {}),
     NARADA_SITE_ROOT: sessionSiteRoot,
     NARADA_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
   }).filter(([, value]: any) => value !== null && value !== undefined && value !== ''));
+}
+
+function orientationToolFabricPreflight() : any {
+  if (!startResult.orientation_brief) {
+    return {
+      status: 'not_required',
+      required_tools: [],
+      server_name: null,
+    };
+  }
+  const requiredTools: any = [
+    'agent_orientation_read',
+    'mcp_output_show',
+  ];
+  for (const [serverName, serverValue] of Object.entries(mcpFabric?.servers ?? {})) {
+    const server: any = serverValue;
+    const names: any = new Set([
+      ...(Array.isArray(server.tools) ? server.tools.map(String) : []),
+      ...(Array.isArray(server.allowed_tools) ? server.allowed_tools.map(String) : []),
+      ...(Array.isArray(server.tool_names) ? server.tool_names.map(String) : []),
+      ...Object.entries(server.registry_tools ?? {}).flatMap(([key, value]: any) => {
+        if (value?.refused === true) return [];
+        return [String(value?.name ?? key)];
+      }),
+    ]);
+    if (requiredTools.every((name: any) => names.has(name))) {
+      return {
+        status: 'verified',
+        server_name: serverName,
+        required_tools: requiredTools,
+        observed_tools: [...names].sort(),
+        evidence: server.registry_metadata_authoritative === true
+          ? 'authoritative_site_fabric_registry'
+          : 'site_fabric_tool_declaration',
+      };
+    }
+  }
+  throw new Error(
+    `carrier_orientation_tool_fabric_unavailable:${carrier}:`
+    + `required=${requiredTools.join(',')}`,
+  );
 }
 
 function codexMcpServerDefinitions() : any{
@@ -1389,6 +1652,10 @@ function buildSpawnArgs(carrierName: any, identity: any, carrierSessionRegistrat
     piModel: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL,
     claudeCodeMcpConfig,
     claudeCodeModel: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
+    orientationBrief: startResult.orientation_brief ?? null,
+    orientationEntryFile: orientationEntryArtifacts?.packet_path ?? null,
+    kimiAgentFile: orientationEntryArtifacts?.kimi_agent_file ?? null,
+    orientationRequired: launchMaterializationRequired,
     runtimeAuthority: runtimeAuthoritySelection.effective,
   });
 }
@@ -1495,7 +1762,7 @@ const output: any = {
   }
 }
 
-if (carrier !== 'kimi' && carrier !== 'opencode') {
+if (carrier !== 'opencode') {
   try {
     mcpFabric = loadScopedMcpFabric();
   } catch (error) {
@@ -1513,6 +1780,8 @@ if (carrier !== 'kimi' && carrier !== 'opencode') {
   };
 }
 
+const orientationToolPreflight: any = orientationToolFabricPreflight();
+const kimiMcpProjection: any = materializeKimiMcpConfig();
 const spawnArgs: any = buildSpawnArgs(carrier, identity, carrierSessionRegistration);
 const toolFabricAdapter: any = resolveToolFabricAdapter(carrier, runtime);
 const runtimeEngineAvailabilityStatus: any = runtimeEngineAvailability();
@@ -1550,6 +1819,16 @@ const carrierEnvironment: any = {
   ...(startResult.orientation_manifest?.manifest_id ? {
     NARADA_ORIENTATION_MANIFEST_ID: startResult.orientation_manifest.manifest_id,
   } : {}),
+  ...(startResult.orientation_brief ? {
+    NARADA_ORIENTATION_BRIEF: JSON.stringify(startResult.orientation_brief),
+  } : {}),
+  ...(orientationDeliveryReceipt ? {
+    NARADA_ORIENTATION_DELIVERY_RECEIPT: JSON.stringify(orientationDeliveryReceipt),
+  } : {}),
+  ...(orientationEntryArtifacts?.packet_path ? {
+    NARADA_ORIENTATION_ENTRY_FILE: orientationEntryArtifacts.packet_path,
+  } : {}),
+  NARADA_ORIENTATION_REQUIRED: orientationRequiredEnvironmentValue,
   ...(carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER
     ? {
         NARADA_RUNTIME_ENGINE: runtimeEngine,
@@ -1645,13 +1924,17 @@ const handoffSessionRef: any = narsLaunch?.runtime_session_id
   : carrierSessionRegistration?.carrier_session_id
     ? { id: carrierSessionRegistration.carrier_session_id, kind: 'carrier' }
     : null;
-const orientationStartupSequence: any = [{
-  tool: 'agent_context_startup_sequence',
-  arguments: {},
-  source: 'carrier-entry-procedure',
-  semantics: 'retrieve_exact_receipt_bound_orientation_manifest',
-  mutation: false,
-}];
+const orientationStartupSequence: any = startResult.orientation_brief
+  ? [
+      {
+        tool: 'agent_orientation_read',
+        arguments: {},
+        source: 'carrier-entry-injection',
+        semantics: 'follow_exact_opaque_continuations_until_ready;carrier_records_required_reads_and_acknowledgement',
+        mutation: true,
+      },
+    ]
+  : [];
 const embodimentAdmission: any = carrierSessionAdmissionReceipt
   ? {
     schema: 'narada.agent_start.embodiment_admission.v1',
@@ -1690,6 +1973,17 @@ const output: any = {
   ...startResult,
   schema: 'narada.agent_start.result.v0',
   startup_sequence: orientationStartupSequence,
+  orientation_delivery_receipt: orientationDeliveryReceipt,
+  orientation_entry_artifacts: orientationEntryArtifacts,
+  orientation_selection: {
+    continuity_checkpoint_id: exactContinuityCheckpointId,
+    work_task_number: exactWorkTaskNumber,
+    selection_semantics: 'exact_or_explicitly_omitted_never_latest',
+  },
+  ordinary_work_gate: orientationDeliveryReceipt
+    ? 'acknowledgement_required'
+    : 'not_materialized',
+  orientation_tool_preflight: orientationToolPreflight,
   embodiment_admission: embodimentAdmission,
   agent_identity_ref: agentIdentityRef,
   runtime_contract_schema: RUNTIME_CONTRACT_SCHEMA,
@@ -1724,6 +2018,7 @@ const output: any = {
   admitted_tool_fabric_adapter_kinds: [...ADMITTED_TOOL_FABRIC_ADAPTER_KINDS],
   tool_fabric_adapter: toolFabricAdapter,
   tool_fabric_adapter_kind: toolFabricAdapter.tool_fabric_adapter_kind,
+  kimi_mcp_projection: kimiMcpProjection,
   carrier_implementation_kind: toolFabricAdapter.carrier_implementation_kind,
   mcp_registry_validation: strictMcpRegistry ? 'strict' : 'diagnostic',
   handoff: { session_ref: handoffSessionRef },
@@ -1934,8 +2229,18 @@ spawnCarrierProcessAndExit({
   aiProcessInvocation,
   executionMode: agentStartExecutionPosture.agent_start_execution_mode,
   hiddenOutputFiles: hiddenRuntimeOutputFiles,
-  onSpawn: sessionAuthorityAdmission && sessionAuthority
+  onSpawn: orientationDeliveryReceipt || (sessionAuthorityAdmission && sessionAuthority)
     ? (pid: any) => {
+      if (orientationDeliveryReceipt) {
+        recordOrientationDeliveryReceipt({
+          siteRoot: sessionSiteRoot,
+          dbPath,
+          admissionReceipt: carrierSessionAdmissionReceipt,
+          brief: startResult.orientation_brief,
+          deliveryReceipt: orientationDeliveryReceipt,
+        });
+      }
+      if (!sessionAuthorityAdmission || !sessionAuthority) return;
       try {
         sessionAuthority.heartbeatSession({
           principal: sessionAuthorityAdmission.principal,

@@ -7,6 +7,7 @@ use narada_nars_session_authority::AuthorityBinding;
 use narada_nars_session_core::{
     session_index, supervisor::SessionSupervisor, CoreError, SessionCore, SessionCoreConfig,
 };
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde_json::{json, Map, Value};
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -16,11 +17,16 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+const ORIENTATION_BOOTSTRAP_TURN_PREFIX: &str = "input_orientation_bootstrap_";
+const ORIENTATION_BOOTSTRAP_PROMPT: &str = "This is the mandatory Carrier-entry orientation turn, not ordinary work. Use only the exposed orientation tools. Call agent_orientation_read({}) and follow each returned next_call exactly. Treat every continuation as opaque; never inspect or alter it. Do not begin, discuss, or perform the selected work in this turn. Stop only when status=ready and ordinary_work_gate=open, or report the exact orientation blocker.";
+
 #[derive(Debug, Clone)]
 pub struct NativeRuntimeConfig {
     pub identity: String,
     pub session_id: String,
     pub site_root: Option<PathBuf>,
+    pub orientation_entry_file: Option<PathBuf>,
+    pub orientation_required: Option<bool>,
     pub mcp_scope: String,
     pub health_enabled: bool,
     pub health_host: String,
@@ -28,6 +34,17 @@ pub struct NativeRuntimeConfig {
     pub events_enabled: bool,
     pub events_host: String,
     pub events_port: u16,
+}
+
+fn parse_orientation_required_signal(value: Option<&str>) -> Result<Option<bool>, String> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    match value.to_ascii_lowercase().as_str() {
+        "1" | "true" | "required" => Ok(Some(true)),
+        "0" | "false" | "not_required" => Ok(Some(false)),
+        _ => Err("orientation_required_signal_invalid".to_string()),
+    }
 }
 
 impl NativeRuntimeConfig {
@@ -39,6 +56,12 @@ impl NativeRuntimeConfig {
             .or_else(|_| env::var("NARADA_CARRIER_SESSION_ID"))
             .unwrap_or_default();
         let mut site_root = env::var("NARADA_SITE_ROOT").ok().map(PathBuf::from);
+        let mut orientation_entry_file = env::var("NARADA_ORIENTATION_ENTRY_FILE")
+            .ok()
+            .map(PathBuf::from);
+        let orientation_required_value = env::var("NARADA_ORIENTATION_REQUIRED").ok();
+        let orientation_required =
+            parse_orientation_required_signal(orientation_required_value.as_deref())?;
         let mut health_enabled = env::var("NARADA_AGENT_RUNTIME_HEALTH_ENABLED")
             .ok()
             .as_deref()
@@ -114,10 +137,20 @@ impl NativeRuntimeConfig {
                             .ok_or_else(|| "site_root_required".to_string())?,
                     ));
                 }
+                "--orientation-entry-file" => {
+                    index += 1;
+                    orientation_entry_file =
+                        Some(PathBuf::from(args.get(index).cloned().ok_or_else(
+                            || "orientation_entry_file_required".to_string(),
+                        )?));
+                }
                 value if value.starts_with("--identity=") => identity = value[11..].to_string(),
                 value if value.starts_with("--session=") => session_id = value[10..].to_string(),
                 value if value.starts_with("--site-root=") => {
                     site_root = Some(PathBuf::from(value[12..].to_string()))
+                }
+                value if value.starts_with("--orientation-entry-file=") => {
+                    orientation_entry_file = Some(PathBuf::from(value[25..].to_string()))
                 }
                 _ => {}
             }
@@ -135,6 +168,8 @@ impl NativeRuntimeConfig {
             identity,
             session_id,
             site_root,
+            orientation_entry_file,
+            orientation_required,
             mcp_scope: normalize_mcp_scope(env::var("NARADA_MCP_SCOPE").ok().as_deref()),
             health_enabled,
             health_host,
@@ -510,6 +545,316 @@ impl RuntimeRequestRegistry {
         })
     }
 }
+#[derive(Debug)]
+struct OrientationEntryGate {
+    entry_file: PathBuf,
+    db_path: PathBuf,
+    brief: Value,
+    delivery_receipt: Value,
+    receipt_id: String,
+}
+
+impl OrientationEntryGate {
+    fn from_config(config: &NativeRuntimeConfig) -> Result<Option<Self>, String> {
+        if config.orientation_required == Some(true) && config.orientation_entry_file.is_none() {
+            return Err("orientation_entry_packet_required".to_string());
+        }
+        if config.orientation_required == Some(false) && config.orientation_entry_file.is_some() {
+            return Err("orientation_required_signal_conflict".to_string());
+        }
+        let Some(entry_file) = config.orientation_entry_file.as_ref() else {
+            return Ok(None);
+        };
+        let site_root = config
+            .site_root
+            .as_ref()
+            .ok_or_else(|| "orientation_entry_site_root_required".to_string())?;
+        let admitted_root = site_root
+            .join(".ai")
+            .join("runtime")
+            .join("orientation-entry");
+        let admitted_root = admitted_root
+            .canonicalize()
+            .map_err(|error| format!("orientation_entry_root_unavailable:{error}"))?;
+        let entry_file = entry_file
+            .canonicalize()
+            .map_err(|error| format!("orientation_entry_file_unavailable:{error}"))?;
+        if !entry_file.starts_with(&admitted_root) {
+            return Err(format!(
+                "orientation_entry_file_outside_admitted_root:{}",
+                entry_file.display()
+            ));
+        }
+        let packet: Value = serde_json::from_str(
+            &fs::read_to_string(&entry_file)
+                .map_err(|error| format!("orientation_entry_file_read_failed:{error}"))?,
+        )
+        .map_err(|error| format!("orientation_entry_packet_invalid:{error}"))?;
+        if packet.get("schema").and_then(Value::as_str)
+            != Some("narada.carrier_entry.orientation_packet.v1")
+            || packet.get("ordinary_work_gate").and_then(Value::as_str)
+                != Some("acknowledgement_required")
+        {
+            return Err("orientation_entry_packet_invalid".to_string());
+        }
+        let brief = packet
+            .get("orientation_brief")
+            .cloned()
+            .ok_or_else(|| "orientation_entry_brief_required".to_string())?;
+        let delivery_receipt = packet
+            .get("delivery_receipt")
+            .cloned()
+            .ok_or_else(|| "orientation_entry_delivery_receipt_required".to_string())?;
+        if brief.get("schema").and_then(Value::as_str) != Some("narada.orientation_brief.v1")
+            || delivery_receipt.get("schema").and_then(Value::as_str)
+                != Some("narada.carrier_session.orientation_delivery_receipt.v1")
+            || delivery_receipt.get("status").and_then(Value::as_str) != Some("delivered")
+            || delivery_receipt
+                .get("delivery_mode")
+                .and_then(Value::as_str)
+                != Some("carrier_entry_injection")
+            || delivery_receipt
+                .get("ordinary_work_gate")
+                .and_then(Value::as_str)
+                != Some("delivery_required")
+            || delivery_receipt.get("coordinate") != brief.get("coordinate")
+            || delivery_receipt.get("manifest_id") != brief.pointer("/manifest_ref/manifest_id")
+            || delivery_receipt.get("manifest_digest")
+                != brief.pointer("/manifest_ref/manifest_digest")
+            || delivery_receipt.get("brief_id") != brief.get("brief_id")
+            || delivery_receipt.get("brief_digest") != brief.get("brief_digest")
+        {
+            return Err("orientation_entry_delivery_binding_mismatch".to_string());
+        }
+        let admission: Value = serde_json::from_str(
+            &env::var("NARADA_CARRIER_SESSION_ADMISSION_RECEIPT")
+                .map_err(|_| "orientation_entry_admission_receipt_required".to_string())?,
+        )
+        .map_err(|error| format!("orientation_entry_admission_receipt_invalid:{error}"))?;
+        if delivery_receipt.get("coordinate") != admission.get("coordinate")
+            || delivery_receipt.get("admission_receipt_ref") != admission.get("receipt_id")
+            || brief.get("admission_receipt_ref") != admission.get("receipt_id")
+        {
+            return Err("orientation_entry_admission_binding_mismatch".to_string());
+        }
+        let receipt_id = delivery_receipt
+            .get("receipt_id")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| "orientation_entry_delivery_receipt_id_required".to_string())?
+            .to_string();
+        let db_path = env::var("NARADA_AGENT_CONTEXT_DB")
+            .ok()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                site_root
+                    .join(".ai")
+                    .join("state")
+                    .join("agent-context.sqlite")
+            });
+        Ok(Some(Self {
+            entry_file,
+            db_path,
+            brief,
+            delivery_receipt,
+            receipt_id,
+        }))
+    }
+
+    fn provider_card_message(&self, include_entry_selections: bool) -> String {
+        let brief = &self.brief;
+        let role = brief
+            .pointer("/role_binding/role")
+            .or_else(|| brief.pointer("/role_binding/role_id"))
+            .or_else(|| brief.pointer("/role_binding/binding/role"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        let entry_selection = |field: &str| -> Value {
+            let selection = brief.get(field).unwrap_or(&Value::Null);
+            if selection.get("mode").and_then(Value::as_str) == Some("exact") {
+                json!({
+                    "mode": "exact",
+                    "snapshot_posture": "selected_at_carrier_entry_not_live_state",
+                    "summary": selection.get("summary").cloned().unwrap_or(Value::Null),
+                    "inspect": selection
+                        .get("inspection_call")
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                })
+            } else {
+                json!({
+                    "mode": "omitted",
+                    "reason_code": selection
+                        .get("reason_code")
+                        .cloned()
+                        .unwrap_or_else(|| Value::String("not_selected".to_string())),
+                })
+            }
+        };
+        let mut card = json!({
+            "schema": "narada.orientation_context_card.v1",
+            "projection_posture": "derived_from_exact_brief_not_independent_authority",
+            "projection_mode": if include_entry_selections { "entry_handoff" } else { "recurring_position" },
+            "orientation_status": "acknowledged_before_ordinary_turn",
+            "position": {
+                "local_agent_id": brief
+                    .pointer("/agent_identity/local_agent_id")
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                "canonical_agent_id": brief
+                    .pointer("/agent_identity/canonical_agent_id")
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                "site_ref": brief
+                    .pointer("/coordinate/site_ref")
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                "carrier_kind": brief.get("carrier_kind").cloned().unwrap_or(Value::Null),
+                "role": role,
+            },
+            "manifest_ref": brief.get("manifest_ref").cloned().unwrap_or(Value::Null),
+            "residual_codes": brief.get("residual_codes").cloned().unwrap_or(Value::Null),
+            "authority_posture": {
+                "continuity": "historical_context_only",
+                "selected_work": "entry_orientation_not_action_authority",
+                "consequential_action": "owning_admission_still_required",
+            },
+        });
+        if include_entry_selections {
+            card["entry_snapshot_at"] = brief.get("generated_at").cloned().unwrap_or(Value::Null);
+            card["continuity"] = entry_selection("continuity_selection");
+            card["work"] = entry_selection("work_selection");
+        } else {
+            card["work_refresh"] = brief
+                .get("work_selection")
+                .filter(|selection| selection.get("mode").and_then(Value::as_str) == Some("exact"))
+                .and_then(|selection| selection.get("inspection_call"))
+                .cloned()
+                .unwrap_or(Value::Null);
+        }
+        let prefix = if include_entry_selections {
+            "Narada Orientation Entry Card. Identity and authority posture remain in force; continuity and work are entry snapshots, not live state."
+        } else {
+            "Narada Orientation Position Card. Refresh live work through work_refresh; entry summaries are intentionally omitted after handoff."
+        };
+        format!(
+            "{} {}",
+            prefix,
+            serde_json::to_string(&card).unwrap_or_else(|_| "{}".to_string())
+        )
+    }
+
+    fn blocked(&self, reason: &str) -> Value {
+        json!({
+            "schema": "narada.runtime.orientation_entry_gate.v1",
+            "status": "blocked",
+            "ordinary_work_gate": "acknowledgement_required",
+            "reason": reason,
+            "delivery_receipt_ref": self.receipt_id,
+            "entry_file": self.entry_file,
+        })
+    }
+
+    fn inspect(&self) -> Value {
+        if !self.db_path.exists() {
+            return self.blocked("agent_context_store_unavailable");
+        }
+        let connection =
+            match Connection::open_with_flags(&self.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+                Ok(connection) => connection,
+                Err(_) => return self.blocked("agent_context_store_unavailable"),
+            };
+        let stored_delivery: Option<String> = match connection
+            .query_row(
+                "SELECT receipt_json FROM orientation_delivery_receipts WHERE receipt_id = ?1 LIMIT 1",
+                params![self.receipt_id],
+                |row| row.get(0),
+            )
+            .optional()
+        {
+            Ok(value) => value,
+            Err(_) => return self.blocked("orientation_evidence_tables_unavailable"),
+        };
+        let Some(stored_delivery) = stored_delivery else {
+            return self.blocked("orientation_delivery_not_admitted");
+        };
+        let stored_delivery: Value = match serde_json::from_str(&stored_delivery) {
+            Ok(value) => value,
+            Err(_) => return self.blocked("orientation_delivery_evidence_invalid"),
+        };
+        if stored_delivery != self.delivery_receipt {
+            return self.blocked("orientation_delivery_evidence_mismatch");
+        }
+        let acknowledgement_json: Option<String> = match connection
+            .query_row(
+                "SELECT acknowledgement_json FROM orientation_acknowledgements WHERE delivery_receipt_ref = ?1 LIMIT 1",
+                params![self.receipt_id],
+                |row| row.get(0),
+            )
+            .optional()
+        {
+            Ok(value) => value,
+            Err(_) => return self.blocked("orientation_evidence_tables_unavailable"),
+        };
+        let Some(acknowledgement_json) = acknowledgement_json else {
+            return self.blocked("orientation_acknowledgement_required");
+        };
+        let acknowledgement: Value = match serde_json::from_str(&acknowledgement_json) {
+            Ok(value) => value,
+            Err(_) => return self.blocked("orientation_acknowledgement_invalid"),
+        };
+        if acknowledgement.get("schema").and_then(Value::as_str)
+            != Some("narada.carrier_session.orientation_acknowledgement.v1")
+            || acknowledgement.get("status").and_then(Value::as_str) != Some("acknowledged")
+            || acknowledgement
+                .get("delivery_receipt_ref")
+                .and_then(Value::as_str)
+                != Some(self.receipt_id.as_str())
+            || acknowledgement.get("coordinate") != self.brief.get("coordinate")
+            || acknowledgement.get("manifest_id") != self.brief.pointer("/manifest_ref/manifest_id")
+            || acknowledgement.get("manifest_digest")
+                != self.brief.pointer("/manifest_ref/manifest_digest")
+            || acknowledgement.get("brief_id") != self.brief.get("brief_id")
+            || acknowledgement.get("brief_digest") != self.brief.get("brief_digest")
+            || acknowledgement
+                .get("acknowledgement_semantics")
+                .and_then(Value::as_str)
+                != Some("receipt_and_required_reads_not_comprehension")
+            || acknowledgement
+                .get("action_admission")
+                .and_then(Value::as_str)
+                != Some("separate_required")
+        {
+            return self.blocked("orientation_acknowledgement_binding_mismatch");
+        }
+        json!({
+            "schema": "narada.runtime.orientation_entry_gate.v1",
+            "status": "open",
+            "ordinary_work_gate": "open",
+            "reason": "orientation_acknowledged",
+            "delivery_receipt_ref": self.receipt_id,
+            "acknowledgement_ref": acknowledgement.get("acknowledgement_id"),
+            "acknowledgement_semantics": "receipt_and_required_reads_not_comprehension",
+            "action_admission": "separate_required",
+            "entry_file": self.entry_file,
+        })
+    }
+
+    fn refusal(&self) -> Option<String> {
+        let state = self.inspect();
+        if state.get("ordinary_work_gate").and_then(Value::as_str) == Some("open") {
+            return None;
+        }
+        Some(format!(
+            "orientation_acknowledgement_required:{}",
+            state
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+        ))
+    }
+}
+
 pub struct NativeRuntime {
     config: NativeRuntimeConfig,
     supervisor: SessionSupervisor,
@@ -520,6 +865,8 @@ pub struct NativeRuntime {
     execution_policy: Value,
     intelligence_selection: Option<Value>,
     request_registry: RuntimeRequestRegistry,
+    orientation_gate: Option<OrientationEntryGate>,
+    orientation_bootstrap_attempt: u64,
     closed: bool,
 }
 
@@ -552,6 +899,7 @@ impl NativeRuntime {
         )
         .map_err(|error| error.to_string())?;
         let mcp_gateway = NativeMcpGateway::new(config.site_root.as_deref(), &config.mcp_scope);
+        let orientation_gate = OrientationEntryGate::from_config(&config)?;
         let execution_policy = json!({
             "schema": "narada.nars.execution_policy.v1",
             "scope": "session",
@@ -568,11 +916,171 @@ impl NativeRuntime {
             execution_policy,
             intelligence_selection: None,
             request_registry: RuntimeRequestRegistry::default(),
+            orientation_gate,
+            orientation_bootstrap_attempt: 0,
             closed: false,
         };
         runtime.write_session_projection(None)?;
         runtime.write_heartbeat("alive", "session_created")?;
         Ok(runtime)
+    }
+
+    fn recover_pending_after_orientation(&mut self) -> Result<Vec<Value>, String> {
+        let mut adapter = NativeProviderAdapter::from_environment(
+            self.config.site_root.clone(),
+            &mut self.mcp_gateway,
+        )
+        .with_session_context(self.config.session_id.clone());
+        self.supervisor
+            .recover_with_adapter(&mut adapter)
+            .map_err(core_error)
+    }
+
+    fn ensure_orientation_entry(&mut self, reason: &str) -> Result<Vec<Value>, String> {
+        let Some(initial_state) = self
+            .orientation_gate
+            .as_ref()
+            .map(OrientationEntryGate::inspect)
+        else {
+            return Ok(Vec::new());
+        };
+        if initial_state
+            .get("ordinary_work_gate")
+            .and_then(Value::as_str)
+            == Some("open")
+        {
+            return self.recover_pending_after_orientation();
+        }
+
+        self.orientation_bootstrap_attempt += 1;
+        let attempt = self.orientation_bootstrap_attempt;
+        let turn_id = format!(
+            "{ORIENTATION_BOOTSTRAP_TURN_PREFIX}{}_{}",
+            self.config.session_id, attempt
+        );
+        let mut output = vec![self
+            .supervisor
+            .core_mut()
+            .append_event(json!({
+                "event": "orientation_bootstrap_started",
+                "attempt": attempt,
+                "reason": reason,
+                "turn_id": turn_id,
+                "delivery_receipt_ref": initial_state.get("delivery_receipt_ref"),
+            }))
+            .map_err(core_error)?];
+
+        self.mcp_gateway.begin_orientation();
+        let catalog = self.mcp_gateway.tool_catalog();
+        let exposed = catalog
+            .iter()
+            .filter_map(|tool| tool.get("tool_name").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        let missing = ["agent_orientation_read"]
+            .into_iter()
+            .filter(|required| !exposed.contains(required))
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            self.mcp_gateway.end_orientation();
+            output.push(
+                self.supervisor
+                    .core_mut()
+                    .append_event(json!({
+                        "event": "orientation_bootstrap_unavailable",
+                        "attempt": attempt,
+                        "reason": "orientation_tools_missing",
+                        "turn_id": turn_id,
+                        "missing_tools": missing,
+                        "exposed_tools": exposed,
+                        "ordinary_work_gate": initial_state.get("ordinary_work_gate"),
+                        "delivery_receipt_ref": initial_state.get("delivery_receipt_ref"),
+                    }))
+                    .map_err(core_error)?,
+            );
+            return Ok(output);
+        }
+
+        let mut input = json!({
+            "event_id": turn_id,
+            "request_id": format!("orientation-bootstrap-{attempt}"),
+            "content": ORIENTATION_BOOTSTRAP_PROMPT,
+            "source": "system_directive",
+            "source_kind": "system",
+            "source_id": "narada-agent-runtime-server",
+            "transport": "carrier_server_api",
+            "delivery_mode": "admit_for_current_turn",
+            "authority_ref": format!("runtime:{}:orientation-entry", self.config.session_id),
+            "directive_id": format!("orientation-entry:{}", self.config.session_id),
+            "metadata": {
+                "orientation_bootstrap": true,
+                "orientation_delivery_receipt_ref": initial_state.get("delivery_receipt_ref"),
+            },
+        });
+        self.enrich_provider_input(&mut input);
+        let turn_result = {
+            let mut adapter = NativeProviderAdapter::from_environment(
+                self.config.site_root.clone(),
+                &mut self.mcp_gateway,
+            )
+            .with_session_context(self.config.session_id.clone());
+            self.supervisor
+                .submit_front_system_with_adapter(input, &mut adapter)
+                .map_err(core_error)
+        };
+        self.mcp_gateway.end_orientation();
+        match turn_result {
+            Ok(mut events) => output.append(&mut events),
+            Err(error) => {
+                output.push(
+                    self.supervisor
+                        .core_mut()
+                        .append_event(json!({
+                            "event": "orientation_bootstrap_failed",
+                            "attempt": attempt,
+                            "reason": reason,
+                            "turn_id": turn_id,
+                            "error": error,
+                            "ordinary_work_gate": initial_state.get("ordinary_work_gate"),
+                            "delivery_receipt_ref": initial_state.get("delivery_receipt_ref"),
+                        }))
+                        .map_err(core_error)?,
+                );
+                return Ok(output);
+            }
+        }
+
+        let final_state = self
+            .orientation_gate
+            .as_ref()
+            .map(OrientationEntryGate::inspect)
+            .unwrap_or_else(|| json!({"ordinary_work_gate": "open"}));
+        let opened = final_state
+            .get("ordinary_work_gate")
+            .and_then(Value::as_str)
+            == Some("open");
+        output.push(
+            self.supervisor
+                .core_mut()
+                .append_event(json!({
+                    "event": if opened {
+                        "orientation_bootstrap_completed"
+                    } else {
+                        "orientation_bootstrap_incomplete"
+                    },
+                    "attempt": attempt,
+                    "reason": reason,
+                    "turn_id": turn_id,
+                    "ordinary_work_gate": final_state.get("ordinary_work_gate"),
+                    "gate_reason": final_state.get("reason"),
+                    "delivery_receipt_ref": final_state.get("delivery_receipt_ref"),
+                    "acknowledgement_ref": final_state.get("acknowledgement_ref"),
+                }))
+                .map_err(core_error)?,
+        );
+        if opened {
+            output.extend(self.recover_pending_after_orientation()?);
+        }
+        Ok(output)
     }
 
     pub fn startup(&mut self) -> Result<Vec<Value>, String> {
@@ -680,16 +1188,20 @@ impl NativeRuntime {
                 .activate(&now_iso(), Some(std::process::id() as i64))
                 .map_err(|error| error.to_string())?;
         }
-        let mut adapter = NativeProviderAdapter::from_environment(
-            self.config.site_root.clone(),
-            &mut self.mcp_gateway,
-        )
-        .with_session_context(self.config.session_id.clone());
-        output.extend(
-            self.supervisor
-                .recover_with_adapter(&mut adapter)
-                .map_err(core_error)?,
-        );
+        if self.orientation_gate.is_some() {
+            output.extend(self.ensure_orientation_entry("session_start")?);
+        } else {
+            let mut adapter = NativeProviderAdapter::from_environment(
+                self.config.site_root.clone(),
+                &mut self.mcp_gateway,
+            )
+            .with_session_context(self.config.session_id.clone());
+            output.extend(
+                self.supervisor
+                    .recover_with_adapter(&mut adapter)
+                    .map_err(core_error)?,
+            );
+        }
         self.write_session_projection(Some(&output[0]))?;
         self.write_heartbeat("alive", "session_started")?;
         Ok(output)
@@ -1055,6 +1567,19 @@ impl NativeRuntime {
                 "runtime_requests".to_string(),
                 self.request_registry.snapshot(),
             );
+            object.insert(
+                "orientation_entry".to_string(),
+                self.orientation_gate
+                    .as_ref()
+                    .map(OrientationEntryGate::inspect)
+                    .unwrap_or_else(|| {
+                        json!({
+                            "schema": "narada.runtime.orientation_entry_gate.v1",
+                            "status": "not_required",
+                            "ordinary_work_gate": "open",
+                        })
+                    }),
+            );
             object.insert("intelligence".to_string(), self.intelligence_snapshot());
             object.insert(
                 "mcp".to_string(),
@@ -1325,6 +1850,18 @@ impl NativeRuntime {
             .get("event_id")
             .and_then(Value::as_str)
             .unwrap_or_default();
+        let orientation_bootstrap = input
+            .pointer("/metadata/orientation_bootstrap")
+            .and_then(Value::as_bool)
+            == Some(true);
+        if orientation_bootstrap {
+            return input
+                .get("content")
+                .map(|content| provider_content(Some(content)))
+                .filter(|content| !content.is_empty())
+                .map(|content| vec![json!({ "role": "system", "content": content })])
+                .unwrap_or_default();
+        }
         let control = input
             .get("metadata")
             .and_then(|metadata| metadata.get("intelligence_invocation"));
@@ -1340,6 +1877,7 @@ impl NativeRuntime {
             })
             .unwrap_or(false);
         let mut messages = Vec::new();
+        let mut prior_ordinary_assistant = false;
         if !current_only {
             let page = self
                 .supervisor
@@ -1367,6 +1905,9 @@ impl NativeRuntime {
                         .or_else(|| event.get("event_id"))
                         .and_then(Value::as_str)
                         .unwrap_or_default();
+                    if event_id.starts_with(ORIENTATION_BOOTSTRAP_TURN_PREFIX) {
+                        continue;
+                    }
                     if event_id == current_id {
                         continue;
                     }
@@ -1378,6 +1919,7 @@ impl NativeRuntime {
                     } else if kind == "assistant_message" {
                         let content = provider_content(event.get("content"));
                         if !content.is_empty() {
+                            prior_ordinary_assistant = true;
                             messages.push(json!({ "role": "assistant", "content": content }));
                         }
                     }
@@ -1389,6 +1931,12 @@ impl NativeRuntime {
             if !content.is_empty() {
                 messages.push(json!({ "role": "user", "content": content }));
             }
+        }
+        if let Some(gate) = self.orientation_gate.as_ref() {
+            messages.insert(0, json!({
+                "role": "system",
+                "content": gate.provider_card_message(current_only || !prior_ordinary_assistant),
+            }));
         }
         messages
     }
@@ -1447,6 +1995,24 @@ impl NativeRuntime {
         if self.closed {
             return self.reject(request_id, Some("session.submit"), "nars_session_closed");
         }
+        let mut output = Vec::new();
+        if self.orientation_gate.is_some() {
+            let orientation_refusal = self
+                .orientation_gate
+                .as_ref()
+                .and_then(OrientationEntryGate::refusal);
+            if orientation_refusal.is_some() {
+                output.extend(self.ensure_orientation_entry("before_session_submit")?);
+            }
+            if let Some(reason) = self
+                .orientation_gate
+                .as_ref()
+                .and_then(OrientationEntryGate::refusal)
+            {
+                output.extend(self.reject(request_id, Some("session.submit"), &reason)?);
+                return Ok(output);
+            }
+        }
         let content = request_content(request)
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| "content_required".to_string())?;
@@ -1495,7 +2061,7 @@ impl NativeRuntime {
             &mut self.mcp_gateway,
         )
         .with_session_context(self.config.session_id.clone());
-        let mut output = vec![accepted];
+        output.push(accepted);
         output.extend(
             self.supervisor
                 .submit_with_adapter(input, &mut adapter)
@@ -2494,8 +3060,8 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn test_runtime(root: &Path) -> NativeRuntime {
-        NativeRuntime::new(NativeRuntimeConfig {
+    fn test_config(root: &Path) -> NativeRuntimeConfig {
+        NativeRuntimeConfig {
             identity: "native-test-agent".to_string(),
             session_id: "native-test-session".to_string(),
             site_root: Some(root.to_path_buf()),
@@ -2506,8 +3072,33 @@ mod tests {
             events_enabled: false,
             events_host: "127.0.0.1".to_string(),
             events_port: 0,
-        })
-        .unwrap()
+            orientation_entry_file: None,
+            orientation_required: None,
+        }
+    }
+
+    fn test_runtime(root: &Path) -> NativeRuntime {
+        NativeRuntime::new(test_config(root)).unwrap()
+    }
+
+    #[test]
+    fn orientation_requirement_signal_cannot_be_erased_by_omitting_the_entry_path() {
+        let root = std::env::temp_dir().join(format!(
+            "narada-runtime-orientation-signal-{}",
+            Uuid::new_v4().simple()
+        ));
+        let mut config = test_config(&root);
+        config.orientation_required = Some(true);
+        assert_eq!(
+            OrientationEntryGate::from_config(&config).unwrap_err(),
+            "orientation_entry_packet_required"
+        );
+        config.orientation_required = Some(false);
+        config.orientation_entry_file = Some(root.join("entry.json"));
+        assert_eq!(
+            OrientationEntryGate::from_config(&config).unwrap_err(),
+            "orientation_required_signal_conflict"
+        );
     }
 
     #[test]

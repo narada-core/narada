@@ -10,7 +10,7 @@ export {
   assertMcpFabricRuntimeTransition,
   transitionMcpFabricRuntime,
 } from './mcp-fabric-runtime-state.js';
-export { codexMcpEnvVarNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex, projectServerEnvironment, mcpServerNames } from './mcp-fabric-projection.js';
+export { codexMcpEnvVarNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex, projectFabricForKimi, projectServerEnvironment, mcpServerNames } from './mcp-fabric-projection.js';
 
 function isMainModule(): boolean {
   return Boolean(process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]);

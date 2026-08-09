@@ -151,6 +151,64 @@ Policy may withhold consequential Carrier actions until activation. Activation
 still grants no task, inbox, command, publication, credential, or external
 effect authority.
 
+### Evidence, Delivery, Cognition, And Action Are Different Planes
+
+The canonical manifest is not an agent prompt. Treating it as one would force a
+replaceable intellect to parse receipt ids, digests, source revisions,
+completion contracts, and negative-claim machinery merely to discover what
+position it occupies. The crossing therefore has four explicit projections:
+
+| Plane | Object | Consumer |
+| --- | --- | --- |
+| Evidence | Immutable Orientation Manifest, exact canonical brief, delivery receipt, required-read page/completion evidence, and acknowledgement. | Carrier Session Authority, evidence stores, diagnostics, and reviewers. |
+| Delivery | Carrier-bound entry packet and opaque continuation state. | Carrier adapter/runtime. |
+| Cognition | Thin inline occupant brief followed by one compact ready projection. | The replaceable intelligence substrate. |
+| Action | Live owner readbacks and separate admission for consequential effects. | Owning authority and Carrier action boundary. |
+
+The cognitive projection preserves the exact position, entry-time continuity
+and work selections, residual blockers, authority posture, and canonical
+`manifest_ref`. It omits transport coordinates and evidence machinery retained
+on the other planes. Entry work is explicitly a timestamped snapshot; when a
+live owner read is available, the ready projection points to that owner rather
+than presenting the snapshot as current truth.
+
+The normal occupant surface has one domain operation:
+`agent_orientation_read({})`. Each response supplies the exact next call using
+an opaque continuation. The Carrier resolves that continuation to canonical
+required-read coordinates, records page and completion evidence, and uses a
+final continuation to record acknowledgement. The occupant never invents or
+copies step ids, byte offsets, hashes, timestamps, receipts, or completion
+payloads. Direct evidence and compatibility operations remain administrative.
+
+The canonical Carrier-side brief may retain up to 8 KiB of executable
+read/completion contracts. Its occupant projection is independently capped at
+3 KiB, and each ceremony response is compact and capped at 6 KiB. Page sizing
+accounts for JSON escaping rather than raw source bytes alone. Persistence and
+delivery form one transaction boundary: a page or completion cannot become
+evidence unless the exact occupant response is first proven inline-deliverable.
+Each required-read source is admitted at no more than 192 KiB, and the complete
+manifest is admitted at no more than 128 required-read pages. Either excess is
+refused before a manifest generation is published rather than becoming an
+unbounded Carrier-entry ceremony.
+Exact selected continuity is paged from the immutable manifest generation in
+the same chain; its short cognitive summary is only navigation, never the
+continuity payload.
+
+This one-tool fallback is necessary for external Carriers whose native context
+injection cannot be observed strongly enough. A Carrier runtime that can
+perform and evidence delivery internally may hide the ceremony entirely, but
+must produce the same canonical evidence and ready projection. Carrier-specific
+ergonomics may vary; the authority and evidence semantics may not.
+
+The TypeScript and native Rust MCP runtime proxies are substitutable
+enforcement embodiments, not competing orientation authorities. Both validate
+the same entry packet and derived acknowledgement projection and refuse
+ordinary MCP calls with the same contract until the gate opens. Agent Context
+alone compiles the manifest, emits required-read material, persists delivery
+and completion evidence, and creates the canonical acknowledgement. A shared
+adversarial corpus plus performative Codex/Kimi E2E proves proxy parity; merely
+duplicating the validator in Rust is not accepted as evidence.
+
 ### Cardinality Is Policy
 
 The authority key is the Site-scoped Carrier Session identity

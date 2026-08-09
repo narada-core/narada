@@ -147,6 +147,7 @@
     "@narada-core/nars-pi-kernel": "workspace:*",
     "@narada-core/nars-provider-runtime": "workspace:*",
     "@narada-core/operator-surface-runtime-contract": "workspace:*",
+    "@narada-core/orientation-manifest": "workspace:*",
     "@narada-core/process-launch-posture": "workspace:*",
     "@narada-core/site-paths": "workspace:*"
   },

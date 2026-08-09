@@ -4,9 +4,17 @@ export function codexMcpEnvVarNames(): string[] {
   return [
     'NARADA_AGENT_ID',
     'NARADA_AGENT_START_EVENT_ID',
+    'NARADA_CARRIER_SESSION_ADMISSION_RECEIPT',
+    'NARADA_CARRIER_SESSION_ACTIVATION_RECEIPT',
     'NARADA_NARS_SESSION_ID',
     'NARADA_RUNTIME_SESSION_ID',
     'NARADA_CARRIER_SESSION_ID',
+    'NARADA_ORIENTATION_BRIEF',
+    'NARADA_ORIENTATION_DELIVERY_RECEIPT',
+    'NARADA_ORIENTATION_ENTRY_FILE',
+    'NARADA_ORIENTATION_REQUIRED',
+    'NARADA_ORIENTATION_MANIFEST_ID',
+    'NARADA_SITE_ID',
     'NARADA_SITE_ROOT',
     'NARADA_WORKSPACE_ROOT',
     'NARADA_AGENT_CONTEXT_DB',
@@ -39,6 +47,22 @@ export function projectFabricForCodex(fabric: AnyRecord): AnyRecord[] {
     ...projectServerTimeouts(server),
     });
   });
+}
+
+export function projectFabricForKimi(fabric: AnyRecord): AnyRecord {
+  const envVars = codexMcpEnvVarNames();
+  const mcpServers: AnyRecord = {};
+  for (const [name, serverValue] of Object.entries(fabric.servers as AnyRecord)) {
+    const server = serverValue as AnyRecord;
+    mcpServers[name] = {
+      transport: 'stdio',
+      command: projectCarrierCommand(server.command),
+      args: server.args,
+      env_vars: mergeUnique([...(server.env_vars ?? []), ...envVars]),
+      ...projectServerTimeouts(server),
+    };
+  }
+  return { mcpServers };
 }
 
 export function projectFabricForAgentTui(fabric: AnyRecord, envValues: AnyRecord): AnyRecord {
@@ -98,24 +122,23 @@ export function mcpServerNames(fabric: AnyRecord): string[] {
 
 function agentTuiToolNames(server: AnyRecord): string[] {
   if (server.registry_metadata_authoritative === true) {
-    return expandAgentContextStartupAliases(server, mergeUnique((Object.values((server.registry_tools ?? {}) as AnyRecord) as AnyRecord[])
+    return normalizeAgentContextOccupantTools(server, mergeUnique((Object.values((server.registry_tools ?? {}) as AnyRecord) as AnyRecord[])
       .filter((tool) => tool && tool.refused !== true)
       .map((tool: AnyRecord) => tool.name)));
   }
-  return expandAgentContextStartupAliases(server, mergeUnique([
+  return normalizeAgentContextOccupantTools(server, mergeUnique([
     ...(server.tools ?? []),
     ...(server.allowed_tools ?? []),
     ...(server.tool_names ?? []),
   ]));
 }
 
-function expandAgentContextStartupAliases(server: AnyRecord, tools: string[]): string[] {
+function normalizeAgentContextOccupantTools(server: AnyRecord, tools: string[]): string[] {
   if (!isAgentContextSurface(server)) return tools;
   const toolSet = new Set(tools);
-  if (toolSet.has('startup_sequence') || toolSet.has('agent_context_startup_sequence')) {
-    toolSet.add('agent_context_startup_sequence');
-    toolSet.delete('startup_sequence');
-  }
+  if (toolSet.has('startup_sequence') || toolSet.has('agent_context_startup_sequence')) toolSet.add('agent_orientation_read');
+  toolSet.delete('startup_sequence');
+  toolSet.delete('agent_context_startup_sequence');
   return mergeUnique([...toolSet]);
 }
 

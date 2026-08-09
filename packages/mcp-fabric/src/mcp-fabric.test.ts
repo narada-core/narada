@@ -11,6 +11,7 @@ import {
   mcpServerNames,
   projectFabricForAgentTui,
   projectFabricForCodex,
+  projectFabricForKimi,
   projectServerEnvironment,
   renderMcpFabricDoctorTable,
   runMcpFabricDoctor,
@@ -40,6 +41,11 @@ const projectedAgentTuiServers = projectFabricForAgentTui(projectedCarrierFabric
 assert.equal(projectedAgentTuiServers.portableNode.command, process.execPath);
 assert.equal(projectedAgentTuiServers.staleFnmNode.command, process.execPath);
 assert.equal(projectedAgentTuiServers.powershell.command, 'pwsh');
+const projectedKimiServers = projectFabricForKimi(projectedCarrierFabric).mcpServers;
+assert.equal(projectedKimiServers.portableNode.transport, 'stdio');
+assert.equal(projectedKimiServers.portableNode.command, process.execPath);
+assert.ok(projectedKimiServers.portableNode.env_vars.includes('NARADA_ORIENTATION_DELIVERY_RECEIPT'));
+assert.ok(projectedKimiServers.portableNode.env_vars.includes('NARADA_ORIENTATION_REQUIRED'));
 
 const missingSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-'));
 try {
@@ -487,7 +493,7 @@ const startupAliasFabric = loadSiteMcpFabric(startupAliasSite, { required: true 
 const startupAliasProjection = projectFabricForAgentTui(startupAliasFabric, {});
 assert.equal(startupAliasProjection.mcpServers['narada-agent-context'].target_site_root, startupAliasSite.replaceAll('\\', '/'));
 assert.deepEqual(startupAliasProjection.mcpServers['narada-agent-context'].tools, [
-  'agent_context_startup_sequence',
+  'agent_orientation_read',
   'mcp_output_show',
 ]);
 rmSync(startupAliasSite, { recursive: true, force: true });
@@ -516,7 +522,7 @@ writeFileSync(join(splitOutputReaderSite, '.narada', 'capabilities', 'mcp-surfac
 const splitOutputReaderFabric = loadSiteMcpFabric(splitOutputReaderSite, { required: true });
 const splitOutputReaderProjection = projectFabricForAgentTui(splitOutputReaderFabric, {});
 assert.deepEqual(splitOutputReaderProjection.mcpServers['narada-agent-context'].tools, [
-  'agent_context_startup_sequence',
+  'agent_orientation_read',
   'mcp_output_show',
 ]);
 assert.deepEqual(splitOutputReaderProjection.mcpServers['narada-task-lifecycle'].tools, [
@@ -783,7 +789,9 @@ writeFileSync(join(doctorSite, '.ai', 'mcp', 'doctor-mcp.json'), `${JSON.stringi
     },
   },
 }, null, 2)}\n`, 'utf8');
-const doctorReport = await runMcpFabricDoctor(doctorSite, { timeoutMs: 1000 });
+// Node startup on Windows can exceed one second under a loaded workspace; this
+// fixture verifies protocol behavior, not a cold-start SLO.
+const doctorReport = await runMcpFabricDoctor(doctorSite, { timeoutMs: 5000 });
 assert.equal(doctorReport.status, 'ok');
 assert.equal(doctorReport.runtime_lifecycle_state, 'ready');
 assert.deepEqual(doctorReport.runtime_lifecycle_history, ['declared', 'loading', 'ready']);
@@ -802,7 +810,7 @@ const doctorCli: any = runHiddenPostureCommandSync(process.execPath, [
   '--site-root',
   doctorSite,
   '--timeout-ms',
-  '1000',
+  '5000',
 ], { encoding: 'utf8', posture: 'test_child' });
 assert.equal(doctorCli.status, 0, doctorCli.stderr);
 assert.match(doctorCli.stdout, /file\s+server\s+command\s+paths\s+init\s+tools\s+first diagnostic/);

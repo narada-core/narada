@@ -48,6 +48,7 @@ import { createNarsRuntimeHostStateMachine } from './runtime-host-state.js';
 import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.js';
 import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.js';
 import { createSessionAuthorityRuntimeBinding } from '@narada-core/nars-session-authority';
+import { createOrientationEntryGate } from './orientation-entry-gate.js';
 
 export { formatHostStatusEvent } from './runtime-server-events.js';
 
@@ -131,7 +132,10 @@ function baseRuntimeContextOptions({ lifecycleBinding, operatorSurfaceKind, laun
   };
 }
 
-async function loadRuntimeDependencies(runtimeContext: any = {}) {
+async function loadRuntimeDependencies(
+  runtimeContext: any = {},
+  { orientationGate = null }: any = {},
+) {
   const deniedTools: any = new Set(String(process.env.NARADA_DENIED_CAPABILITY_TOOLS ?? '').split(',').map((value: any) => value.trim()).filter(Boolean));
   const admitCapability: any = ({ toolName }: any) => deniedTools.has(toolName)
     ? { admitted: false, reason: 'denied_by_runtime_policy' }
@@ -269,6 +273,7 @@ async function loadRuntimeDependencies(runtimeContext: any = {}) {
           }
         }
         : null,
+      orientationGate,
     });
     sessionCoreForArtifacts = runtimeService.supervisor.core;
     appendRuntimeEvent = (event: any) => runtimeService.supervisor.core.appendEvent(toSessionCoreEvent(event));
@@ -517,6 +522,10 @@ async function main() {
   const parsedHealth: any = parseHealthOptions(requestedArgs.filter((arg: any) => arg !== '--wrapper-events-jsonl' && arg !== '--raw-jsonl'));
   const parsedEvents: any = parseEventStreamOptions(parsedHealth.forwardedArgs);
   const args: any = parsedEvents.forwardedArgs;
+  const orientationEntryFile: any = valueAfterFlag(args, '--orientation-entry-file')
+    ?? process.env.NARADA_ORIENTATION_ENTRY_FILE
+    ?? null;
+  const orientationRequired: any = process.env.NARADA_ORIENTATION_REQUIRED ?? null;
   const operatorSurfaceKind: any = valueAfterFlag(args, '--operator-surface') ?? process.env.NARADA_OPERATOR_SURFACE_KIND ?? 'agent-cli';
   const lifecycleBinding: any = lifecycleBindingFromArgs(args, process.env);
   const delegatedAuthorityHandoff: any = createDelegatedAuthorityHandoff({ args, env: process.env, binding: lifecycleBinding });
@@ -652,6 +661,13 @@ async function main() {
     const principal: any = process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID?.trim() || null;
     if (!principal) throw new Error('intelligence_principal_required');
     const principalBinding: any = parseSiteConfigEnv(process.env.NARADA_INTELLIGENCE_PRINCIPAL_BINDING);
+    const orientationGate: any = createOrientationEntryGate({
+      entryFile: orientationEntryFile,
+      requiredSignal: orientationRequired,
+      siteRoot: lifecycleBinding.metadata.site_root,
+      dbPath: process.env.NARADA_AGENT_CONTEXT_DB
+        ?? join(lifecycleBinding.metadata.site_root, '.ai', 'state', 'agent-context.sqlite'),
+    });
 
     runtimeContext = createNarsRuntimeContext({
       ...baseRuntimeContextOptions({
@@ -693,8 +709,9 @@ async function main() {
       eventsPath: preliminaryRuntimeContext.eventsPath,
       sessionPath: preliminaryRuntimeContext.sessionPath,
       controlInputBridgeState: () => controlInputBridge?.state ?? null,
+      orientationEntryGateState: () => orientationGate.inspect(),
     });
-    runtimeService = await loadRuntimeDependencies(runtimeContext);
+    runtimeService = await loadRuntimeDependencies(runtimeContext, { orientationGate });
     if (healthRuntimeContext) healthRuntimeContext.sessionCore = runtimeService.supervisor.core;
     controlInputBridge = createControlInputBridge({
       path: runtimeContext.controlPath,

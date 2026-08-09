@@ -519,6 +519,280 @@ test('session-core turn persists carrier and gateway evidence for a provider too
   assert.equal(existsSync(join(root, 'session.json')), false);
 });
 
+test('Narada-hosted Carrier performs the exact paged orientation ceremony before an ordinary effect', async () => {
+  const root: any = mkdtempSync(join(tmpdir(), 'session-core-orientation-bootstrap-'));
+  const input: any = new PassThrough();
+  const output: any = new PassThrough();
+  let rendered: any = '';
+  let gateOpen: any = false;
+  const providerCatalogs: any[] = [];
+  const providerMessages: any[] = [];
+  const invokedTools: any[] = [];
+  let ordinaryEffectPerformed: any = false;
+  output.on('data', (chunk: any) => { rendered += String(chunk); });
+
+  const orientationGate: any = {
+    required: true,
+    inspect: () => ({
+      schema: 'narada.runtime.orientation_entry_gate.v1',
+      status: gateOpen ? 'open' : 'blocked',
+      ordinary_work_gate: gateOpen ? 'open' : 'acknowledgement_required',
+      reason: gateOpen ? 'orientation_acknowledged' : 'orientation_acknowledgement_required',
+      delivery_receipt_ref: 'orientation-delivery:test',
+    }),
+  };
+  const service: any = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'orientation-bootstrap-1',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+      mcpScope: 'site',
+    },
+    orientationGate,
+    invokeIntelligenceFn: async (messages: any, tools: any) => {
+      providerCatalogs.push(tools.map((tool: any) => tool.function?.name ?? tool.name));
+      providerMessages.push(messages);
+      const orientationTurn: any = messages[0]?.role === 'system';
+      const toolResultCount: any = messages.filter((message: any) => message.role === 'tool').length;
+      if (orientationTurn && toolResultCount === 0) {
+        return {
+          choices: [{
+            message: {
+              role: 'assistant',
+              tool_calls: [{
+                id: 'orientation-read',
+                function: { name: 'agent_orientation_read', arguments: '{}' },
+              }],
+            },
+          }],
+        };
+      }
+      if (orientationTurn && toolResultCount === 1) {
+        return {
+          choices: [{
+            message: {
+              role: 'assistant',
+              tool_calls: [{
+                id: 'orientation-page-1',
+                function: {
+                  name: 'agent_orientation_read',
+                  arguments: '{"continuation":"page-1"}',
+                },
+              }],
+            },
+          }],
+        };
+      }
+      if (orientationTurn && toolResultCount === 2) {
+        return {
+          choices: [{
+            message: {
+              role: 'assistant',
+              tool_calls: [{
+                id: 'orientation-page-2',
+                function: {
+                  name: 'agent_orientation_read',
+                  arguments: '{"continuation":"page-2"}',
+                },
+              }],
+            },
+          }],
+        };
+      }
+      if (orientationTurn && toolResultCount === 3) {
+        return {
+          choices: [{
+            message: {
+              role: 'assistant',
+              tool_calls: [{
+                id: 'orientation-ack',
+                function: { name: 'agent_orientation_read', arguments: '{"continuation":"ack"}' },
+              }],
+            },
+          }],
+        };
+      }
+      if (orientationTurn) {
+        return { choices: [{ message: { role: 'assistant', content: 'orientation complete' } }] };
+      }
+      if (toolResultCount === 0) {
+        return {
+          choices: [{
+            message: {
+              role: 'assistant',
+              tool_calls: [{
+                id: 'ordinary-read',
+                function: { name: 'fs_read_file', arguments: '{\"path\":\"work.txt\"}' },
+              }],
+            },
+          }],
+        };
+      }
+      return { choices: [{ message: { role: 'assistant', content: 'ordinary work complete' } }] };
+    },
+    toolGateway: {
+      toolCatalog: () => [
+        { type: 'function', function: { name: 'agent_orientation_read', parameters: { type: 'object' } } },
+        { type: 'function', function: { name: 'mcp_output_show', parameters: { type: 'object' } } },
+        { type: 'function', function: { name: 'fs_read_file', parameters: { type: 'object' } } },
+      ],
+      invoke: async (request: any) => {
+        invokedTools.push({
+          tool_name: request.toolName,
+          arguments: request.arguments ?? request.toolArguments ?? {},
+        });
+        if (request.toolName === 'agent_orientation_read') {
+          const argumentsValue: any = request.arguments ?? request.toolArguments ?? {};
+          if (!argumentsValue.continuation) {
+            return {
+              status: 'orientation_required',
+              next_call: {
+                tool: 'agent_orientation_read',
+                arguments: { continuation: 'page-1' },
+              },
+            };
+          }
+          if (argumentsValue.continuation === 'page-1') {
+            return {
+              status: 'page_emitted',
+              content: 'page-one',
+              next_call: {
+                tool: 'agent_orientation_read',
+                arguments: { continuation: 'page-2' },
+              },
+            };
+          }
+          if (argumentsValue.continuation === 'page-2') {
+            return {
+              status: 'completed',
+              content: 'page-two',
+              next_call: { tool: 'agent_orientation_read', arguments: { continuation: 'ack' } },
+            };
+          }
+          gateOpen = true;
+          return { status: 'ready', ordinary_work_gate: 'open', next_call: null };
+        }
+        ordinaryEffectPerformed = true;
+        return { status: 'completed', content: 'work' };
+      },
+      operationalState: () => 'healthy',
+      close: async () => {},
+    },
+  });
+
+  const run: any = service.run({ input, output });
+  input.end([
+    JSON.stringify({ id: 'ordinary-1', method: 'session.submit', params: { content: 'perform ordinary work' } }),
+    JSON.stringify({ id: 'close-1', method: 'session.close' }),
+  ].join('\n') + '\n');
+  await run;
+
+  assert.equal(gateOpen, true);
+  assert.deepEqual(invokedTools, [
+    { tool_name: 'agent_orientation_read', arguments: {} },
+    {
+      tool_name: 'agent_orientation_read',
+      arguments: { continuation: 'page-1' },
+    },
+    {
+      tool_name: 'agent_orientation_read',
+      arguments: { continuation: 'page-2' },
+    },
+    { tool_name: 'agent_orientation_read', arguments: { continuation: 'ack' } },
+    { tool_name: 'fs_read_file', arguments: { path: 'work.txt' } },
+  ]);
+  assert.equal(ordinaryEffectPerformed, true);
+  assert.deepEqual(providerCatalogs[0], [
+    'agent_orientation_read',
+    'mcp_output_show',
+  ]);
+  assert.equal(providerCatalogs.at(-1).includes('fs_read_file'), true);
+  const ordinaryMessages: any = providerMessages.find(
+    (messages: any) => messages.some((message: any) => message.content === 'perform ordinary work'),
+  );
+  assert.ok(ordinaryMessages);
+  assert.equal(
+    ordinaryMessages.some((message: any) => message.content === 'orientation complete'),
+    false,
+  );
+
+  const events: any[] = rendered.trim().split(/\r?\n/).map((line: any) => JSON.parse(line));
+  const bootstrapCompletedIndex: any = events.findIndex(
+    (event: any) => event.event === 'orientation_bootstrap_completed',
+  );
+  const ordinaryAcceptedIndex: any = events.findIndex(
+    (event: any) => event.event === 'session_control_accepted'
+      && event.request_id === 'ordinary-1',
+  );
+  assert.ok(bootstrapCompletedIndex >= 0);
+  assert.ok(ordinaryAcceptedIndex > bootstrapCompletedIndex);
+});
+
+test('Narada-hosted Carrier never dispatches ordinary work while orientation remains incomplete', async () => {
+  const root: any = mkdtempSync(join(tmpdir(), 'session-core-orientation-blocked-'));
+  const input: any = new PassThrough();
+  const output: any = new PassThrough();
+  let rendered: any = '';
+  const providerMessages: any[] = [];
+  output.on('data', (chunk: any) => { rendered += String(chunk); });
+  const orientationGate: any = {
+    required: true,
+    inspect: () => ({
+      schema: 'narada.runtime.orientation_entry_gate.v1',
+      status: 'blocked',
+      ordinary_work_gate: 'acknowledgement_required',
+      reason: 'orientation_acknowledgement_required',
+      delivery_receipt_ref: 'orientation-delivery:blocked',
+    }),
+  };
+  const service: any = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'orientation-blocked-1',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+      mcpScope: 'site',
+    },
+    orientationGate,
+    invokeIntelligenceFn: async (messages: any) => {
+      providerMessages.push(messages);
+      return { choices: [{ message: { role: 'assistant', content: 'orientation not completed' } }] };
+    },
+    toolGateway: {
+      toolCatalog: () => [
+        { type: 'function', function: { name: 'agent_orientation_read', parameters: { type: 'object' } } },
+        { type: 'function', function: { name: 'fs_read_file', parameters: { type: 'object' } } },
+      ],
+      invoke: async () => ({ status: 'unexpected' }),
+      operationalState: () => 'healthy',
+      close: async () => {},
+    },
+  });
+
+  const run: any = service.run({ input, output });
+  input.end([
+    JSON.stringify({ id: 'ordinary-blocked', method: 'session.submit', params: { content: 'must not dispatch' } }),
+    JSON.stringify({ id: 'close-1', method: 'session.close' }),
+  ].join('\n') + '\n');
+  await run;
+
+  assert.equal(providerMessages.length, 2);
+  assert.equal(providerMessages.every((messages: any) => messages[0]?.role === 'system'), true);
+  assert.equal(
+    providerMessages.some((messages: any) => messages.some((message: any) => message.content === 'must not dispatch')),
+    false,
+  );
+  const events: any[] = rendered.trim().split(/\r?\n/).map((line: any) => JSON.parse(line));
+  assert.equal(
+    events.find((event: any) => event.event === 'session_control_rejected'
+      && event.request_id === 'ordinary-blocked')?.code,
+    'orientation_required',
+  );
+});
+
 test('JSONL transport handles partial and multiple frames while rejecting malformed JSON objects', async () => {
   const root: any = mkdtempSync(join(tmpdir(), 'session-core-jsonl-frames-'));
   const input: any = new PassThrough();

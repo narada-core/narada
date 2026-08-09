@@ -17,6 +17,10 @@
       "types": "./dist/compiler.d.ts",
       "import": "./dist/compiler.js"
     },
+    "./ceremony": {
+      "types": "./dist/ceremony.d.ts",
+      "import": "./dist/ceremony.js"
+    },
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.ts",

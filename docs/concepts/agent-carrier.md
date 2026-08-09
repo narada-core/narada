@@ -77,7 +77,7 @@ At minimum, a carrier should:
 - bind exactly one `agent_id` for the Session;
 - materialize an agent start event and carrier session record;
 - set required `NARADA_*` environment for child MCP surfaces;
-- expose the startup command affordance, currently `agent_context_startup_sequence({})`;
+- enforce Carrier entry through `agent_orientation_read({})`, then follow only its opaque continuations until `status=ready`;
 - disable or refuse non-admitted native execution paths when policy requires MCP-only execution;
 - mount only admitted MCP/tool surfaces with explicit approval posture;
 - record a durable launch result packet before handoff to the interactive substrate;

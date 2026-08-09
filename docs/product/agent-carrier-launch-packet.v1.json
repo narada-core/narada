@@ -108,19 +108,19 @@
     "startup_command": {
       "type": "object",
       "required_shape": {
-        "name": "agent_context_startup_sequence",
+        "name": "agent_orientation_read",
         "arguments": {}
       },
-      "rule": "Reads the exact receipt-bound manifest id projected in the Carrier environment; it never recompiles or chooses a checkpoint."
+      "rule": "Starts delivery of the exact receipt-bound manifest projected in the Carrier environment. Each response owns the next opaque continuation; the occupant never chooses evidence steps, offsets, or a checkpoint."
     },
     "startup_sequence": {
       "type": "array",
       "required_first_steps": [
         {
-          "tool": "agent_context_startup_sequence",
+          "tool": "agent_orientation_read",
           "arguments": {},
           "source": "carrier-entry-procedure",
-          "semantics": "retrieve_exact_receipt_bound_orientation_manifest",
+          "semantics": "deliver_exact_receipt_bound_orientation_until_ready",
           "mutation": false
         }
       ],
@@ -128,7 +128,7 @@
         "tool": "narada_task_read_or_narada_task_work_next",
         "rule": "Read-only first-work orientation may follow admitted manifest delivery. Explicit task handoffs use narada_task_read; generic discovery uses narada_task_work_next with claim=false."
       },
-      "rule": "Continuity may enter startup only when an exact continuity projection was already selected and bound into this manifest generation. Diagnostic hydration and ambient latest checkpoint selection are not startup steps."
+      "rule": "The Carrier follows each returned opaque continuation until status=ready and ordinary_work_gate=open. Continuity may enter startup only when an exact continuity projection was already selected and bound into this manifest generation. Diagnostic hydration, direct acknowledgement, and ambient latest checkpoint selection are not occupant startup steps."
     },
     "startup_first_work_orientation": {
       "type": "object",

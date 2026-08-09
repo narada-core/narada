@@ -112,8 +112,19 @@ export function codexMcpDefinitionArgs(servers: any) : any{
   ]);
 }
 
-function startupAffordancePrompt(identity: any, carrierDescription: any) : any{
-  return `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. ${carrierDescription} Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`;
+function startupAffordancePrompt(
+  identity: any,
+  carrierDescription: any,
+  orientationBrief: any = null,
+  orientationRequired: any = false,
+) : any{
+  if (orientationRequired && !orientationBrief) {
+    throw new Error('carrier_entry_orientation_brief_required');
+  }
+  const orientationInstruction: any = orientationRequired
+    ? ' This is the enforced Carrier-entry bootstrap, not ordinary work. Call agent_orientation_read({}) now and execute every returned next_call exactly. Treat each continuation as opaque: never inspect or alter it. Do not discuss or perform selected work during bootstrap. Stop only when status=ready and ordinary_work_gate=open. Agent Context retains required-read and acknowledgement evidence. Readiness proves delivery, not comprehension or authority for a later action. If agent_orientation_read is unavailable, report an invalid Carrier launch and do not substitute shell or file discovery.'
+    : '';
+  return `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. ${carrierDescription}${orientationInstruction} When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`;
 }
 
 export function buildCarrierSpawnArgs(carrierName: any, {
@@ -142,6 +153,10 @@ export function buildCarrierSpawnArgs(carrierName: any, {
   claudeCodeMcpConfig,
   claudeCodeModel,
   runtimeAuthority,
+  orientationBrief = null,
+  orientationEntryFile = null,
+  kimiAgentFile = null,
+  orientationRequired = false,
 }: any) : any{
   const launchSelectionKind: any = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
   const matrixRow: any = requireCarrierLaunchMatrixRow(launchSelectionKind);
@@ -156,6 +171,12 @@ export function buildCarrierSpawnArgs(carrierName: any, {
     if (!enableNativeShellFlag) {
       args.push('--disable', 'shell_tool');
     }
+    args.push(startupAffordancePrompt(
+      identity,
+      'Narada tools are attached through the exact Site MCP fabric projection.',
+      orientationBrief,
+      orientationRequired,
+    ));
     if (processPlatform === 'win32') {
       return [codexCliScriptPath(), ...args];
     }
@@ -163,6 +184,9 @@ export function buildCarrierSpawnArgs(carrierName: any, {
   }
 
   if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
+    if (orientationRequired && !orientationEntryFile) {
+      throw new Error('carrier_entry_orientation_file_required');
+    }
     const sessionId: any = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     const runtimeArgs: any[] = [
       '--identity',
@@ -175,6 +199,7 @@ export function buildCarrierSpawnArgs(carrierName: any, {
       carrierName,
       '--authority',
       runtimeAuthority ?? 'read',
+      ...(orientationEntryFile ? ['--orientation-entry-file', orientationEntryFile] : []),
     ];
     return runtimeEngineKind === 'rust'
       ? runtimeArgs
@@ -218,7 +243,7 @@ export function buildCarrierSpawnArgs(carrierName: any, {
       '--extension',
       join(rootDir, '.pi', 'extensions', 'narada-mcp-bridge.ts'),
       '--append-system-prompt',
-      startupAffordancePrompt(identity, 'Narada tools are attached through the Narada-owned Pi MCP bridge generated from the Site-local .ai/mcp fabric.'),
+      startupAffordancePrompt(identity, 'Narada tools are attached through the Narada-owned Pi MCP bridge generated from the Site-local .ai/mcp fabric.', orientationBrief, orientationRequired),
     ];
   }
 
@@ -240,18 +265,27 @@ export function buildCarrierSpawnArgs(carrierName: any, {
       '--mcp-config',
       JSON.stringify(claudeCodeMcpConfig()),
       '--append-system-prompt',
-      startupAffordancePrompt(identity, 'Narada tools are attached through Claude Code native MCP config generated from the Site MCP fabric.'),
+      startupAffordancePrompt(identity, 'Narada tools are attached through Claude Code native MCP config generated from the Site MCP fabric.', orientationBrief, orientationRequired),
     ];
   }
 
   if (carrierName === 'opencode') {
     return [
       '--prompt',
-      startupAffordancePrompt(identity, 'This carrier path injects the Narada startup affordance as a prompt only; it does not attach or verify Narada MCP servers.'),
+      startupAffordancePrompt(identity, 'This carrier path injects the Narada startup affordance as a prompt only; it does not attach or verify Narada MCP servers.', orientationBrief, orientationRequired),
     ];
   }
 
-  const spawnArgs: any = ['-S', identity];
+  if (carrierName === 'kimi') {
+    if (orientationRequired && !kimiAgentFile) {
+      throw new Error('carrier_entry_kimi_agent_file_required');
+    }
+    const kimiArgs: any[] = kimiAgentFile ? ['--agent-file', kimiAgentFile] : [];
+    if (yoloFlag) kimiArgs.push('-y');
+    return kimiArgs;
+  }
+
+  const spawnArgs: any = [];
   if (yoloFlag) {
     spawnArgs.push('-y');
   }

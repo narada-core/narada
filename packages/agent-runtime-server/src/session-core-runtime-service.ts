@@ -8,6 +8,7 @@ import { buildNarsRuntimeSurfaceContract } from '@narada-core/nars-runtime-contr
 import { buildLaunchProcessOwnershipEvidence } from '@narada-core/launch-process-ownership';
 import { normalizeIntelligenceInvocationControl } from '@narada-core/invokable-intelligence-contract';
 import { normalizeNarsExecutionPolicy } from '@narada-core/nars-intelligence-kernel-contract';
+import { assertOrientationBriefIntegrity } from '@narada-core/orientation-manifest';
 import { DEFAULT_RUNTIME_ENGINE } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
 import { createRuntimeSessionBinding } from './runtime-session-binding.js';
 import { createNarsCapabilityGateway } from '@narada-core/nars-capability-gateway/capability-gateway';
@@ -31,11 +32,101 @@ const SESSION_CONTROL_METHODS: any = new Set([
   'session.recovery',
   'session.close',
 ]);
+const ORIENTATION_BOOTSTRAP_TURN_PREFIX: any = 'input_orientation_bootstrap_';
+const ORIENTATION_BOOTSTRAP_REQUIRED_TOOLS: any = Object.freeze([
+  'agent_orientation_read',
+]);
+const ORIENTATION_BOOTSTRAP_ALLOWED_TOOLS: any = new Set([
+  ...ORIENTATION_BOOTSTRAP_REQUIRED_TOOLS,
+  'mcp_output_show',
+]);
+const ORIENTATION_BOOTSTRAP_PROMPT: any = [
+  'This is the mandatory Carrier-entry orientation turn, not ordinary work.',
+  'Use only the exposed orientation tools.',
+  'Call agent_orientation_read({}) and follow each returned next_call exactly.',
+  'Treat every continuation as opaque; never inspect or alter it.',
+  'Do not begin, discuss, or perform the selected work in this turn.',
+  'Stop only when status=ready and ordinary_work_gate=open, or report the exact orientation blocker.',
+].join(' ');
 
 /** Unknown or malformed runtime scope input is inert; only launcher-admitted scopes can expose tools. */
 export function normalizeRuntimeMcpScope(value: any) {
   const normalized: any = String(value ?? 'none').trim().toLowerCase();
   return ADMITTED_RUNTIME_MCP_SCOPES.has(normalized) ? normalized : 'none';
+}
+
+function hasPriorOrdinaryAssistantMessage({ eventsPath, currentInput }: any = {}) {
+  const currentInputId: any = currentInput?.event_id == null ? null : String(currentInput.event_id);
+  return readNarsEventLog(eventsPath).events.some((event: any) => {
+    const eventTurnId: any = String(event.turn_id ?? event.input_event_id ?? event.event_id ?? '');
+    if (eventTurnId.startsWith(ORIENTATION_BOOTSTRAP_TURN_PREFIX) || eventTurnId === currentInputId) return false;
+    return event?.event === 'assistant_message' && Boolean(normalizeProviderConversationContent(event.content));
+  });
+}
+
+export function buildOrientationProviderCardMessage(
+  briefValue: any,
+  { includeEntrySelections = true }: any = {},
+) {
+  if (!briefValue) return null;
+  const brief: any = assertOrientationBriefIntegrity(briefValue);
+  const roleBinding: any = brief.role_binding && typeof brief.role_binding === 'object'
+    ? brief.role_binding
+    : null;
+  const role: any = roleBinding?.role
+    ?? roleBinding?.role_id
+    ?? roleBinding?.binding?.role
+    ?? null;
+  const entrySelection: any = (selection: any) => selection?.mode === 'exact'
+    ? {
+        mode: 'exact',
+        snapshot_posture: 'selected_at_carrier_entry_not_live_state',
+        summary: selection.summary,
+        inspect: selection.inspection_call,
+      }
+    : {
+        mode: 'omitted',
+        reason_code: selection?.reason_code ?? 'not_selected',
+      };
+  const card: any = {
+    schema: 'narada.orientation_context_card.v1',
+    projection_posture: 'derived_from_exact_brief_not_independent_authority',
+    projection_mode: includeEntrySelections ? 'entry_handoff' : 'recurring_position',
+    orientation_status: 'acknowledged_before_ordinary_turn',
+    position: {
+      local_agent_id: brief.agent_identity.local_agent_id,
+      canonical_agent_id: brief.agent_identity.canonical_agent_id,
+      site_ref: brief.coordinate.site_ref,
+      carrier_kind: brief.carrier_kind,
+      role,
+    },
+    ...(includeEntrySelections ? {
+      entry_snapshot_at: brief.generated_at,
+      continuity: entrySelection(brief.continuity_selection),
+      work: entrySelection(brief.work_selection),
+    } : {
+      work_refresh: brief.work_selection?.mode === 'exact'
+        ? brief.work_selection.inspection_call
+        : null,
+    }),
+    manifest_ref: brief.manifest_ref,
+    residual_codes: brief.residual_codes,
+    authority_posture: {
+      continuity: 'historical_context_only',
+      selected_work: 'entry_orientation_not_action_authority',
+      consequential_action: 'owning_admission_still_required',
+    },
+  };
+  const encodedCard: any = JSON.stringify(card);
+  if (Buffer.byteLength(encodedCard, 'utf8') > 3_072) {
+    throw new Error('orientation_context_card_inline_bound_exceeded');
+  }
+  return [
+    includeEntrySelections
+      ? 'Narada Orientation Entry Card. Identity and authority posture remain in force; continuity and work are entry snapshots, not live state.'
+      : 'Narada Orientation Position Card. Refresh live work through work_refresh; entry summaries are intentionally omitted after handoff.',
+    encodedCard,
+  ].join(' ');
 }
 let heartbeatWriteSequence: any = 0;
 
@@ -111,6 +202,7 @@ export function createScopedIntelligenceToolGateway({ mcpScope = 'none', gateway
         parameters: tool.input_schema ?? { type: 'object', properties: {} },
       },
       nars_gateway_proxy: true,
+      canonical_tool_name: tool.tool_name ?? null,
       capability_identity: tool.capability_identity ?? tool.capabilityIdentity ?? null,
     })),
     invoke: ({ toolName, tool_name: toolNameAlias, arguments: args, abortSignal, turnId, turn_id: turnIdAlias, inputEventId, input_event_id: inputEventIdAlias, agentId, agent_id: agentIdAlias, sessionId, session_id: sessionIdAlias, inputId, input_id: inputIdAlias, runtimeRequestId, runtime_request_id: runtimeRequestIdAlias, idempotencyKey, idempotency_key: idempotencyKeyAlias, turnAttempt, turn_attempt: turnAttemptAlias, toolCallId, tool_call_id: toolCallIdAlias, piMessageId, pi_message_id: piMessageIdAlias, capabilityIdentity, capability_identity: capabilityIdentityAlias, authorityPosture, authority_posture: authorityPostureAlias, admissionEvidence, admission_evidence: admissionEvidenceAlias, executionEvidence, execution_evidence: executionEvidenceAlias, resultReference, result_reference: resultReferenceAlias, reconciliationState, reconciliation_state: reconciliationStateAlias, correlationKey, correlation_key: correlationKeyAlias }: any) => gateway.invoke({
@@ -156,6 +248,73 @@ export function createScopedIntelligenceToolGateway({ mcpScope = 'none', gateway
     operationalState: () => gateway.operationalState?.() ?? 'unknown',
     close: () => gateway.close(),
   };
+}
+
+function providerToolName(tool: any): string {
+  return String(tool?.function?.name ?? tool?.name ?? '').trim();
+}
+
+function canonicalToolName(tool: any): string {
+  return String(
+    tool?.canonical_tool_name
+    ?? tool?.canonicalToolName
+    ?? tool?.function?.canonical_tool_name
+    ?? tool?.function?.name
+    ?? tool?.name
+    ?? '',
+  ).trim();
+}
+
+// During the internal Carrier-entry turn, the intelligence provider sees and
+// can invoke only orientation capabilities. The same gateway becomes fully
+// available after the acknowledgement gate opens.
+export function createOrientationEntryToolGateway({
+  gateway,
+  isOrientationTurn = () => false,
+}: any = {}) {
+  if (!gateway) throw new Error('orientation_entry_tool_gateway_required');
+  let providerToCanonical: any = new Map();
+
+  const readCatalog: any = async () => {
+    const catalog: any[] = typeof gateway.toolCatalog === 'function'
+      ? await gateway.toolCatalog()
+      : [];
+    providerToCanonical = new Map(catalog.map((tool: any) => [
+      providerToolName(tool),
+      canonicalToolName(tool),
+    ]));
+    return catalog;
+  };
+
+  return Object.freeze({
+    async toolCatalog() {
+      const catalog: any[] = await readCatalog();
+      if (!isOrientationTurn()) return catalog;
+      return catalog.filter((tool: any) => (
+        ORIENTATION_BOOTSTRAP_ALLOWED_TOOLS.has(canonicalToolName(tool))
+      ));
+    },
+    async invoke(request: any = {}) {
+      if (!isOrientationTurn()) return gateway.invoke?.(request);
+      if (providerToCanonical.size === 0) await readCatalog();
+      const requestedName: any = String(
+        request?.toolName ?? request?.tool_name ?? '',
+      ).trim();
+      const canonicalName: any = providerToCanonical.get(requestedName) ?? requestedName;
+      if (!ORIENTATION_BOOTSTRAP_ALLOWED_TOOLS.has(canonicalName)) {
+        return {
+          schema: 'narada.runtime.orientation_tool_admission.v1',
+          status: 'refused',
+          reason: 'orientation_bootstrap_tool_not_allowed',
+          tool_name: requestedName,
+          canonical_tool_name: canonicalName,
+        };
+      }
+      return gateway.invoke?.(request);
+    },
+    operationalState: () => gateway.operationalState?.() ?? 'unknown',
+    close: () => gateway.close?.(),
+  });
 }
 
 /** Build the one runtime-owned capability gateway shared by kernel startup and turns. */
@@ -344,6 +503,12 @@ export function normalizeProviderConversationContent(content: any) {
 }
 
 export function requestRejectionCode(method: any, message: any) {
+  if (
+    method === 'session.submit'
+    && String(message).startsWith('orientation_acknowledgement_required:')
+  ) {
+    return 'orientation_required';
+  }
   if (message === 'invalid_json') return 'invalid_json';
   if (String(message).includes('IntelligenceInvocationControlError')
     || String(message).includes('invalid-intelligence-invocation-control')
@@ -363,6 +528,7 @@ function providerConversationMessages({ eventsPath, currentInput }: any = {}) {
   const messages: any = [];
   for (const event of readNarsEventLog(eventsPath).events) {
     const eventTurnId: any = String(event.turn_id ?? event.input_event_id ?? event.event_id ?? '');
+    if (eventTurnId.startsWith(ORIENTATION_BOOTSTRAP_TURN_PREFIX)) continue;
     if (event?.event === 'user_message' && eventTurnId !== currentInputId) {
       const content: any = normalizeProviderConversationContent(event.content);
       if (content) messages.push({ role: 'user', content });
@@ -384,12 +550,30 @@ export function sessionSubmitInvocationControl(request: any) {
   return value === undefined ? null : normalizeIntelligenceInvocationControl(value);
 }
 
-export function buildProviderTurnContext({ eventsPath, input }: any = {}) {
+export function buildProviderTurnContext({
+  eventsPath,
+  input,
+  orientationBrief = null,
+}: any = {}) {
   const control: any = input?.metadata?.intelligence_invocation ?? null;
+  const orientationBootstrap: any = input?.metadata?.orientation_bootstrap === true;
   const content: any = String(input?.content ?? '').trim();
-  const messages: any = control && (control.intent_id || CURRENT_INPUT_ONLY_MODES.has(control.mode))
-    ? (content ? [{ role: 'user', content }] : [])
-    : providerConversationMessages({ eventsPath, currentInput: input });
+  const currentInputOnly: any = Boolean(control && (control.intent_id || CURRENT_INPUT_ONLY_MODES.has(control.mode)));
+  const ordinaryMessages: any = orientationBootstrap
+    ? (content ? [{ role: 'system', content }] : [])
+    : currentInputOnly
+      ? (content ? [{ role: 'user', content }] : [])
+      : providerConversationMessages({ eventsPath, currentInput: input });
+  const orientationCard: any = orientationBootstrap
+    ? null
+    : buildOrientationProviderCardMessage(orientationBrief, {
+        includeEntrySelections: !orientationBrief
+          || currentInputOnly
+          || !hasPriorOrdinaryAssistantMessage({ eventsPath, currentInput: input }),
+      });
+  const messages: any = orientationCard
+    ? [{ role: 'system', content: orientationCard }, ...ordinaryMessages]
+    : ordinaryMessages;
   return {
     turnId: input.event_id,
     runtimeRequestId: input.runtime_request_id
@@ -471,6 +655,13 @@ function projectRuntimeHealth(snapshot: any, runtimeContext: any, toolGateway: a
     health_endpoint: runtimeContext.healthUrl ?? null,
     event_endpoint: runtimeContext.eventStreamUrl ?? null,
     runtime_host_state: runtimeHostSnapshot(runtimeContext),
+    orientation_entry: typeof runtimeContext.orientationEntryGateState === 'function'
+      ? runtimeContext.orientationEntryGateState()
+      : {
+          schema: 'narada.runtime.orientation_entry_gate.v1',
+          status: 'not_required',
+          ordinary_work_gate: 'open',
+        },
     heartbeat,
     intelligence,
     intelligence_kernel_kind: intelligence.intelligence_kernel_kind
@@ -551,6 +742,7 @@ export function createSessionCoreRuntimeService({
   admitCapability = null,
   onAuthorityHeartbeat = null,
   onAuthorityClose = null,
+  orientationGate = null,
   heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
   now = () => new Date().toISOString(),
 }: any = {}) {
@@ -599,13 +791,20 @@ export function createSessionCoreRuntimeService({
       if (shouldPersistNarsRuntimeRequestTransition(record)) supervisor?.core.appendEvent(record);
     },
   });
-  const intelligenceToolGateway: any = toolGateway
+  let orientationBootstrapActive: any = false;
+  const baseIntelligenceToolGateway: any = toolGateway
     ? createScopedIntelligenceToolGateway({ mcpScope, toolGateway })
     : createRuntimeCapabilityGateway({
       runtimeContext,
       admitCapability,
       recordEvidence: async (event: any) => supervisor?.core.appendEvent({ event: event.kind, ...event }),
     });
+  const intelligenceToolGateway: any = orientationGate?.required === true
+    ? createOrientationEntryToolGateway({
+        gateway: baseIntelligenceToolGateway,
+        isOrientationTurn: () => orientationBootstrapActive,
+      })
+    : baseIntelligenceToolGateway;
   // Bind the scoped NARS gateway at the session-core crossing as well as
   // carrying it through the carrier turn context.  The kernel must never
   // have to guess whether a capability gateway was supplied; a transport or
@@ -626,9 +825,123 @@ export function createSessionCoreRuntimeService({
       if (executionPolicyReconfigurationInProgress) {
         throw new Error('runtime_execution_policy_reconfiguration_in_progress');
       }
-      return buildProviderTurnContext({ eventsPath: runtimeContext.eventsPath, input });
+      return buildProviderTurnContext({
+        eventsPath: runtimeContext.eventsPath,
+        input,
+        orientationBrief: orientationGate?.brief ?? null,
+      });
     },
   });
+
+  let orientationBootstrapAttempt: any = 0;
+  let orientationBootstrapPromise: any = null;
+  const ensureOrientationEntry: any = async (reason: any = 'requested') => {
+    if (orientationGate?.required !== true) {
+      return orientationGate?.inspect?.() ?? {
+        schema: 'narada.runtime.orientation_entry_gate.v1',
+        status: 'not_required',
+        ordinary_work_gate: 'open',
+        reason: 'carrier_entry_packet_not_supplied',
+      };
+    }
+    const initialState: any = orientationGate.inspect();
+    if (initialState.ordinary_work_gate === 'open') {
+      await supervisor.resumeRecovery?.();
+      return initialState;
+    }
+    if (orientationBootstrapPromise) return orientationBootstrapPromise;
+
+    const attempt: any = ++orientationBootstrapAttempt;
+    const turnId: any = `${ORIENTATION_BOOTSTRAP_TURN_PREFIX}${runtimeContext.session}:${attempt}`;
+    const running: any = (async () => {
+      supervisor.core.appendEvent({
+        event: 'orientation_bootstrap_started',
+        attempt,
+        reason,
+        turn_id: turnId,
+        delivery_receipt_ref: initialState.delivery_receipt_ref ?? null,
+      });
+      orientationBootstrapActive = true;
+      try {
+        const catalog: any[] = await intelligenceToolGateway.toolCatalog();
+        const exposedCanonicalNames: any = new Set(
+          catalog.map((tool: any) => canonicalToolName(tool)),
+        );
+        const missingTools: any[] = ORIENTATION_BOOTSTRAP_REQUIRED_TOOLS.filter(
+          (name: any) => !exposedCanonicalNames.has(name),
+        );
+        if (missingTools.length > 0) {
+          const blockedState: any = orientationGate.inspect();
+          supervisor.core.appendEvent({
+            event: 'orientation_bootstrap_unavailable',
+            attempt,
+            reason: 'orientation_tools_missing',
+            turn_id: turnId,
+            missing_tools: missingTools,
+            exposed_tools: [...exposedCanonicalNames].sort(),
+            ...blockedState,
+          });
+          return blockedState;
+        }
+
+        const result: any = await supervisor.dispatch({
+          id: turnId,
+          request_id: turnId,
+          event_id: turnId,
+          method: 'session.submit',
+          source: 'system_directive',
+          source_kind: 'system',
+          source_id: 'narada-agent-runtime-server',
+          transport: 'carrier_server_api',
+          delivery_mode: 'admit_for_current_turn',
+          authority_ref: `runtime:${runtimeContext.session}:orientation-entry`,
+          directive_id: `orientation-entry:${runtimeContext.session}`,
+          content: ORIENTATION_BOOTSTRAP_PROMPT,
+          metadata: {
+            orientation_bootstrap: true,
+            orientation_delivery_receipt_ref: initialState.delivery_receipt_ref ?? null,
+          },
+        }, { position: 'front', drain: 'once' });
+        const finalState: any = orientationGate.inspect();
+        const opened: any = finalState.ordinary_work_gate === 'open';
+        supervisor.core.appendEvent({
+          event: opened
+            ? 'orientation_bootstrap_completed'
+            : 'orientation_bootstrap_incomplete',
+          attempt,
+          reason,
+          turn_id: turnId,
+          turn_terminal_state: result?.terminal_state ?? null,
+          ...finalState,
+        });
+        if (opened) {
+          orientationBootstrapActive = false;
+          await supervisor.resumeRecovery?.();
+        }
+        return finalState;
+      } catch (error) {
+        const errorMessage: any = error instanceof Error ? error.message : String(error);
+        const blockedState: any = orientationGate.inspect();
+        supervisor.core.appendEvent({
+          event: 'orientation_bootstrap_failed',
+          attempt,
+          reason,
+          turn_id: turnId,
+          error: errorMessage,
+          ...blockedState,
+        });
+        return blockedState;
+      } finally {
+        orientationBootstrapActive = false;
+      }
+    })();
+    orientationBootstrapPromise = running;
+    try {
+      return await running;
+    } finally {
+      if (orientationBootstrapPromise === running) orientationBootstrapPromise = null;
+    }
+  };
 
   async function handleRequest(request: any, writer: any, requestState: any) {
     const requestId: any = request?.id ?? request?.request_id ?? null;
@@ -808,6 +1121,22 @@ export function createSessionCoreRuntimeService({
       if (request?.parse_error === 'invalid_json') throw new Error('invalid_json');
       if (method !== 'session.submit') throw new Error('unsupported_session_control');
       if (requestContent(request) == null) throw new Error('unsupported_session_control');
+      if (orientationGate?.required === true) {
+        let gateState: any = orientationGate.inspect();
+        if (gateState.ordinary_work_gate !== 'open') {
+          await ensureOrientationEntry('before_session_submit');
+          gateState = orientationGate.inspect();
+        }
+        supervisor.core.appendEvent({
+          event: 'orientation_entry_gate_evaluated',
+          request_id: requestId,
+          method,
+          ...gateState,
+        });
+        if (gateState.ordinary_work_gate !== 'open') {
+          throw new Error(`orientation_acknowledgement_required:${gateState.reason}`);
+        }
+      }
       const invocationControl: any = sessionSubmitInvocationControl(request);
       supervisor.core.appendEvent({
         event: 'session_control_accepted',
@@ -929,7 +1258,12 @@ export function createSessionCoreRuntimeService({
       sessionPath: runtimeContext.sessionPath,
       siteRoot: runtimeContext.siteRoot,
     });
-    supervisor.start();
+    const orientationAtStart: any = orientationGate?.required === true
+      ? orientationGate.inspect()
+      : null;
+    supervisor.start({
+      deferRecoveryDrain: orientationAtStart?.ordinary_work_gate !== 'open',
+    });
     let heartbeatTimer: any = null;
     input.setEncoding?.('utf8');
     let buffer: any = '';
@@ -973,6 +1307,7 @@ export function createSessionCoreRuntimeService({
       const startedAt: any = now();
       writeRuntimeHeartbeat(runtimeContext, { reason: 'session_started', now: startedAt });
       await notifyAuthorityHeartbeat('session_started', startedAt);
+      await ensureOrientationEntry('session_start');
       if (heartbeatCadenceMs > 0) {
         heartbeatTimer = setInterval(() => {
           const heartbeatAt: any = now();
@@ -1035,6 +1370,7 @@ export function createSessionCoreRuntimeService({
     runtimeContext,
     intelligenceRuntime,
     requestLifecycle,
+    ensureOrientationEntry,
     run,
   });
 }

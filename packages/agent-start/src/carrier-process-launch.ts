@@ -141,12 +141,30 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
     return;
   }
 
+  let handoffFailed: any = false;
+  child.once('spawn', () => {
+    try {
+      onSpawn?.(child.pid ?? null, child);
+    } catch (error) {
+      handoffFailed = true;
+      try {
+        child.kill?.();
+      } catch {
+        // Preserve the handoff failure.
+      }
+      writeStderr(`[FAIL] Carrier handoff admission failed: ${error instanceof Error ? error.message : String(error)}`);
+      onExit(1);
+    }
+  });
+
   child.on('error', (err: any) => {
+    if (handoffFailed) return;
     writeStderr(`[FAIL] Failed to spawn runtime process: ${err.message}`);
     onExit(1);
   });
 
   child.on('close', (code: any) => {
+    if (handoffFailed) return;
     onExit(code ?? 0);
   });
 }

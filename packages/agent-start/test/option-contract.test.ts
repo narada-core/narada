@@ -103,7 +103,7 @@ function writeAllowedRootMcpServerFile(siteRoot: any, fileName: any, serverName:
         transport: 'stdio',
         command: 'node',
         args: allowedRoots.flatMap((root: any) => ['--allowed-root', root]),
-        tools: ['agent_context_startup_sequence'],
+        tools: ['agent_orientation_read', 'mcp_output_show'],
         target_site_root: '{site_root}',
         injection_scope: injectionScope,
         narada_scope: { injection_scope: injectionScope },
@@ -128,7 +128,7 @@ function writeCanonicalMcpServerFile(siteRoot: any, fileName: any, serverName: a
           projection_id: 'default',
           injection_scope: injectionScope,
         },
-        tools: ['agent_context_startup_sequence'],
+        tools: ['agent_orientation_read', 'mcp_output_show'],
         target_site_root: '{site_root}',
         injection_scope: injectionScope,
         narada_scope: { injection_scope: injectionScope },
@@ -147,7 +147,7 @@ function writeMinimalMcpFabric(siteRoot: any, serverName: any, injectionScope: a
         transport: 'stdio',
         command: 'node',
         args: ['--version'],
-        tools: ['agent_context_startup_sequence'],
+        tools: ['agent_orientation_read', 'mcp_output_show'],
         target_site_root: '{site_root}',
         injection_scope: injectionScope,
         narada_scope: { injection_scope: injectionScope },
@@ -166,7 +166,7 @@ function writeMinimalMcpServerFile(siteRoot: any, fileName: any, serverName: any
         transport: 'stdio',
         command: 'node',
         args: [commandArg],
-        tools: ['agent_context_startup_sequence'],
+        tools: ['agent_orientation_read', 'mcp_output_show'],
         target_site_root: '{site_root}',
         injection_scope: injectionScope,
         narada_scope: { injection_scope: injectionScope },
@@ -880,7 +880,7 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
         transport: 'stdio',
         command: 'node',
         args: ['--version'],
-        tools: ['agent_context_startup_sequence'],
+        tools: ['agent_orientation_read', 'mcp_output_show'],
         target_site_root: '{site_root}',
       },
     },
@@ -1058,14 +1058,10 @@ test('codex resolves CLI script from PATH and disables native shell by default',
 
   const output: any = runOk(['--runtime', 'codex'], { NARADA_CODEX_CLI_SCRIPT: '', PATH: fakeBin });
   assert.deepEqual(output.native_shell_exception.status, 'disabled');
-  assert.equal(output.startup_command_name, 'agent_context_startup_sequence');
-  assert.deepEqual(output.startup_command, {
-    name: 'agent_context_startup_sequence',
-    arguments: {},
-    display: 'agent_context_startup_sequence({})',
-  });
-  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
-  assert.equal(output.tool_fabric_adapter.expected_tools.includes('startup_sequence'), false);
+  assert.equal(output.startup_command_name, null);
+  assert.equal(output.startup_command, null);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_orientation_read'), true);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), false);
   assert.equal(output.required_environment.NARADA_AGENT_ID, identity);
   assert.equal(output.required_environment.NARADA_AGENT_START_EVENT_ID, output.agent_start_event);
   assert.equal(output.would_set_environment.NARADA_AGENT_ID, identity);
@@ -1075,7 +1071,16 @@ test('codex resolves CLI script from PATH and disables native shell by default',
   if (process.platform === 'win32') assert.equal(output.runtime_args[0], fakeCodexScript);
   assert.deepEqual(output.runtime_args.slice(codexArgOffset, codexArgOffset + 2), ['--ask-for-approval', 'never']);
   assert.equal(output.runtime_args.includes('--disable'), true);
-  assert.deepEqual(output.runtime_args.slice(-4), ['--disable', 'apps', '--disable', 'shell_tool']);
+  const disabledFeatureOffset: any = output.runtime_args.findIndex(
+    (argument: any, index: any) => argument === '--disable' && output.runtime_args[index + 1] === 'apps',
+  );
+  assert.notEqual(disabledFeatureOffset, -1);
+  assert.deepEqual(output.runtime_args.slice(disabledFeatureOffset, disabledFeatureOffset + 4), [
+    '--disable',
+    'apps',
+    '--disable',
+    'shell_tool',
+  ]);
 
   const explicitOutput: any = runOk(['--runtime', 'codex'], { NARADA_CODEX_CLI_SCRIPT: launcherPath });
   if (process.platform === 'win32') assert.equal(explicitOutput.runtime_args[0], launcherPath);
@@ -1097,7 +1102,7 @@ test('agent-tui delegates intelligence selection and MCP ownership to the NARS r
   assert.equal(env.KIMI_CODE_MODEL, undefined);
   assert.equal(Object.hasOwn(env, 'KIMI_CODE_API_KEY'), false);
   assert.equal(output.intelligence_selection_authority.launcher_selection, false);
-  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_orientation_read'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);
   assert.equal(output.runtime_args.includes('--operator-surface'), true);
@@ -1365,6 +1370,8 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
     launchOutput.required_environment.NARADA_ORIENTATION_MANIFEST_ID,
     launchOutput.orientation_manifest.manifest_id,
   );
+  assert.equal(launchOutput.required_environment.NARADA_ORIENTATION_REQUIRED, '1');
+  assert.equal(typeof launchOutput.required_environment.NARADA_ORIENTATION_ENTRY_FILE, 'string');
   assert.deepEqual(
     JSON.parse(launchOutput.required_environment.NARADA_CARRIER_SESSION_ADMISSION_RECEIPT),
     admissionReceipt,
@@ -1441,7 +1448,7 @@ test('opencode dry-run records prompt-only carrier posture', () => {
   assert.equal(output.context_isolation.runtime, 'opencode');
   assert.equal(output.runtime_args.length, 2);
   assert.equal(output.runtime_args[0], '--prompt');
-  assert.ok(output.runtime_args[1].includes('Use agent_context_startup_sequence first'));
+  assert.equal(output.runtime_args[1].includes('agent_context_startup_sequence'), false);
   assert.ok(output.runtime_args[1].includes('does not attach or verify Narada MCP servers'));
   assert.deepEqual(output.mcp_fabric.server_names, []);
   assert.equal(output.mcp_scope.resolution.enforcement, 'carrier_without_narada_mcp_adapter');

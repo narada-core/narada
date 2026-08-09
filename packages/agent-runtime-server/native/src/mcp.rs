@@ -19,6 +19,11 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_STARTUP_TIMEOUT_MS: u64 = 10_000;
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 15_000;
+const ORIENTATION_ENTRY_TOOLS: &[&str] = &["agent_orientation_read", "mcp_output_show"];
+
+fn orientation_entry_tool(name: &str) -> bool {
+    ORIENTATION_ENTRY_TOOLS.contains(&name)
+}
 
 #[derive(Debug, Clone)]
 struct ServerConfig {
@@ -61,12 +66,7 @@ struct WorkerMcpProjection {
     include_output_readback_tools: bool,
 }
 
-const WORKER_STARTUP_TOOLS: &[&str] = &[
-    "agent_context_startup_sequence",
-    "agent_context_whoami",
-    "agent_context_hydrate_current",
-    "agent_context_doctrinal_grounding",
-];
+const WORKER_STARTUP_TOOLS: &[&str] = &["agent_orientation_read"];
 const WORKER_OUTPUT_TOOLS: &[&str] = &[
     "fs_read_file",
     "fs_read_file_range",
@@ -83,6 +83,7 @@ pub struct NativeMcpGateway {
     next_execution_id: u64,
     execution_count: usize,
     worker_projection: Option<WorkerMcpProjection>,
+    orientation_only: bool,
 }
 
 impl NativeMcpGateway {
@@ -97,7 +98,16 @@ impl NativeMcpGateway {
             next_execution_id: 1,
             execution_count: 0,
             worker_projection: worker_mcp_projection_from_env(),
+            orientation_only: false,
         }
+    }
+
+    pub fn begin_orientation(&mut self) {
+        self.orientation_only = true;
+    }
+
+    pub fn end_orientation(&mut self) {
+        self.orientation_only = false;
     }
 
     pub fn start(&mut self) -> Vec<Value> {
@@ -176,6 +186,13 @@ impl NativeMcpGateway {
         let bindings = self.bindings();
         bindings
             .into_iter()
+            .filter(|(_, tool, _)| {
+                !self.orientation_only
+                    || tool
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .is_some_and(orientation_entry_tool)
+            })
             .map(|(server_name, tool, provider_name)| {
                 json!({
                     "server_name": server_name,
@@ -221,6 +238,13 @@ impl NativeMcpGateway {
         let Some((server_name, original_name)) = self.find_binding(tool_name) else {
             return self.finish_refused(common, "tool_not_found", event_sink);
         };
+        if self.orientation_only && !orientation_entry_tool(&original_name) {
+            return self.finish_refused(
+                common,
+                "orientation_bootstrap_tool_not_allowed",
+                event_sink,
+            );
+        }
         let Some(server) = self.servers.get_mut(&server_name) else {
             return self.finish_refused(common, "mcp_server_not_found", event_sink);
         };

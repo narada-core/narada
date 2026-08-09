@@ -48,15 +48,26 @@ test('runtime engine selection changes only the NARS process boundary', () => {
     claudeCodeMcpConfig: () => ({}),
     claudeCodeModel: 'sonnet',
     runtimeAuthority: 'read',
+    orientationBrief: { schema: 'narada.orientation_brief.v1', brief_id: 'brief:1' },
+    orientationEntryFile: 'C:/site/.ai/runtime/orientation-entry/carrier_test/entry.json',
+    orientationRequired: true,
   };
 
   const rustArgs = buildCarrierSpawnArgs('agent-cli', { ...common, runtimeEngineKind: 'rust' });
   assert.deepEqual(rustArgs.slice(0, 4), ['--identity', 'sonar.resident', '--session', 'carrier_test']);
   assert.equal(rustArgs.includes('agent-runtime-server.mjs'), false);
+  assert.deepEqual(
+    rustArgs.slice(-2),
+    ['--orientation-entry-file', common.orientationEntryFile],
+  );
 
   const nodeArgs = buildCarrierSpawnArgs('agent-cli', { ...common, runtimeEngineKind: 'node' });
   assert.equal(nodeArgs[0], 'C:/narada/agent-runtime-server.mjs');
   assert.deepEqual(nodeArgs.slice(1, 5), ['--identity', 'sonar.resident', '--session', 'carrier_test']);
+  assert.deepEqual(
+    nodeArgs.slice(-2),
+    ['--orientation-entry-file', common.orientationEntryFile],
+  );
 
   assert.equal(resolveCarrierCommand('agent-cli', {
     agentTuiCarrier: 'agent-tui',
@@ -65,6 +76,59 @@ test('runtime engine selection changes only the NARS process boundary', () => {
     runtimeEngineKind: 'rust',
     runtimeEngineCommand: common.runtimeEngineCommand,
   }), common.runtimeEngineCommand);
+});
+
+test('Codex and Kimi receive the exact orientation entry before ordinary work', () => {
+  const orientationBrief: any = {
+    schema: 'narada.orientation_brief.v1',
+    brief_id: 'orientation-brief:exact',
+    required_reads: [{ step_id: 'read:agents:1' }],
+  };
+  const common: any = {
+    agentTuiCarrier: 'agent-tui',
+    identity: 'sonar.resident',
+    yoloFlag: true,
+    enableNativeShellFlag: false,
+    processPlatform: 'win32',
+    runtimeEngineKind: 'node',
+    codexCliScriptPath: () => 'codex.cmd',
+    codexMcpServerDefinitions: () => [],
+    agentRuntimeServerScriptPath: () => 'runtime.mjs',
+    agentCliSessionName: () => 'carrier_test',
+    carrierSessionRegistration: { carrier_session_id: 'carrier_test' },
+    sessionSiteRoot: 'C:/site',
+    naradaPackageRoot: () => 'C:/narada',
+    siteCarrierControlPath: () => 'C:/site/control.jsonl',
+    siteCarrierSessionPath: () => 'C:/site/session.jsonl',
+    piCliScriptPath: () => 'pi.js',
+    rootDir: 'C:/site',
+    piProvider: 'openai-codex',
+    piModel: 'gpt-5.5',
+    claudeCodeMcpConfig: () => ({}),
+    claudeCodeModel: 'sonnet',
+    runtimeAuthority: 'read',
+    orientationBrief,
+    orientationEntryFile: 'C:/site/.ai/runtime/orientation-entry/carrier_test/entry.json',
+    kimiAgentFile: 'C:/site/.ai/runtime/orientation-entry/carrier_test/kimi-agent.md',
+    orientationRequired: true,
+  };
+
+  const codexArgs: any = buildCarrierSpawnArgs('codex', common);
+  assert.equal(codexArgs[0], 'codex.cmd');
+  assert.match(codexArgs.at(-1), /agent_orientation_read/);
+  assert.doesNotMatch(codexArgs.at(-1), /agent_orientation_acknowledge/);
+  assert.match(codexArgs.at(-1), /continuation as opaque/);
+  assert.match(codexArgs.at(-1), /status=ready/);
+  assert.match(codexArgs.at(-1), /enforced Carrier-entry bootstrap/);
+  assert.doesNotMatch(codexArgs.at(-1), /orientation-brief:exact/);
+
+  const kimiArgs: any = buildCarrierSpawnArgs('kimi', common);
+  assert.deepEqual(kimiArgs, [
+    '--agent-file',
+    common.kimiAgentFile,
+    '-y',
+  ]);
+  assert.equal(kimiArgs.includes('-S'), false);
 });
 
 test('wait and explicit visible terminal refuse hidden detached start posture', () => {
@@ -198,6 +262,38 @@ test('hidden detached carrier start reports asynchronous spawn errors before par
   } finally {
     rmSync(outputDir, { recursive: true, force: true });
   }
+});
+
+test('visible Carrier start runs the authoritative handoff callback after OS spawn', () => {
+  const child: any = new EventEmitter();
+  child.pid = 5252;
+  child.kill = () => {};
+  const handoffs: any[] = [];
+  const exits: any[] = [];
+
+  spawnCarrierProcessAndExit({
+    command: 'carrier',
+    args: ['--entry'],
+    cwd: 'C:/workspace/site',
+    env: { NARADA_AGENT_ID: 'site.resident' },
+    executionMode: 'visible_inherited',
+    spawnOptions: {
+      spawnImpl() {
+        return child;
+      },
+    },
+    onSpawn(pid: any, spawnedChild: any) {
+      handoffs.push({ pid, child: spawnedChild });
+    },
+    onExit(code: any) {
+      exits.push(code);
+    },
+  });
+
+  child.emit('spawn');
+  assert.deepEqual(handoffs, [{ pid: 5252, child }]);
+  child.emit('close', 0);
+  assert.deepEqual(exits, [0]);
 });
 
 test('hidden detached carrier start writes real child output to owned files', async () => {

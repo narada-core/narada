@@ -12,7 +12,7 @@ export const NARS_LIFECYCLE_HOOK_SCHEMA = 'narada.nars.lifecycle_hook.v1';
 export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA = 'narada.nars.authority_runtime_host_transition.v1';
 export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA = 'narada.nars.authority_runtime_host_transition_refusal.v1';
 export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_CASES_SCHEMA = 'narada.nars.authority_runtime_host_transition_cases.v1';
-export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
+export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_orientation_read';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const OBSERVER_VISIBILITIES = Object.freeze(['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);

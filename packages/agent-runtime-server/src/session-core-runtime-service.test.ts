@@ -93,6 +93,13 @@ test('provider conversation normalization preserves text and artifact references
 
 test('supported control failures retain method-specific rejection codes', () => {
   assert.equal(requestRejectionCode('session.submit', 'provider_failed'), 'request_dispatch_failed');
+  assert.equal(
+    requestRejectionCode(
+      'session.submit',
+      'orientation_acknowledgement_required:orientation_acknowledgement_required',
+    ),
+    'orientation_required',
+  );
   assert.equal(requestRejectionCode('session.health', 'health_failed'), 'session_control_failed');
   assert.equal(requestRejectionCode('runtime.intelligence.reconfigure', 'binding_failed'), 'runtime_reconfiguration_failed');
   assert.equal(requestRejectionCode('runtime.execution_policy.reconfigure', 'binding_failed'), 'runtime_execution_policy_reconfiguration_failed');

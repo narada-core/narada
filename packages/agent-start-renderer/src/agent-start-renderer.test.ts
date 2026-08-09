@@ -40,7 +40,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
       }),
       KIMI_API_KEY: 'secret',
     },
-    startup_command: { name: 'agent_context_startup_sequence', arguments: {}, display: 'agent_context_startup_sequence({})' },
+    startup_command: { name: 'agent_orientation_read', arguments: {}, display: 'agent_orientation_read({})' },
     launcher_contracts: {
       launch_result_artifact: { status: 'materialized', artifact_path: 'x.result.json' },
       operator_projection_open_request: { status: 'opened', projection_kind: 'browser_url', target_ref: 'http://127.0.0.1:4545' },
@@ -66,7 +66,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
         events: { status: 'projected', websocket_path: '/events' },
       },
     },
-    startup_sequence: [{ tool: 'agent_context_startup_sequence', arguments: {} }],
+    startup_sequence: [{ tool: 'agent_orientation_read', arguments: {} }],
     exec: true,
     launch_result_path: 'x.result.json',
   }, { colorEnabled: false });
@@ -97,8 +97,8 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
   assert.match(text, /narada-site-agent-context/);
   assert.match(text, /narada-site-local-filesystem/);
   assert.match(text, /launch_summary:/);
-  assert.match(text, /startup_command:\n\s+command: agent_context_startup_sequence\(\{\}\)/);
-  assert.match(text, /agent_context_startup_sequence \{\}/);
+  assert.match(text, /startup_command:\n\s+command: agent_orientation_read\(\{\}\)/);
+  assert.match(text, /agent_orientation_read \{\}/);
   assert.match(text, /agent_start_result_end: evt_1/);
 });
 

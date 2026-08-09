@@ -59,6 +59,7 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
   assert.equal(launch.runtime_engine_selection.runtime_engine_kind, 'rust');
   assert.equal(launch.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(launch.required_environment.NARADA_AGENT_ID, 'narada.architect');
+  assert.equal(launch.required_environment.NARADA_ORIENTATION_REQUIRED, '0');
   assert.equal(launch.intelligence_selection_authority.launcher_selection, false);
   assert.equal(launch.required_environment.NARADA_INTELLIGENCE_PROVIDER, undefined);
   assert.equal(launch.required_environment.NARADA_AI_MODEL, undefined);

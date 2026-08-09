@@ -785,7 +785,7 @@ assert.equal(createInputEvent({ ...baseInput, event_id: undefined }).event_id!.t
 assert.equal(isStartupNudge('run startup sequence'), true);
 assert.equal(isStartupNudge('please start up'), true);
 assert.equal(isStartupNudge('inspect startup files'), false);
-assert.deepEqual(startupCommandFromLaunchPacket({}), { name: 'agent_context_startup_sequence', arguments: {} });
+assert.deepEqual(startupCommandFromLaunchPacket({}), { name: 'agent_orientation_read', arguments: {} });
 assert.deepEqual(startupCommandFromLaunchPacket({ startup_command: { name: 'startup_sequence', arguments: {} } }), { name: 'startup_sequence', arguments: {} });
 assert.deepEqual(classifyCarrierInputIntent(input, {
   startup_command: { name: 'agent_context_startup_sequence', arguments: {} },

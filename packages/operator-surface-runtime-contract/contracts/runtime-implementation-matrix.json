@@ -391,7 +391,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "quota-meter-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "quota-meter-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-quota-overlay-read", "quota-meter-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-quota-overlay-read", "native-quota-meter-overlay-status-parity", "quota-meter-authority-boundary-test"] }
       }
     },
     {

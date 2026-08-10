@@ -446,7 +446,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "browser-control-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "browser-control-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-browser-control-contract", "browser-control-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-browser-control-contract", "native-browser-control-session-inventory-parity", "browser-control-authority-boundary-test"] }
       }
     },
     {

@@ -468,7 +468,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "cloudflare-carrier-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "cloudflare-carrier-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-cloudflare-metadata-doctor", "native-cloudflare-local-evidence-read", "cloudflare-carrier-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-cloudflare-metadata-doctor", "native-cloudflare-local-evidence-read", "native-cloudflare-health-projection-parity", "cloudflare-carrier-authority-boundary-test"] }
       }
     }
   ]

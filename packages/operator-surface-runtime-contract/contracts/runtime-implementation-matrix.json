@@ -203,7 +203,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "sop-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "sop-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-sop-template-read-slice", "native-sop-registry-template-read", "sop-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-sop-template-read-slice", "native-sop-registry-template-read", "native-sop-bounded-candidate-read", "sop-authority-boundary-test"] }
       }
     },
     {
@@ -325,7 +325,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "site-coherence-protocol-parity"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "site-coherence-protocol-parity"] },
-        "rust": { "status": "admitted", "evidence": ["native-site-coherence", "site-coherence-local-parity", "site-coherence-protocol-parity"] }
+        "rust": { "status": "admitted", "evidence": ["native-site-coherence", "native-site-coherence-bounded-state-read", "site-coherence-local-parity", "site-coherence-protocol-parity"] }
       }
     },
     {

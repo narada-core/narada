@@ -347,7 +347,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "delegated-task-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "delegated-task-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-delegated-task-read-slice", "delegated-task-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-delegated-task-read-slice", "native-delegated-task-bounded-record-read", "delegated-task-authority-boundary-test"] }
       }
     },
     {
@@ -358,7 +358,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "worker-delegation-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "worker-delegation-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-worker-delegation-read-slice", "worker-delegation-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-worker-delegation-read-slice", "native-worker-bounded-output-paging", "worker-delegation-authority-boundary-test"] }
       }
     },
     {

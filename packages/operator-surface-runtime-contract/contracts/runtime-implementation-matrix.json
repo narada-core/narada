@@ -151,14 +151,14 @@
       "package": "@narada-core/calendar-mcp",
       "required": true,
       "profile_runtime_engine_kinds": {
-        "native": "bun",
+        "native": "rust",
         "bun": "bun",
         "node-compat": "node"
       },
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "calendar-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "calendar-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-calendar-contract", "native-calendar-bounded-policy-output-read", "calendar-authority-boundary-test", "native-calendar-doctor-parity", "native-calendar-guidance-parity", "native-calendar-output-show-parity", "native-calendar-authority-bridge"] }
+        "rust": { "status": "admitted", "evidence": ["native-calendar-contract", "native-calendar-bounded-policy-output-read", "native-calendar-doctor-parity", "native-calendar-guidance-parity", "native-calendar-output-show-parity", "native-calendar-authority-bridge", "native-calendar-graph-authority-parity", "native-calendar-write-policy-parity", "native-calendar-audit-parity"] }
       }
     },
     {

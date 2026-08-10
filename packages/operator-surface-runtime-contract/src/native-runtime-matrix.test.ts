@@ -4,7 +4,7 @@ import { loadRuntimeImplementationMatrixContract } from './operator-surface-runt
 import { runtimeProfileImplementationMatrix } from './runtime-profile-selection.js';
 import { resolveRuntimeMaterializationPlan } from './runtime-materialization-plan.js';
 
-const NATIVE_SURFACES = ['site-lifecycle-mcp', 'site-registry-mcp', 'project-state-mcp', 'runtime-introspection-mcp', 'site-coherence-mcp', 'launcher-mcp'] as const;
+const NATIVE_SURFACES = ['site-lifecycle-mcp', 'site-registry-mcp', 'project-state-mcp', 'runtime-introspection-mcp', 'site-coherence-mcp', 'launcher-mcp', 'calendar-mcp'] as const;
 
 test('native profile admits the Rust native surface batch', () => {
   const entries = runtimeProfileImplementationMatrix('native');

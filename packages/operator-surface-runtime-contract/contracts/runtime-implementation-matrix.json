@@ -380,7 +380,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "nars-session-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "nars-session-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-nars-session-index-read", "nars-session-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-nars-session-index-read", "native-nars-session-local-projection-parity", "nars-session-authority-boundary-test"] }
       }
     },
     {

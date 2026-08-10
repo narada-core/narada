@@ -188,7 +188,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "surface-feedback-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "surface-feedback-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-surface-feedback-read-slice", "surface-feedback-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-surface-feedback-read-slice", "native-surface-feedback-proof-template-parity", "surface-feedback-authority-boundary-test"] }
       }
     },
     {

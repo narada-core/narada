@@ -158,7 +158,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "calendar-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "calendar-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-calendar-contract", "native-calendar-bounded-policy-output-read", "calendar-authority-boundary-test", "native-calendar-doctor-parity", "native-calendar-guidance-parity", "native-calendar-output-show-parity"] }
+        "rust": { "status": "experimental", "evidence": ["native-calendar-contract", "native-calendar-bounded-policy-output-read", "calendar-authority-boundary-test", "native-calendar-doctor-parity", "native-calendar-guidance-parity", "native-calendar-output-show-parity", "native-calendar-authority-bridge"] }
       }
     },
     {

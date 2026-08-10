@@ -252,6 +252,17 @@
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "site-coherence-protocol-parity"] },
         "rust": { "status": "admitted", "evidence": ["native-site-coherence", "site-coherence-local-parity", "site-coherence-protocol-parity"] }
       }
+    },
+    {
+      "component_kind": "launcher-mcp",
+      "package": "@narada-core/launcher-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "launcher-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "launcher-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-launcher", "launcher-registry-parity", "launcher-protocol-parity"] }
+      }
     }
   ]
 }

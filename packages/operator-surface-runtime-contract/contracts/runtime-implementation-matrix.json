@@ -233,7 +233,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "inbox-protocol-parity"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "inbox-protocol-parity"] },
-        "rust": { "status": "admitted", "evidence": ["native-site-inbox", "inbox-protocol-parity", "native-site-inbox-roundtrip"] }
+        "rust": { "status": "admitted", "evidence": ["native-site-inbox", "native-site-inbox-bounded-file-read", "inbox-protocol-parity", "native-site-inbox-roundtrip"] }
       }
     },
     {

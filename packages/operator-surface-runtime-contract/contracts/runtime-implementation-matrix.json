@@ -347,7 +347,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "delegated-task-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "delegated-task-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-delegated-task-read-slice", "native-delegated-task-bounded-record-read", "delegated-task-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-delegated-task-read-slice", "native-delegated-task-bounded-record-read", "native-delegated-task-template-catalog-parity", "delegated-task-authority-boundary-test"] }
       }
     },
     {

@@ -360,6 +360,39 @@
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "worker-delegation-protocol-tests"] },
         "rust": { "status": "experimental", "evidence": ["native-worker-delegation-read-slice", "worker-delegation-authority-boundary-test"] }
       }
+    },
+    {
+      "component_kind": "artifacts-mcp",
+      "package": "@narada-core/artifacts-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "bun", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "artifacts-protocol-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "artifacts-protocol-tests"] },
+        "rust": { "status": "experimental", "evidence": ["native-artifacts-local-contract", "artifacts-authority-boundary-test"] }
+      }
+    },
+    {
+      "component_kind": "nars-session-mcp",
+      "package": "@narada-core/nars-session-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "bun", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "nars-session-protocol-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "nars-session-protocol-tests"] },
+        "rust": { "status": "experimental", "evidence": ["native-nars-session-index-read", "nars-session-authority-boundary-test"] }
+      }
+    },
+    {
+      "component_kind": "quota-meter-mcp",
+      "package": "@narada-core/quota-meter-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "bun", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "quota-meter-protocol-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "quota-meter-protocol-tests"] },
+        "rust": { "status": "experimental", "evidence": ["native-quota-overlay-read", "quota-meter-authority-boundary-test"] }
+      }
     }
   ]
 }

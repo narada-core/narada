@@ -457,7 +457,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "operator-overlay-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "operator-overlay-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-operator-overlay-status", "operator-overlay-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-operator-overlay-status", "native-operator-overlay-status-parity", "operator-overlay-authority-boundary-test"] }
       }
     },
     {

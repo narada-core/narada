@@ -413,7 +413,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "graph-mail-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "graph-mail-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-graph-mail-contract", "native-graph-mail-doctor-parity", "native-graph-mail-auth-status-parity", "graph-mail-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-graph-mail-contract", "native-graph-mail-doctor-parity", "native-graph-mail-auth-status-parity", "native-graph-mail-core-authority-parity", "graph-mail-authority-boundary-test"] }
       }
     },
     {

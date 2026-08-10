@@ -136,14 +136,14 @@
       "package": "@narada-core/git-mcp",
       "required": false,
       "profile_runtime_engine_kinds": {
-        "native": "bun",
+        "native": "rust",
         "bun": "bun",
         "node-compat": "node"
       },
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "git-protocol-parity"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "git-protocol-parity"] },
-        "rust": { "status": "experimental", "evidence": ["native-git-read-canary", "git-work-scope-parity", "git-workflow-record", "git-index-slice", "native-git-protocol-tests"] }
+        "rust": { "status": "admitted", "evidence": ["native-git-read-canary", "git-work-scope-parity", "git-workflow-record", "git-index-slice", "native-git-protocol-tests", "native-git-applet-default"] }
       }
     },
     {

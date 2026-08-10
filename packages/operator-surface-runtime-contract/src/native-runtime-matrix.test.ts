@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { loadRuntimeImplementationMatrixContract } from './operator-surface-runtime-contract.js';
 import { runtimeProfileImplementationMatrix } from './runtime-profile-selection.js';
 import { resolveRuntimeMaterializationPlan } from './runtime-materialization-plan.js';
 
@@ -20,5 +21,17 @@ test('all admitted profiles preserve explicit alternatives for the Rust native s
     for (const componentKind of NATIVE_SURFACES) {
       assert.equal(plan.entries.find((entry: any) => entry.component_kind === componentKind)?.runtime_engine_kind, profile === 'native' ? 'rust' : profile === 'bun' ? 'bun' : 'node');
     }
+  }
+});
+
+test('native profile keeps non-admitted Rust rows on Bun until parity is proven', () => {
+  const matrix = loadRuntimeImplementationMatrixContract();
+  const nativeEntries = runtimeProfileImplementationMatrix('native');
+  for (const row of matrix.rows ?? []) {
+    const rustStatus = row.implementations?.rust?.status;
+    if (rustStatus === 'admitted') continue;
+    const nativeEntry = nativeEntries.find((entry: any) => entry.component_kind === row.component_kind);
+    assert.equal(nativeEntry?.runtime_engine_kind, 'bun', `${row.component_kind}:native default`);
+    assert.equal(nativeEntry?.implementation_status, 'admitted', `${row.component_kind}:Bun fallback`);
   }
 });

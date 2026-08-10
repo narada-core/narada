@@ -188,6 +188,39 @@
       }
     },
     {
+      "component_kind": "site-lifecycle-mcp",
+      "package": "@narada-core/site-lifecycle-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "lifecycle-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "lifecycle-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-site-lifecycle", "lifecycle-protocol-parity"] }
+      }
+    },
+    {
+      "component_kind": "site-registry-mcp",
+      "package": "@narada-core/site-registry-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "registry-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "registry-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-site-registry", "registry-protocol-parity"] }
+      }
+    },
+    {
+      "component_kind": "project-state-mcp",
+      "package": "@narada-core/project-state-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "project-state-protocol-parity"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "project-state-protocol-parity"] },
+        "rust": { "status": "admitted", "evidence": ["native-project-state", "project-state-protocol-parity"] }
+      }
+    },
+    {
       "component_kind": "work-lifecycle-mcp",
       "package": "@narada-core/work-lifecycle-mcp",
       "required": true,

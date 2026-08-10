@@ -349,6 +349,17 @@
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "delegated-task-protocol-tests"] },
         "rust": { "status": "experimental", "evidence": ["native-delegated-task-read-slice", "delegated-task-authority-boundary-test"] }
       }
+    },
+    {
+      "component_kind": "worker-delegation-mcp",
+      "package": "@narada-core/worker-delegation-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": { "native": "bun", "bun": "bun", "node-compat": "node" },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "worker-delegation-protocol-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "worker-delegation-protocol-tests"] },
+        "rust": { "status": "experimental", "evidence": ["native-worker-delegation-read-slice", "worker-delegation-authority-boundary-test"] }
+      }
     }
   ]
 }

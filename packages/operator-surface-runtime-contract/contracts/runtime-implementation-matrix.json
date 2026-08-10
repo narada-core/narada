@@ -369,7 +369,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "artifacts-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "artifacts-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-artifacts-local-contract", "native-artifacts-local-index-read", "artifacts-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-artifacts-local-contract", "native-artifacts-local-index-read", "native-artifact-message-part-parity", "artifacts-authority-boundary-test"] }
       }
     },
     {

@@ -173,7 +173,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "site-loop-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "site-loop-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-site-loop-read-slice", "native-site-loop-persistence-read", "native-site-loop-bounded-config-output-read", "site-loop-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-site-loop-read-slice", "native-site-loop-persistence-read", "native-site-loop-bounded-config-output-read", "native-site-loop-config-validation-parity", "site-loop-authority-boundary-test"] }
       }
     },
     {

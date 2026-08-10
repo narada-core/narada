@@ -203,7 +203,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "sop-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "sop-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-sop-template-read-slice", "native-sop-registry-template-read", "native-sop-bounded-candidate-read", "native-sop-action-read", "native-sop-action-list-parity", "native-sop-run-list-read", "native-sop-run-list-parity", "native-sop-run-status-read", "native-sop-handoff-read", "native-sop-run-events-read", "native-sop-run-events-parity", "native-sop-run-coverage-read", "native-sop-outbox-read", "native-sop-template-read-parity", "sop-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-sop-template-read-slice", "native-sop-registry-template-read", "native-sop-bounded-candidate-read", "native-sop-action-read", "native-sop-action-list-parity", "native-sop-run-list-read", "native-sop-run-list-parity", "native-sop-run-status-read", "native-sop-run-status-parity", "native-sop-handoff-read", "native-sop-run-events-read", "native-sop-run-events-parity", "native-sop-run-coverage-read", "native-sop-outbox-read", "native-sop-template-read-parity", "sop-authority-boundary-test"] }
       }
     },
     {

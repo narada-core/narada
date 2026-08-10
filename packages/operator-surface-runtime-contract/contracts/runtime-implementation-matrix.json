@@ -402,7 +402,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "mailbox-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "mailbox-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-mailbox-projection-reader", "mailbox-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-mailbox-projection-reader", "native-mailbox-domain-metadata-read", "mailbox-authority-boundary-test"] }
       }
     },
     {

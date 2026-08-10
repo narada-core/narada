@@ -413,7 +413,7 @@
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "graph-mail-protocol-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "graph-mail-protocol-tests"] },
-        "rust": { "status": "experimental", "evidence": ["native-graph-mail-contract", "native-graph-mail-doctor-parity", "native-graph-mail-auth-status-parity", "native-graph-mail-core-authority-parity", "native-graph-mail-draft-attachment-authority-parity", "native-graph-mail-reply-authority-parity", "native-graph-mail-upload-session-parity", "native-graph-mail-download-authority-parity", "native-graph-mail-upload-authority-contract", "native-graph-mail-auth-posture-parity", "native-graph-mail-device-auth-contract", "native-graph-mail-ticket-draft-upsert-parity", "native-graph-mail-delegated-token-adapter", "graph-mail-authority-boundary-test"] }
+        "rust": { "status": "experimental", "evidence": ["native-graph-mail-contract", "native-graph-mail-doctor-parity", "native-graph-mail-auth-status-parity", "native-graph-mail-core-authority-parity", "native-graph-mail-draft-attachment-authority-parity", "native-graph-mail-reply-authority-parity", "native-graph-mail-upload-session-parity", "native-graph-mail-download-authority-parity", "native-graph-mail-upload-authority-contract", "native-graph-mail-auth-posture-parity", "native-graph-mail-device-auth-contract", "native-graph-mail-ticket-draft-upsert-parity", "native-graph-mail-ticket-disposition-parity", "native-graph-mail-delegated-token-adapter", "graph-mail-authority-boundary-test"] }
       }
     },
     {

@@ -196,14 +196,14 @@
       "package": "@narada-core/sop-mcp",
       "required": true,
       "profile_runtime_engine_kinds": {
-        "native": "rust",
+        "native": "node",
         "bun": "bun",
         "node-compat": "node"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "sop-protocol-tests"] },
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "sop-protocol-tests", "sop-registry-and-execution-authority"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "sop-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-sop-template-read-slice", "native-sop-registry-template-read", "native-sop-bounded-candidate-read", "native-sop-action-read", "native-sop-action-list-parity", "native-sop-run-list-read", "native-sop-run-list-parity", "native-sop-run-status-read", "native-sop-run-status-parity", "native-sop-handoff-read", "native-sop-handoff-parity", "native-sop-run-events-read", "native-sop-run-events-parity", "native-sop-run-coverage-read", "native-sop-run-coverage-parity", "native-sop-outbox-read", "native-sop-outbox-parity", "native-sop-template-read-parity", "sop-authority-boundary-test", "native-rust-default-contract"] }
+        "rust": { "status": "unavailable", "evidence": ["native-sop-read-slice-only", "sop-authority-boundary-test", "native-sop-registry-and-execution-parity-missing"] }
       }
     },
     {
@@ -398,11 +398,11 @@
       "component_kind": "mailbox-mcp",
       "package": "@narada-core/mailbox-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "node", "bun": "bun", "node-compat": "node" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "mailbox-protocol-tests"] },
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "mailbox-protocol-tests", "mailbox-sync-admission-and-outbox-authority"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "mailbox-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-mailbox-projection-reader", "native-mailbox-domain-metadata-read", "native-mailbox-read-parity", "mailbox-authority-boundary-test", "native-rust-default-contract"] }
+        "rust": { "status": "unavailable", "evidence": ["native-mailbox-read-slice-only", "mailbox-authority-boundary-test", "native-mailbox-mutation-parity-missing"] }
       }
     },
     {
@@ -422,9 +422,9 @@
       "required": true,
       "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "scheduler-protocol-tests"] },
+        "node": { "status": "admitted", "evidence": ["package-node-tests", "scheduler-protocol-tests", "scheduler-operational-authority"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "scheduler-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-scheduler-contract", "scheduler-authority-boundary-test", "native-rust-default-contract"] }
+        "rust": { "status": "admitted", "evidence": ["native-scheduler-task-authority", "native-scheduler-activation-authority", "native-scheduler-tool-contract-parity", "native-scheduler-task-list-parity", "native-scheduler-dry-run-mutation-parity", "native-scheduler-activation-transition-parity", "native-rust-default-contract"] }
       }
     },
     {

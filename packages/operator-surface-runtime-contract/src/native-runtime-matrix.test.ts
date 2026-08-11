@@ -8,7 +8,6 @@ const NATIVE_SURFACES = [
   'structured-command-mcp',
   'git-mcp',
   'site-inbox-mcp',
-  'mailbox-mcp',
   'graph-mail-mcp',
   'calendar-mcp',
   'site-loop-mcp',
@@ -16,7 +15,6 @@ const NATIVE_SURFACES = [
   'site-registry-mcp',
   'worker-delegation-mcp',
   'delegated-task-mcp',
-  'sop-mcp',
   'scheduler-mcp',
   'surface-feedback-mcp',
   'launcher-mcp',
@@ -34,7 +32,7 @@ const NATIVE_SURFACES = [
   'project-state-mcp',
 ] as const;
 
-test('native profile admits the complete requested Rust MCP surface batch', () => {
+test('native profile admits the operationally complete requested Rust MCP surface batch', () => {
   const entries = runtimeProfileImplementationMatrix('native');
   for (const componentKind of NATIVE_SURFACES) {
     const entry = entries.find((candidate: any) => candidate.component_kind === componentKind);
@@ -52,14 +50,26 @@ test('all admitted profiles preserve explicit Bun and Node alternatives for the 
   }
 });
 
-test('native profile keeps only non-requested Rust rows on Bun until parity is proven', () => {
+test('native profile uses an explicitly admitted fallback until Rust operational parity is proven', () => {
   const matrix = loadRuntimeImplementationMatrixContract();
   const nativeEntries = runtimeProfileImplementationMatrix('native');
   for (const row of matrix.rows ?? []) {
     const rustStatus = row.implementations?.rust?.status;
     if (rustStatus === 'admitted') continue;
     const nativeEntry = nativeEntries.find((entry: any) => entry.component_kind === row.component_kind);
-    assert.equal(nativeEntry?.runtime_engine_kind, 'bun', `${row.component_kind}:native default`);
-    assert.equal(nativeEntry?.implementation_status, 'admitted', `${row.component_kind}:Bun fallback`);
+    assert.notEqual(nativeEntry?.runtime_engine_kind, 'rust', `${row.component_kind}:native fallback`);
+    assert.equal(nativeEntry?.implementation_status, 'admitted', `${row.component_kind}:admitted fallback`);
+  }
+});
+
+test('operational mutation surfaces remain on Node until their native implementations own authority', () => {
+  const matrix = loadRuntimeImplementationMatrixContract();
+  const nativeEntries = runtimeProfileImplementationMatrix('native');
+  for (const componentKind of ['sop-mcp', 'mailbox-mcp']) {
+    const row = matrix.rows?.find((candidate: any) => candidate.component_kind === componentKind);
+    const entry = nativeEntries.find((candidate: any) => candidate.component_kind === componentKind);
+    assert.equal(row?.implementations?.rust?.status, 'unavailable', componentKind);
+    assert.equal(entry?.runtime_engine_kind, 'node', componentKind);
+    assert.equal(entry?.implementation_status, 'admitted', componentKind);
   }
 });

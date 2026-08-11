@@ -10,9 +10,7 @@ export type McpWorkspaceDiscovery = {
 };
 
 export function isMcpRecoveryWorkspace(root: string): boolean {
-  return existsSync(join(root, 'packages', 'shared', 'mcp-materializer-native', 'package.json'))
-    || (existsSync(join(root, 'scripts', 'recover-carrier-materialization.mjs'))
-      && existsSync(join(root, 'packages', 'mcp-registrar', 'package.json')));
+  return existsSync(join(root, 'packages', 'shared', 'mcp-materializer-native', 'package.json'));
 }
 
 type NativeMaterializerRecovery = {
@@ -169,10 +167,15 @@ export async function acknowledgeMcpCarrierRestart(
 ): Promise<Record<string, unknown>> {
   const discovery = discoverMcpRecoveryWorkspace(configuredRoot);
   if (!discovery) throw new Error('mcp_recovery_workspace_not_found_for_restart_ack');
-  const recoveryEntrypoint = join(discovery.root, 'scripts', 'recover-carrier-materialization.mjs');
-  const runtimeExecutable = resolveMcpRecoveryRuntimeExecutable();
-  const args = [recoveryEntrypoint, '--ack-carrier', carrierId, ...(expectedPressureRef ? ['--expected-pressure-ref', expectedPressureRef] : [])];
-  const { stdout } = await execFileGoverned(runtimeExecutable, args, {
+  if (!expectedPressureRef?.trim()) throw new Error('mcp_restart_ack_expected_pressure_ref_required');
+  const native = resolveNativeMaterializerRecovery(discovery.root);
+  const args = [
+    'acknowledge-restart',
+    '--installed-index', native.installedIndex,
+    '--carrier-id', carrierId,
+    '--expected-evidence-ref', expectedPressureRef,
+  ];
+  const { stdout } = await execFileGoverned(native.executable, args, {
     cwd: discovery.root,
     encoding: 'utf8',
     maxBuffer: 1024 * 1024,
@@ -185,19 +188,6 @@ export async function acknowledgeMcpCarrierRestart(
   }
   return result;
 }
-export function resolveMcpRecoveryRuntimeExecutable(): string {
-  const candidates = [
-    process.env.NARADA_NODE_EXECUTABLE?.trim(),
-    process.execPath,
-    process.platform === 'win32' && process.env.FNM_DIR?.trim()
-      ? join(process.env.FNM_DIR, 'node-versions', 'v' + process.versions.node, 'installation', 'node.exe')
-      : undefined,
-    process.platform === 'win32' && process.env.APPDATA?.trim()
-      ? join(process.env.APPDATA, 'fnm', 'node-versions', 'v' + process.versions.node, 'installation', 'node.exe')
-      : undefined,
-  ];
-  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate))) ?? 'node';
-}
 export async function recoverMcpCarrierMaterialization(
   configuredRoot: string | undefined,
   projectSiteRoot: string | undefined,
@@ -206,47 +196,18 @@ export async function recoverMcpCarrierMaterialization(
   const discovery = discoverMcpRecoveryWorkspace(configuredRoot);
   if (!discovery) return { status: 'not_available', mutation_performed: false, workspace_discovery: { status: 'not_found' } };
   const mcpWorkspaceRoot = discovery.root;
-  let native: NativeMaterializerRecovery | null = null;
-  try {
-    native = resolveNativeMaterializerRecovery(mcpWorkspaceRoot);
-  } catch {
-    // Legacy fixtures and installations remain readable; native is preferred whenever installed.
-  }
-  const legacyEntrypoint = join(mcpWorkspaceRoot, 'scripts', 'recover-carrier-materialization.mjs');
-  if (!native && !existsSync(legacyEntrypoint)) {
-    throw new Error('mcp_recovery_entrypoint_missing:' + mcpWorkspaceRoot);
-  }
+  const native = resolveNativeMaterializerRecovery(mcpWorkspaceRoot);
   if (!execute) {
     return {
       status: 'planned',
       mutation_performed: false,
       mcp_workspace_root: mcpWorkspaceRoot,
-      recovery_entrypoint: native?.executable ?? legacyEntrypoint,
-      recovery_args: native ? ['recover-generation', '--generation', native.generationSidecar] : [],
+      recovery_entrypoint: native.executable,
+      recovery_args: ['recover-generation', '--generation', native.generationSidecar],
       workspace_discovery: { status: 'found', source: discovery.source },
     };
   }
   try {
-    if (!native) {
-      const runtimeExecutable = resolveMcpRecoveryRuntimeExecutable();
-      const { stdout } = await execFileGoverned(runtimeExecutable, [legacyEntrypoint], {
-        cwd: mcpWorkspaceRoot,
-        encoding: 'utf8',
-        maxBuffer: 1024 * 1024,
-        timeout: 600_000,
-        env: {
-          ...process.env,
-          NARADA_MCP_WORKSPACE_ROOT: mcpWorkspaceRoot,
-          ...(projectSiteRoot ? { NARADA_PROJECT_SITE_ROOT: projectSiteRoot } : {}),
-        },
-      });
-      const legacy = JSON.parse(String(stdout)) as Record<string, unknown>;
-      if (legacy.schema !== 'narada.carrier_materialization_recovery.v1'
-        || (legacy.status !== 'current' && legacy.status !== 'recovered')) {
-        throw new Error('mcp_recovery_invalid_result:' + String(stdout).slice(-2000));
-      }
-      return { ...legacy, workspace_discovery: { status: 'found', source: discovery.source } };
-    }
     try {
       const { stdout } = await execFileGoverned(native.executable, ['verify-all', '--installed-index', native.installedIndex], {
         cwd: mcpWorkspaceRoot,

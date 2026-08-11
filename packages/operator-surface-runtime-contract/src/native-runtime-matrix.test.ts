@@ -8,6 +8,7 @@ const NATIVE_SURFACES = [
   'structured-command-mcp',
   'git-mcp',
   'site-inbox-mcp',
+  'mailbox-mcp',
   'graph-mail-mcp',
   'calendar-mcp',
   'site-loop-mcp',
@@ -62,14 +63,13 @@ test('native profile uses an explicitly admitted fallback until Rust operational
   }
 });
 
-test('operational mutation surfaces remain on Node until their native implementations own authority', () => {
+test('SOP remains on Node until its native implementation owns operational authority', () => {
   const matrix = loadRuntimeImplementationMatrixContract();
   const nativeEntries = runtimeProfileImplementationMatrix('native');
-  for (const componentKind of ['sop-mcp', 'mailbox-mcp']) {
-    const row = matrix.rows?.find((candidate: any) => candidate.component_kind === componentKind);
-    const entry = nativeEntries.find((candidate: any) => candidate.component_kind === componentKind);
-    assert.equal(row?.implementations?.rust?.status, 'unavailable', componentKind);
-    assert.equal(entry?.runtime_engine_kind, 'node', componentKind);
-    assert.equal(entry?.implementation_status, 'admitted', componentKind);
-  }
+  const componentKind = 'sop-mcp';
+  const row = matrix.rows?.find((candidate: any) => candidate.component_kind === componentKind);
+  const entry = nativeEntries.find((candidate: any) => candidate.component_kind === componentKind);
+  assert.equal(row?.implementations?.rust?.status, 'unavailable', componentKind);
+  assert.equal(entry?.runtime_engine_kind, 'node', componentKind);
+  assert.equal(entry?.implementation_status, 'admitted', componentKind);
 });

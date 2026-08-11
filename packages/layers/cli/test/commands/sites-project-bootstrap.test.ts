@@ -12,6 +12,7 @@ import {
 } from '../../src/commands/sites.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
+import { discoverMcpRecoveryWorkspace } from '../../src/lib/mcp-carrier-recovery.js';
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -190,13 +191,7 @@ describe('sitesBootstrapProjectCommand', () => {
   it('recovers configured MCP carrier materialization before the first Site write', async () => {
     const workspace = await tempWorkspace('narada-project-recovery-');
     const mcpWorkspace = await tempWorkspace('narada-mcp-recovery-');
-    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
-    await writeFile(join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'), [
-      "import { existsSync, writeFileSync } from 'node:fs';",
-      "if (existsSync(process.env.NARADA_PROJECT_SITE_ROOT)) throw new Error('site_was_written_before_recovery');",
-      "writeFileSync(new URL('./recovery-ran', import.meta.url), 'yes');",
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', all_carrier_materialization_performed: true }));",
-    ].join('\n'));
+    const recoveryMarker = join(mcpWorkspace, 'recovery-ran');
 
     const result = await sitesBootstrapProjectCommand({
       workspace,
@@ -204,10 +199,16 @@ describe('sitesBootstrapProjectCommand', () => {
       mcpWorkspaceRoot: mcpWorkspace,
       execute: true,
       format: 'json',
-    }, createMockContext());
+    }, createMockContext(), {
+      recover: async () => {
+        if (existsSync(join(workspace, '.narada'))) throw new Error('site_was_written_before_recovery');
+        await writeFile(recoveryMarker, 'yes');
+        return { schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', all_carrier_materialization_performed: true };
+      },
+    });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(existsSync(join(mcpWorkspace, 'scripts', 'recovery-ran'))).toBe(true);
+    expect(existsSync(recoveryMarker)).toBe(true);
     expect(existsSync(join(workspace, '.narada', 'config.json'))).toBe(true);
     expect((result.result as { mcp_materialization_recovery: { status: string } }).mcp_materialization_recovery.status).toBe('recovered');
   });
@@ -216,13 +217,8 @@ describe('sitesBootstrapProjectCommand', () => {
     const workspace = await tempWorkspace('narada-project-auto-recovery-');
     const sourceRoot = await tempWorkspace('narada-source-root-');
     const mcpWorkspace = join(sourceRoot, 'mcp-surfaces');
-    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
-    await mkdir(join(mcpWorkspace, 'packages', 'mcp-registrar'), { recursive: true });
-    await writeFile(join(mcpWorkspace, 'packages', 'mcp-registrar', 'package.json'), '{"name":"@narada-core/mcp-registrar"}\n');
-    await writeFile(
-      join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'),
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'current', restart_required: false }));\n",
-    );
+    await mkdir(join(mcpWorkspace, 'packages', 'shared', 'mcp-materializer-native'), { recursive: true });
+    await writeFile(join(mcpWorkspace, 'packages', 'shared', 'mcp-materializer-native', 'package.json'), '{}\n');
     process.env.NARADA_MCP_AUTO_DISCOVERY = '1';
     process.env.NARADA_SRC_ROOT = sourceRoot;
 
@@ -231,7 +227,9 @@ describe('sitesBootstrapProjectCommand', () => {
       siteId: 'auto-recovered-project',
       execute: true,
       format: 'json',
-    }, createMockContext());
+    }, createMockContext(), {
+      recover: async (configuredRoot) => ({ status: 'current', restart_required: false, workspace_discovery: { source: discoverMcpRecoveryWorkspace(configuredRoot)?.source } }),
+    });
     const recovery = (result.result as {
       mcp_materialization_recovery: { status: string; workspace_discovery: { source: string } };
     }).mcp_materialization_recovery;
@@ -243,14 +241,9 @@ describe('sitesBootstrapProjectCommand', () => {
     const workspace = await tempWorkspace('narada-project-carrier-recovery-');
     const codexHome = await tempWorkspace('narada-codex-home-');
     const mcpWorkspace = await tempWorkspace('narada-materialized-mcp-');
-    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
-    await mkdir(join(mcpWorkspace, 'packages', 'mcp-registrar'), { recursive: true });
+    await mkdir(join(mcpWorkspace, 'packages', 'shared', 'mcp-materializer-native'), { recursive: true });
     await mkdir(join(mcpWorkspace, '.ai', 'runtime'), { recursive: true });
-    await writeFile(join(mcpWorkspace, 'packages', 'mcp-registrar', 'package.json'), '{"name":"@narada-core/mcp-registrar"}\n');
-    await writeFile(
-      join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'),
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'current', restart_required: false }));\n",
-    );
+    await writeFile(join(mcpWorkspace, 'packages', 'shared', 'mcp-materializer-native', 'package.json'), '{}\n');
     await writeFile(join(codexHome, 'config.toml.narada-generation.json'), JSON.stringify({
       artifact_manifest_path: join(mcpWorkspace, '.ai', 'runtime', 'workspace-artifact-manifest.json'),
     }));
@@ -263,7 +256,9 @@ describe('sitesBootstrapProjectCommand', () => {
       siteId: 'carrier-recovered-project',
       execute: true,
       format: 'json',
-    }, createMockContext());
+    }, createMockContext(), {
+      recover: async (configuredRoot) => ({ status: 'current', restart_required: false, workspace_discovery: { source: discoverMcpRecoveryWorkspace(configuredRoot, { codexHome })?.source } }),
+    });
     const recovery = (result.result as {
       mcp_materialization_recovery: { status: string; workspace_discovery: { source: string } };
     }).mcp_materialization_recovery;
@@ -273,11 +268,6 @@ describe('sitesBootstrapProjectCommand', () => {
   it('leaves no partial Site when configured MCP recovery fails', async () => {
     const workspace = await tempWorkspace('narada-project-recovery-fail-');
     const mcpWorkspace = await tempWorkspace('narada-mcp-recovery-fail-');
-    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
-    await writeFile(
-      join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'),
-      "process.stderr.write('purposeful recovery failure'); process.exit(9);\n",
-    );
 
     await expect(sitesBootstrapProjectCommand({
       workspace,
@@ -285,7 +275,7 @@ describe('sitesBootstrapProjectCommand', () => {
       mcpWorkspaceRoot: mcpWorkspace,
       execute: true,
       format: 'json',
-    }, createMockContext())).rejects.toThrow('mcp_recovery_failed');
+    }, createMockContext(), { recover: async () => { throw new Error('mcp_recovery_failed:purposeful recovery failure'); } })).rejects.toThrow('mcp_recovery_failed');
     expect(existsSync(join(workspace, '.narada'))).toBe(false);
   });
   it('refuses non-project sync posture', async () => {

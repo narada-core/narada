@@ -31,11 +31,9 @@ const context = { verbose: false, logger: console } as unknown as CommandContext
 
 async function recoveryWorkspace(root: string, name: string): Promise<string> {
   const workspace = join(root, name);
-  await mkdir(join(workspace, 'scripts'), { recursive: true });
-  await mkdir(join(workspace, 'packages', 'mcp-registrar'), { recursive: true });
+  await mkdir(join(workspace, 'packages', 'shared', 'mcp-materializer-native'), { recursive: true });
   await mkdir(join(workspace, '.ai', 'runtime'), { recursive: true });
-  await writeFile(join(workspace, 'scripts', 'recover-carrier-materialization.mjs'), 'process.exit(0);\n');
-  await writeFile(join(workspace, 'packages', 'mcp-registrar', 'package.json'), '{}\n');
+  await writeFile(join(workspace, 'packages', 'shared', 'mcp-materializer-native', 'package.json'), '{}\n');
   return workspace;
 }
 
@@ -250,12 +248,6 @@ describe('carrier recover and relaunch', () => {
     const root = await temporaryRoot('narada-carrier-recover-e2e-');
     const mcp = await recoveryWorkspace(root, 'mcp-surfaces');
     const recoveryMarker = join(mcp, 'recovery-performed.json');
-    await writeFile(join(mcp, 'scripts', 'recover-carrier-materialization.mjs'), [
-      "import { writeFileSync } from 'node:fs';",
-      "if (process.argv.includes('--ack-carrier')) { process.stdout.write(JSON.stringify({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged' })); process.exit(0); }",
-      `writeFileSync(${JSON.stringify(recoveryMarker)}, JSON.stringify({ status: 'recovered' }));`,
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'], restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' } } }));",
-    ].join('\n'));
 
     const sourceSessionId = 'carrier_recovery_source';
     const sourcePaths = resolveNaradaSitePaths({ siteRoot: root, sessionId: sourceSessionId });
@@ -297,6 +289,11 @@ describe('carrier recover and relaunch', () => {
       mutatingAuthorized: 'carrier.restart',
       format: 'json',
     }, context, {
+      recover: async () => {
+        await writeFile(recoveryMarker, JSON.stringify({ status: 'recovered' }));
+        return { schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'], restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' } } };
+      },
+      acknowledgeRestart: async (_workspace, carrierId, pressureRef) => ({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged', carrier_id: carrierId, evidence_ref: pressureRef }),
       restartSupervisor: {
         launch: async (spec) => {
           const target = resolveNaradaSitePaths({ siteRoot: root, sessionId: spec.sessionId });
@@ -345,10 +342,6 @@ describe('carrier recover and relaunch', () => {
   it('uses a real disposable target process and real HTTP health boundary', async () => {
     const root = await temporaryRoot('narada-carrier-process-e2e-');
     const mcp = await recoveryWorkspace(root, 'mcp-surfaces');
-    await writeFile(join(mcp, 'scripts', 'recover-carrier-materialization.mjs'), [
-      "if (process.argv.includes('--ack-carrier')) { process.stdout.write(JSON.stringify({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged' })); process.exit(0); }",
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'], restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' } } }));",
-    ].join('\n'));
     const sourceSessionId = 'carrier_process_source';
     const sourcePaths = resolveNaradaSitePaths({ siteRoot: root, sessionId: sourceSessionId });
     await mkdir(sourcePaths.narsSessionDir!, { recursive: true });
@@ -374,6 +367,8 @@ describe('carrier recover and relaunch', () => {
         expectedStateJson: JSON.stringify({ manifest_digest: null, observation_digest: 'd'.repeat(64), descriptor_digest: null }),
         reason: 'real disposable process proof', timeoutMs: 15_000, mutatingAuthorized: 'carrier.restart', format: 'json',
       }, context, {
+        recover: async () => ({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'], restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' } } }),
+        acknowledgeRestart: async (_workspace, carrierId, pressureRef) => ({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged', carrier_id: carrierId, evidence_ref: pressureRef }),
         restartSupervisor: {
           launch: async (spec) => {
             const paths = resolveNaradaSitePaths({ siteRoot: root, sessionId: spec.sessionId });
@@ -400,8 +395,6 @@ describe('carrier recover and relaunch', () => {
   it('plans recovery and governed successor activation as one operation', async () => {
     const root = await temporaryRoot('narada-carrier-recover-');
     const mcp = join(root, 'mcp-surfaces');
-    await mkdir(join(mcp, 'scripts'), { recursive: true });
-    await writeFile(join(mcp, 'scripts', 'recover-carrier-materialization.mjs'), 'process.exit(0);\n');
     const response = await carrierRecoverCommand({
       mcpWorkspaceRoot: mcp,
       carrierId: 'codex-andrey',
@@ -416,7 +409,10 @@ describe('carrier recover and relaunch', () => {
       reason: 'test coherent recovery plan',
       dryRun: true,
       format: 'json',
-    }, context, { verifyBinding: () => ({ session_id: 'carrier-source', materialized_carrier_id: 'codex-andrey' }) });
+    }, context, {
+      recover: async () => ({ status: 'planned', mutation_performed: false }),
+      verifyBinding: () => ({ session_id: 'carrier-source', materialized_carrier_id: 'codex-andrey' }),
+    });
     expect(response.exitCode).toBe(ExitCode.SUCCESS);
     const result = response.result as { status: string; recovery: { status: string }; restart: { status: string } };
     expect(result.status).toBe('planned');

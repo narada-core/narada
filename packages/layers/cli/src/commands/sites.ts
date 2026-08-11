@@ -6485,6 +6485,7 @@ export async function sitesBootstrapClientCommand(
 export async function sitesBootstrapProjectCommand(
   options: SitesBootstrapProjectOptions,
   _context: CommandContext,
+  dependencies: { recover?: typeof recoverMcpCarrierMaterialization } = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const workspaceRoot = resolve(options.workspace ?? '.');
@@ -6518,7 +6519,7 @@ export async function sitesBootstrapProjectCommand(
     { path: join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), kind: 'empty-directory-marker' },
   ];
 
-  const mcpMaterializationRecovery = await recoverMcpCarrierMaterialization(
+  const mcpMaterializationRecovery = await (dependencies.recover ?? recoverMcpCarrierMaterialization)(
     options.mcpWorkspaceRoot,
     siteRoot,
     execute,

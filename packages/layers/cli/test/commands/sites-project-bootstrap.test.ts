@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
@@ -37,7 +37,22 @@ async function tempWorkspace(prefix: string): Promise<string> {
   return dir;
 }
 
+const originalAutoDiscovery = process.env.NARADA_MCP_AUTO_DISCOVERY;
+const originalSourceRoot = process.env.NARADA_SRC_ROOT;
+const originalCodexHome = process.env.CODEX_HOME;
+
+beforeEach(() => {
+  process.env.NARADA_MCP_AUTO_DISCOVERY = '0';
+  delete process.env.NARADA_SRC_ROOT;
+  delete process.env.CODEX_HOME;
+});
 afterEach(async () => {
+  if (originalAutoDiscovery === undefined) delete process.env.NARADA_MCP_AUTO_DISCOVERY;
+  else process.env.NARADA_MCP_AUTO_DISCOVERY = originalAutoDiscovery;
+  if (originalSourceRoot === undefined) delete process.env.NARADA_SRC_ROOT;
+  else process.env.NARADA_SRC_ROOT = originalSourceRoot;
+  if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
+  else process.env.CODEX_HOME = originalCodexHome;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -193,6 +208,63 @@ describe('sitesBootstrapProjectCommand', () => {
     expect((result.result as { mcp_materialization_recovery: { status: string } }).mcp_materialization_recovery.status).toBe('recovered');
   });
 
+  it('discovers the standard mcp-surfaces checkout from NARADA_SRC_ROOT', async () => {
+    const workspace = await tempWorkspace('narada-project-auto-recovery-');
+    const sourceRoot = await tempWorkspace('narada-source-root-');
+    const mcpWorkspace = join(sourceRoot, 'mcp-surfaces');
+    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
+    await mkdir(join(mcpWorkspace, 'packages', 'mcp-registrar'), { recursive: true });
+    await writeFile(join(mcpWorkspace, 'packages', 'mcp-registrar', 'package.json'), '{"name":"@narada-core/mcp-registrar"}\n');
+    await writeFile(
+      join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'),
+      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'current', restart_required: false }));\n",
+    );
+    process.env.NARADA_MCP_AUTO_DISCOVERY = '1';
+    process.env.NARADA_SRC_ROOT = sourceRoot;
+
+    const result = await sitesBootstrapProjectCommand({
+      workspace,
+      siteId: 'auto-recovered-project',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+    const recovery = (result.result as {
+      mcp_materialization_recovery: { status: string; workspace_discovery: { source: string } };
+    }).mcp_materialization_recovery;
+    expect(recovery.status).toBe('current');
+    expect(recovery.workspace_discovery.source).toBe('source_root');
+  });
+
+  it('discovers the exact workspace recorded by an installed carrier before filesystem conventions', async () => {
+    const workspace = await tempWorkspace('narada-project-carrier-recovery-');
+    const codexHome = await tempWorkspace('narada-codex-home-');
+    const mcpWorkspace = await tempWorkspace('narada-materialized-mcp-');
+    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
+    await mkdir(join(mcpWorkspace, 'packages', 'mcp-registrar'), { recursive: true });
+    await mkdir(join(mcpWorkspace, '.ai', 'runtime'), { recursive: true });
+    await writeFile(join(mcpWorkspace, 'packages', 'mcp-registrar', 'package.json'), '{"name":"@narada-core/mcp-registrar"}\n');
+    await writeFile(
+      join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'),
+      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'current', restart_required: false }));\n",
+    );
+    await writeFile(join(codexHome, 'config.toml.narada-generation.json'), JSON.stringify({
+      artifact_manifest_path: join(mcpWorkspace, '.ai', 'runtime', 'workspace-artifact-manifest.json'),
+    }));
+    process.env.NARADA_MCP_AUTO_DISCOVERY = '1';
+    process.env.CODEX_HOME = codexHome;
+
+    const result = await sitesBootstrapProjectCommand({
+      workspace,
+      siteId: 'carrier-recovered-project',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+    const recovery = (result.result as {
+      mcp_materialization_recovery: { status: string; workspace_discovery: { source: string } };
+    }).mcp_materialization_recovery;
+    expect(recovery.status).toBe('current');
+    expect(recovery.workspace_discovery.source).toBe('carrier_generation');
+  });
   it('leaves no partial Site when configured MCP recovery fails', async () => {
     const workspace = await tempWorkspace('narada-project-recovery-fail-');
     const mcpWorkspace = await tempWorkspace('narada-mcp-recovery-fail-');
@@ -208,7 +280,7 @@ describe('sitesBootstrapProjectCommand', () => {
       mcpWorkspaceRoot: mcpWorkspace,
       execute: true,
       format: 'json',
-    }, createMockContext())).rejects.toThrow('project_site_mcp_recovery_failed');
+    }, createMockContext())).rejects.toThrow('mcp_recovery_failed');
     expect(existsSync(join(workspace, '.narada'))).toBe(false);
   });
   it('refuses non-project sync posture', async () => {

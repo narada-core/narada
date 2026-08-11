@@ -13,6 +13,7 @@ import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { createHash, randomUUID } from 'node:crypto';
 import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
+import { recoverMcpCarrierMaterialization } from '../lib/mcp-carrier-recovery.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -6481,42 +6482,6 @@ export async function sitesBootstrapClientCommand(
   return { exitCode: ExitCode.SUCCESS, result };
 }
 
-async function recoverProjectSiteCarrierMaterialization(
-  configuredRoot: string | undefined,
-  projectSiteRoot: string,
-  execute: boolean,
-): Promise<Record<string, unknown>> {
-  if (!configuredRoot) return { status: 'not_configured', mutation_performed: false };
-  const mcpWorkspaceRoot = resolve(configuredRoot);
-  const recoveryEntrypoint = join(mcpWorkspaceRoot, 'scripts', 'recover-carrier-materialization.mjs');
-  if (!existsSync(recoveryEntrypoint)) {
-    throw new Error('project_site_mcp_recovery_entrypoint_missing:' + recoveryEntrypoint);
-  }
-  if (!execute) {
-    return { status: 'planned', mutation_performed: false, mcp_workspace_root: mcpWorkspaceRoot, recovery_entrypoint: recoveryEntrypoint };
-  }
-  try {
-    const { stdout } = await execFileGoverned(process.execPath, [recoveryEntrypoint], {
-      cwd: mcpWorkspaceRoot,
-      encoding: 'utf8',
-      maxBuffer: 4 * 1024 * 1024,
-      timeout: 600_000,
-      env: { ...process.env, NARADA_MCP_WORKSPACE_ROOT: mcpWorkspaceRoot, NARADA_PROJECT_SITE_ROOT: projectSiteRoot },
-    });
-    const result = JSON.parse(String(stdout)) as Record<string, unknown>;
-    if (result.schema !== 'narada.carrier_materialization_recovery.v1'
-      || (result.status !== 'current' && result.status !== 'recovered')) {
-      throw new Error('project_site_mcp_recovery_invalid_result:' + String(stdout).slice(-2000));
-    }
-    return result;
-  } catch (error) {
-    const stderr = typeof (error as { stderr?: unknown }).stderr === 'string'
-      ? (error as { stderr: string }).stderr.slice(-4000)
-      : '';
-    throw new Error('project_site_mcp_recovery_failed:' + (error instanceof Error ? error.message : String(error)) + ':' + stderr);
-  }
-}
-
 export async function sitesBootstrapProjectCommand(
   options: SitesBootstrapProjectOptions,
   _context: CommandContext,
@@ -6553,8 +6518,8 @@ export async function sitesBootstrapProjectCommand(
     { path: join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), kind: 'empty-directory-marker' },
   ];
 
-  const mcpMaterializationRecovery = await recoverProjectSiteCarrierMaterialization(
-    options.mcpWorkspaceRoot ?? process.env.NARADA_MCP_WORKSPACE_ROOT,
+  const mcpMaterializationRecovery = await recoverMcpCarrierMaterialization(
+    options.mcpWorkspaceRoot,
     siteRoot,
     execute,
   );

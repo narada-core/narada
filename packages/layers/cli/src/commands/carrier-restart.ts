@@ -2,6 +2,7 @@ import { requestCarrierRestart, showCarrierRestartOutcome } from '@narada-core/s
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { recoverMcpCarrierMaterialization } from '../lib/mcp-carrier-recovery.js';
 
 export interface CarrierRestartOptions {
   siteRoot?: string;
@@ -15,9 +16,101 @@ export interface CarrierRestartOptions {
   timeoutMs?: number;
   dryRun?: boolean;
   mutatingAuthorized?: string;
+  mcpWorkspaceRoot?: string;
+  carrierId?: string;
   format?: CliFormat;
 }
 
+export function carrierRecoveryRestartDecision(
+  recovery: Record<string, unknown>,
+  carrierId: string,
+): {
+  restart_required: boolean;
+  selected_carrier_affected: boolean;
+  affected_carrier_ids: string[];
+  outstanding_carrier_ids: string[];
+} {
+  const affectedCarrierIds = Array.isArray(recovery.restart_carrier_ids)
+    ? recovery.restart_carrier_ids.map(String)
+    : [];
+  const restartRequired = recovery.restart_required === true;
+  const selectedCarrierAffected = restartRequired && affectedCarrierIds.includes(carrierId);
+  return {
+    restart_required: restartRequired,
+    selected_carrier_affected: selectedCarrierAffected,
+    affected_carrier_ids: affectedCarrierIds,
+    outstanding_carrier_ids: affectedCarrierIds.filter((id) => id !== carrierId),
+  };
+}
+export async function carrierRecoverCommand(
+  options: CarrierRestartOptions,
+  context: CommandContext,
+  dependencies: {
+    recover?: typeof recoverMcpCarrierMaterialization;
+    restart?: typeof carrierRestartCommand;
+  } = {},
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const recover = dependencies.recover ?? recoverMcpCarrierMaterialization;
+  const restartCarrier = dependencies.restart ?? carrierRestartCommand;
+  const carrierId = requireOption(options.carrierId, '--carrier-id');
+  const recovery = await recover(
+    options.mcpWorkspaceRoot,
+    options.siteRoot,
+    options.dryRun !== true,
+  );
+  if (recovery.status === 'not_available') {
+    const result = {
+      schema: 'narada.carrier.recover_and_relaunch.v1',
+      status: 'recovery_unavailable',
+      mutation_performed: false,
+      carrier_id: carrierId,
+      recovery,
+      restart: null,
+    };
+    return { exitCode: ExitCode.INVALID_CONFIG, result: formattedResult(result, 'MCP recovery workspace unavailable.', options.format ?? 'auto') };
+  }
+  if (options.dryRun === true) {
+    const restart = await restartCarrier({ ...options, dryRun: true }, context);
+    const result = {
+      schema: 'narada.carrier.recover_and_relaunch.v1',
+      status: 'planned',
+      mutation_performed: false,
+      carrier_id: carrierId,
+      recovery,
+      restart: restart.result,
+    };
+    return { exitCode: restart.exitCode, result: formattedResult(result, 'Carrier recovery and governed relaunch planned.', options.format ?? 'auto') };
+  }
+  const decision = carrierRecoveryRestartDecision(recovery, carrierId);
+  if (!decision.selected_carrier_affected) {
+    const result = {
+      schema: 'narada.carrier.recover_and_relaunch.v1',
+      status: decision.restart_required ? 'recovered_restart_not_selected' : 'current',
+      mutation_performed: recovery.status === 'recovered',
+      carrier_id: carrierId,
+      recovery,
+      restart_decision: decision,
+      restart: null,
+    };
+    return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, 'Carrier materialization recovered; selected carrier restart not required.', options.format ?? 'auto') };
+  }
+  const restart = await restartCarrier(options, context);
+  const result = {
+    schema: 'narada.carrier.recover_and_relaunch.v1',
+    status: restart.exitCode === ExitCode.SUCCESS ? 'completed' : 'restart_failed',
+    mutation_performed: recovery.status === 'recovered' || restart.exitCode === ExitCode.SUCCESS,
+    carrier_id: carrierId,
+    recovery,
+    restart_decision: decision,
+    restart: restart.result,
+  };
+  return {
+    exitCode: restart.exitCode,
+    result: formattedResult(result, restart.exitCode === ExitCode.SUCCESS
+      ? 'Carrier materialization recovered and governed successor activated.'
+      : 'Carrier materialization recovered but governed relaunch failed.', options.format ?? 'auto'),
+  };
+}
 export async function carrierRestartCommand(
   options: CarrierRestartOptions,
   _context: CommandContext,

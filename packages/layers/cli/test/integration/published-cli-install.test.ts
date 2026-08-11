@@ -146,6 +146,19 @@ function findInstalledPackageRoot(root, packageName) {
   return null;
 }
 
+function deferCleanupAfterProcessExit(path) {
+  const cleanup = spawn(process.execPath, ['-e', `
+    const { rmSync } = require('node:fs');
+    const [parentPid, target] = process.argv.slice(1);
+    const timer = setInterval(() => {
+      try { process.kill(Number(parentPid), 0); return; } catch {}
+      clearInterval(timer);
+      try { rmSync(target, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); } catch {}
+    }, 100);
+  `, String(process.pid), path], { detached: true, stdio: 'ignore', windowsHide: true });
+  cleanup.unref();
+}
+
 function parseJsonOutput(result, label) {
   const text = String(result.stdout ?? '');
   const start = text.search(/[\[{]/);
@@ -198,6 +211,8 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     const packagedAssetSource = readFileSync(packagedAsset, 'utf8');
     assert.match(packagedAssetSource, /narada-managed-asset: windows-user-site\.v1/);
     assert.doesNotMatch(packagedAssetSource, /IntelligenceProvider|--intelligence-provider/);
+    assert.match(packagedAssetSource, /NARADA_PROPER_ROOT/);
+    assert.match(packagedAssetSource, /PrefixArgs = @\('--dir', \$properRoot, 'exec', 'narada'\)/);
     for (const packageName of ['agent-runtime-server', 'agent-web-ui']) {
       const packageRoot = findInstalledPackageRoot(join(consumerRoot, 'node_modules'), `@narada-core/${packageName}`);
       assert.ok(packageRoot, `published runtime/UI package missing from bundled dependency tree: @narada-core/${packageName}`);
@@ -220,6 +235,7 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     assert.equal(installPayload.status, 'installed');
     assert.equal(installPayload.installation_profile, 'minimal');
     assert.deepEqual(installPayload.optional_modules, []);
+    assert.ok('dependency_narada_root' in installPayload);
     assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada-core/agent-runtime-server');
     assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada-core/agent-web-ui');
     assert.equal(existsSync(join(siteRoot, 'Start-NaradaWorkspace.ps1')), true);
@@ -228,6 +244,25 @@ test('published CLI installs into a blank Windows profile and provisions the Use
       /IntelligenceProvider|--intelligence-provider/,
     );
     assert.equal(existsSync(join(siteRoot, 'tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1')), true);
+
+    const projectRoot = join(tempRoot, 'blank-project');
+    mkdirSync(join(projectRoot, '.git'), { recursive: true });
+    const bootstrapProject = run(process.execPath, [
+      installedCliEntrypoint,
+      'sites', 'bootstrap-project',
+      '--workspace', projectRoot,
+      '--site-id', 'published-clean-room',
+      '--execute',
+      '--format', 'json',
+    ], { cwd: projectRoot, env });
+    assert.equal(bootstrapProject.status, 0, `published project Site bootstrap failed\n${outputOf(bootstrapProject)}`);
+    const projectPayload = parseJsonOutput(bootstrapProject, 'published project Site bootstrap');
+    assert.equal(projectPayload.status, 'success');
+    assert.equal(projectPayload.task_lifecycle_preparation?.status, 'success');
+    assert.equal(existsSync(join(projectRoot, '.narada', 'config.json')), true);
+    assert.equal(existsSync(join(projectRoot, '.narada', '.ai', 'agents', 'role-plane.json')), true);
+    assert.equal(existsSync(join(projectRoot, '.ai', 'task-lifecycle.db')), true);
+    assert.match(readFileSync(join(projectRoot, '.narada', 'task-lifecycle.toml'), 'utf8'), /roles_are_obligation_targets = true/);
 
     const doctor = run(process.execPath, [
       installedCliEntrypoint,
@@ -301,6 +336,10 @@ test('published CLI installs into a blank Windows profile and provisions the Use
       await stopProcess(consoleProcess);
     }
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    try {
+      rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      deferCleanupAfterProcessExit(tempRoot);
+    }
   }
 });

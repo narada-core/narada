@@ -180,6 +180,8 @@ narada sites bootstrap-project --workspace <project-repo> [--site-id <id>] [--sy
 
 `bootstrap-project` is also dry-run by default and requires `--execute`. It is for existing Git-backed project repositories where Narada governance should live under `<project-repo>/.narada` while project source code remains project-owned.
 
+When `--mcp-workspace-root <mcp-surfaces-checkout>` or `NARADA_MCP_WORKSPACE_ROOT` is supplied, project bootstrap first runs the checkout's stale-only all-carrier recovery. It validates workspace artifacts, builds only when stale, and transactionally materializes every registered carrier only when a projection differs. This gate completes before `.narada` is created; failure leaves no partial Site. Carrier processes still require restart when materialization changed their generated configuration.
+
 For client, business, document, or OneDrive folders, this containment is the default rule:
 
 ```text

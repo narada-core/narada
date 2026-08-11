@@ -881,6 +881,7 @@ export function registerSitesCommands(program: Command): void {
     .requiredOption('--workspace <path>', 'Project workspace/repository root')
     .option('--site-id <id>', 'Project Site id; defaults from workspace name')
     .option('--sync <posture>', 'Project sync posture: git_backed_project_repo', 'git_backed_project_repo')
+    .option('--mcp-workspace-root <path>', 'mcp-surfaces workspace to inspect, build if stale, and materialize transactionally before Site mutation')
     .option('--execute', 'Perform mutations; default is dry-run', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
@@ -889,6 +890,7 @@ export function registerSitesCommands(program: Command): void {
         workspace: opts.workspace as string | undefined,
         siteId: opts.siteId as string | undefined,
         sync: opts.sync as string | undefined,
+        mcpWorkspaceRoot: opts.mcpWorkspaceRoot as string | undefined,
         execute: opts.execute as boolean | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,

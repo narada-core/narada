@@ -681,6 +681,51 @@ async function writeRuntimeBindings(cwd: string, bindings: OperatorSurfaceRuntim
   return path;
 }
 
+async function reconcileSiteRoleRuntimePlane(cwd: string): Promise<string | null> {
+  const path = join(resolve(cwd), '.ai', 'agents', 'role-plane.json');
+  if (!existsSync(path)) return null;
+  const plane = JSON.parse(await readFile(path, 'utf8')) as { roles?: Array<Record<string, unknown>> };
+  if (!Array.isArray(plane.roles)) return null;
+  const registry = await readOperatorSurfaceIdentities(cwd);
+  const bindings = await readRuntimeBindings(cwd);
+  const authorityRoot = resolve(cwd);
+  const parentRoot = resolve(authorityRoot, '..');
+  const taskAuthorityRoot = authorityRoot === join(parentRoot, '.narada') ? parentRoot : authorityRoot;
+  const lifecycleDatabasePath = join(taskAuthorityRoot, '.ai', 'task-lifecycle.db');
+  const admittedIdentityIds = new Set<string>();
+  if (existsSync(lifecycleDatabasePath)) {
+    const lifecycleStore = openTaskLifecycleStore(taskAuthorityRoot, { mode: 'runtime' });
+    try {
+      for (const entry of lifecycleStore.getRoster()) admittedIdentityIds.add(entry.agent_id);
+    } finally {
+      lifecycleStore.db.close();
+    }
+  }
+  let changed = false;
+  for (const role of plane.roles) {
+    const roleId = typeof role.role_id === 'string' ? role.role_id : null;
+    if (!roleId) continue;
+    const identity = registry.identities.find((entry) => entry.role === roleId) ?? null;
+    const binding = identity
+      ? bindings.find((entry) => entry.identity_id === identity.identity_id && entry.status === 'active') ?? null
+      : null;
+    const rosterAdmitted = identity ? admittedIdentityIds.has(identity.identity_id) : false;
+    const nextStatus = identity && rosterAdmitted && binding ? 'active' : 'declared_pending_runtime_admission';
+    const nextRosterStatus = rosterAdmitted ? 'active' : 'pending';
+    const nextLauncherStatus = binding ? 'active' : 'pending';
+    if (role.declaration_status !== nextStatus || role.roster_status !== nextRosterStatus || role.launcher_binding_status !== nextLauncherStatus) changed = true;
+    role.declaration_status = nextStatus;
+    role.roster_status = nextRosterStatus;
+    role.launcher_binding_status = nextLauncherStatus;
+    role.handoff_status = identity && rosterAdmitted && binding ? 'ready' : 'pending';
+    role.admitted_identity_id = identity?.identity_id ?? null;
+    role.runtime_binding_id = binding?.binding_id ?? null;
+    if (identity && rosterAdmitted && binding) role.next_action = null;
+  }
+  if (!changed) return path;
+  await writeFile(path, `${JSON.stringify(plane, null, 2)}\n`, 'utf8');
+  return path;
+}
 async function writeVisibleLabelEvidence(cwd: string, labels: OperatorSurfaceVisibleLabelEvidence[]): Promise<string> {
   const path = visibleLabelEvidencePath(cwd);
   await mkdir(operatorSurfaceDir(cwd), { recursive: true });
@@ -1893,6 +1938,7 @@ export async function operatorSurfaceIdentityAddCommand(
       registry.identities.push(record);
     }
     const path = await writeOperatorSurfaceIdentities(authorityRoot, registry);
+    const rolePlanePath = await reconcileSiteRoleRuntimePlane(authorityRoot);
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
@@ -1901,6 +1947,7 @@ export async function operatorSurfaceIdentityAddCommand(
         registry_path: path,
         identity: record,
         runtime_binding_mutated: false,
+        role_runtime_plane_path: rolePlanePath,
       },
     };
   } catch (error) {
@@ -2174,19 +2221,29 @@ export async function operatorSurfaceIdentityAdmitTaskAuthorityCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
     const cwd = options.cwd ?? '.';
+    const resolvedCwd = resolve(cwd);
+    const parentRoot = resolve(resolvedCwd, '..');
+    const isProjectGovernanceRoot = resolvedCwd === join(parentRoot, '.narada');
+    const taskAuthorityRoot = isProjectGovernanceRoot ? parentRoot : resolvedCwd;
+    const identityAuthorityRoot = existsSync(join(resolvedCwd, '.narada', 'config.json'))
+      ? join(resolvedCwd, '.narada')
+      : resolvedCwd;
     const identityId = requireText(options.identityName, '<identity-name>');
     const by = requireText(options.by, '--by');
     const result = await admitOperatorSurfaceIdentityToTaskAuthority({
-      cwd,
+      cwd: taskAuthorityRoot,
+      identityCwd: identityAuthorityRoot,
       identityId,
       by,
       role: options.role,
       capabilities: parseTaskAuthorityCapabilities(options.capabilities),
     });
+    const rolePlanePath = await reconcileSiteRoleRuntimePlane(identityAuthorityRoot);
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
         ...result,
+        role_runtime_plane_path: rolePlanePath,
         mutation_performed: true,
         review_repair_command: `narada task review <task-number> --agent ${result.identity_id} --verdict <accepted|accepted_with_notes|rejected>`,
       },
@@ -3201,6 +3258,7 @@ export async function operatorSurfaceBindFocusedCommand(
       binding,
     ];
     const bindingPath = await writeRuntimeBindings(cwd, nextBindings);
+    const rolePlanePath = await reconcileSiteRoleRuntimePlane(cwd);
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
@@ -3212,6 +3270,7 @@ export async function operatorSurfaceBindFocusedCommand(
         runtime_binding_mutated: true,
         binding,
         binding_path: bindingPath,
+        role_runtime_plane_path: rolePlanePath,
         site_normalization: siteNormalization.normalized ? {
           before_site_id: siteNormalization.before_site_id,
           after_site_id: siteNormalization.after_site_id,

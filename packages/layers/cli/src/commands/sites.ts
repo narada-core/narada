@@ -2840,8 +2840,8 @@ export async function sitesTaskLifecycleInitCommand(
 
   if (!options.dryRun) {
     await mkdir(aiPath, { recursive: true });
-    const { openTaskLifecycleStore } = await import('../lib/task-lifecycle-store.js');
-    const store = openTaskLifecycleStore(sitePath);
+    const { prepareTaskLifecycleStore } = await import('../lib/task-lifecycle-store.js');
+    const store = prepareTaskLifecycleStore(sitePath);
     try {
       const rows = store.db
         .prepare("select name from sqlite_master where type = 'table' order by name")
@@ -5294,6 +5294,7 @@ export interface SitesBootstrapProjectOptions extends SitesOptions {
   siteId?: string;
   sync?: string;
   execute?: boolean;
+  mcpWorkspaceRoot?: string;
 }
 
 export interface SitesBootstrapWindowsOptions extends SitesOptions {
@@ -6480,6 +6481,42 @@ export async function sitesBootstrapClientCommand(
   return { exitCode: ExitCode.SUCCESS, result };
 }
 
+async function recoverProjectSiteCarrierMaterialization(
+  configuredRoot: string | undefined,
+  projectSiteRoot: string,
+  execute: boolean,
+): Promise<Record<string, unknown>> {
+  if (!configuredRoot) return { status: 'not_configured', mutation_performed: false };
+  const mcpWorkspaceRoot = resolve(configuredRoot);
+  const recoveryEntrypoint = join(mcpWorkspaceRoot, 'scripts', 'recover-carrier-materialization.mjs');
+  if (!existsSync(recoveryEntrypoint)) {
+    throw new Error('project_site_mcp_recovery_entrypoint_missing:' + recoveryEntrypoint);
+  }
+  if (!execute) {
+    return { status: 'planned', mutation_performed: false, mcp_workspace_root: mcpWorkspaceRoot, recovery_entrypoint: recoveryEntrypoint };
+  }
+  try {
+    const { stdout } = await execFileGoverned(process.execPath, [recoveryEntrypoint], {
+      cwd: mcpWorkspaceRoot,
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 600_000,
+      env: { ...process.env, NARADA_MCP_WORKSPACE_ROOT: mcpWorkspaceRoot, NARADA_PROJECT_SITE_ROOT: projectSiteRoot },
+    });
+    const result = JSON.parse(String(stdout)) as Record<string, unknown>;
+    if (result.schema !== 'narada.carrier_materialization_recovery.v1'
+      || (result.status !== 'current' && result.status !== 'recovered')) {
+      throw new Error('project_site_mcp_recovery_invalid_result:' + String(stdout).slice(-2000));
+    }
+    return result;
+  } catch (error) {
+    const stderr = typeof (error as { stderr?: unknown }).stderr === 'string'
+      ? (error as { stderr: string }).stderr.slice(-4000)
+      : '';
+    throw new Error('project_site_mcp_recovery_failed:' + (error instanceof Error ? error.message : String(error)) + ':' + stderr);
+  }
+}
+
 export async function sitesBootstrapProjectCommand(
   options: SitesBootstrapProjectOptions,
   _context: CommandContext,
@@ -6510,11 +6547,18 @@ export async function sitesBootstrapProjectCommand(
     { path: join(siteRoot, 'config.json'), kind: 'config' },
     { path: join(siteRoot, 'README.md'), kind: 'guidance' },
     { path: join(siteRoot, 'AGENTS.md'), kind: 'guidance' },
+    { path: join(siteRoot, 'task-lifecycle.toml'), kind: 'task-lifecycle-policy' },
     { path: rolePlanePath, kind: 'role-runtime-plane' },
     { path: join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), kind: 'empty-directory-marker' },
     { path: join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), kind: 'empty-directory-marker' },
   ];
 
+  const mcpMaterializationRecovery = await recoverProjectSiteCarrierMaterialization(
+    options.mcpWorkspaceRoot ?? process.env.NARADA_MCP_WORKSPACE_ROOT,
+    siteRoot,
+    execute,
+  );
+  let taskLifecyclePreparation: Record<string, unknown> = { status: 'planned', site_path: workspaceRoot };
   if (execute) {
     await mkdir(siteRoot, { recursive: true });
     for (const directory of directories) {
@@ -6548,8 +6592,14 @@ export async function sitesBootstrapProjectCommand(
       ownershipSummary: 'This Site owns project-local governance, construction memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.',
       nonAuthoritySummary: 'Project code and artifacts outside `site_root` are not Narada knowledge, evidence, or authority merely because the Site inhabits the repository.',
     }), 'utf8');
+    await writeFile(join(siteRoot, 'task-lifecycle.toml'), '[roster]\nroles_are_obligation_targets = true\n', 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), '', 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), '', 'utf8');
+    const lifecycleResult = await sitesTaskLifecycleInitCommand({ site: workspaceRoot, dryRun: false, format: 'json' }, _context);
+    if (lifecycleResult.exitCode !== ExitCode.SUCCESS) {
+      throw new Error('project_site_task_lifecycle_preparation_failed:' + JSON.stringify(lifecycleResult.result));
+    }
+    taskLifecyclePreparation = lifecycleResult.result as Record<string, unknown>;
   }
 
   const result = {
@@ -6563,6 +6613,8 @@ export async function sitesBootstrapProjectCommand(
     directories,
     files,
     config,
+    mcp_materialization_recovery: mcpMaterializationRecovery,
+    task_lifecycle_preparation: taskLifecyclePreparation,
     validation_commands: [
       `narada sites doctor ${siteId} --kind project --root ${workspaceRoot}`,
       `narada inbox ingest-files --from ${join(siteRoot, '.ai', 'inbox-drop')}`,

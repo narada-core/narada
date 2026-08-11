@@ -3,7 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { operatorSurfaceIdentityAddCommand } from '../../src/commands/operator-surface.js';
+
+vi.unmock('node:fs');
+vi.unmock('node:fs/promises');
+import { operatorSurfaceBindFocusedCommand, operatorSurfaceIdentityAddCommand, operatorSurfaceIdentityAdmitTaskAuthorityCommand } from '../../src/commands/operator-surface.js';
 import { selectLaunchRecords } from '../../src/commands/workspace-launch-registry.js';
 import { sitesBootstrapProjectCommand, sitesDoctorCommand } from '../../src/commands/sites.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -110,5 +113,37 @@ describe('feedback coherence regressions', () => {
     expect(checks.find((check) => check.name === 'role_obligation_target_policy')?.status).toBe('pass');
     expect(checks.find((check) => check.name === 'role_runtime_architect')?.status).toBe('pass');
     expect(checks.find((check) => check.name === 'role_runtime_builder')?.status).toBe('pass');
+  });
+  it('activates a declared role only after identity and runtime binding admission', async () => {
+    const workspace = await root('narada-role-activation-');
+    await mkdir(join(workspace, '.git'));
+    await sitesBootstrapProjectCommand({ workspace, siteId: 'cintamani', execute: true, format: 'json' }, context());
+    const siteRoot = join(workspace, '.narada');
+
+    await operatorSurfaceIdentityAddCommand({ cwd: siteRoot, identityName: 'cintamani.builder', site: 'cintamani', role: 'builder', agentKind: 'codex_cli', by: 'operator' }, context());
+    let rolePlane = JSON.parse(await readFile(join(siteRoot, '.ai', 'agents', 'role-plane.json'), 'utf8'));
+    expect(rolePlane.roles.find((entry: { role_id: string }) => entry.role_id === 'builder')).toMatchObject({
+      declaration_status: 'declared_pending_runtime_admission', roster_status: 'pending', launcher_binding_status: 'pending',
+    });
+
+    const admission = await operatorSurfaceIdentityAdmitTaskAuthorityCommand({
+      cwd: siteRoot, identityName: 'cintamani.builder', by: 'operator', format: 'json',
+    }, context());
+    expect(admission.exitCode).toBe(ExitCode.SUCCESS);
+    rolePlane = JSON.parse(await readFile(join(siteRoot, '.ai', 'agents', 'role-plane.json'), 'utf8'));
+    expect(rolePlane.roles.find((entry: { role_id: string }) => entry.role_id === 'builder')).toMatchObject({
+      declaration_status: 'declared_pending_runtime_admission', roster_status: 'active', launcher_binding_status: 'pending',
+    });
+
+    const binding = await operatorSurfaceBindFocusedCommand({
+      cwd: siteRoot, identity: 'cintamani.builder', runtimeLocus: 'cintamani',
+      handle: 'session:builder-1', observedHandle: 'session:builder-1',
+      windowTitle: 'cintamani.builder', windowClass: 'NaradaCarrierSession', processName: 'codex', processId: '4242', format: 'json',
+    }, context());
+    expect(binding.exitCode).toBe(ExitCode.SUCCESS);
+    rolePlane = JSON.parse(await readFile(join(siteRoot, '.ai', 'agents', 'role-plane.json'), 'utf8'));
+    expect(rolePlane.roles.find((entry: { role_id: string }) => entry.role_id === 'builder')).toMatchObject({
+      declaration_status: 'active', roster_status: 'active', launcher_binding_status: 'active', admitted_identity_id: 'cintamani.builder',
+    });
   });
 });

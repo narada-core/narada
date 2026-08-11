@@ -1,8 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.unmock('node:fs');
+vi.unmock('node:fs/promises');
 import {
   sitesBootstrapProjectCommand,
   sitesDoctorCommand,
@@ -76,6 +79,8 @@ describe('sitesBootstrapProjectCommand', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(existsSync(join(workspace, '.narada', 'config.json'))).toBe(true);
+    expect(existsSync(join(workspace, '.ai', 'task-lifecycle.db'))).toBe(true);
+    expect(await readFile(join(workspace, '.narada', 'task-lifecycle.toml'), 'utf8')).toContain('roles_are_obligation_targets = true');
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
     expect(agents).toContain('You are `architect`.');
     expect(agents).toContain('You are `builder`.');
@@ -154,10 +159,58 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(data.readiness.coordinates.governing_law_source.source_site_id).toBe('narada-proper');
     expect(data.readiness.coordinates.authority_locus.locus_kind).toBe('project');
     expect(data.readiness.coordinates.evidence_locus.kind).toBe('git');
-    expect(data.readiness.blockers.find((check) => check.name === 'role_identity_exists')).toBeTruthy();
-    expect(data.readiness.warnings).toEqual([]);
+    expect(data.readiness.coordinates.operator_surface_posture.required).toBe(true);
+    expect(data.readiness.blockers.find((check) => check.name === 'role_identity_exists')).toMatchObject({ status: 'fail' });
+    expect(data.readiness.warnings.map((check) => check.name)).toEqual([
+      'operator_surface_identity_admitted',
+      'operator_surface_transport_declared',
+      'operator_surface_runtime_handle_bound',
+    ]);
   });
 
+  it('recovers configured MCP carrier materialization before the first Site write', async () => {
+    const workspace = await tempWorkspace('narada-project-recovery-');
+    const mcpWorkspace = await tempWorkspace('narada-mcp-recovery-');
+    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
+    await writeFile(join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'), [
+      "import { existsSync, writeFileSync } from 'node:fs';",
+      "if (existsSync(process.env.NARADA_PROJECT_SITE_ROOT)) throw new Error('site_was_written_before_recovery');",
+      "writeFileSync(new URL('./recovery-ran', import.meta.url), 'yes');",
+      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', all_carrier_materialization_performed: true }));",
+    ].join('\n'));
+
+    const result = await sitesBootstrapProjectCommand({
+      workspace,
+      siteId: 'recovered-project',
+      mcpWorkspaceRoot: mcpWorkspace,
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(existsSync(join(mcpWorkspace, 'scripts', 'recovery-ran'))).toBe(true);
+    expect(existsSync(join(workspace, '.narada', 'config.json'))).toBe(true);
+    expect((result.result as { mcp_materialization_recovery: { status: string } }).mcp_materialization_recovery.status).toBe('recovered');
+  });
+
+  it('leaves no partial Site when configured MCP recovery fails', async () => {
+    const workspace = await tempWorkspace('narada-project-recovery-fail-');
+    const mcpWorkspace = await tempWorkspace('narada-mcp-recovery-fail-');
+    await mkdir(join(mcpWorkspace, 'scripts'), { recursive: true });
+    await writeFile(
+      join(mcpWorkspace, 'scripts', 'recover-carrier-materialization.mjs'),
+      "process.stderr.write('purposeful recovery failure'); process.exit(9);\n",
+    );
+
+    await expect(sitesBootstrapProjectCommand({
+      workspace,
+      siteId: 'unwritten-project',
+      mcpWorkspaceRoot: mcpWorkspace,
+      execute: true,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow('project_site_mcp_recovery_failed');
+    expect(existsSync(join(workspace, '.narada'))).toBe(false);
+  });
   it('refuses non-project sync posture', async () => {
     const workspace = await tempWorkspace('narada-project-bad-');
     const result = await sitesBootstrapProjectCommand({

@@ -563,7 +563,7 @@ describe('operator-surface commands', () => {
     });
   });
 
-  it('rejects identity rename when the old identity Site is not registered as canonical', async () => {
+  it('accepts identity rename when the old identity Site is the sole registered canonical Site', async () => {
     const cwd = await tempRepo();
     mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
     await writeFile(join(cwd, 'operator-surfaces', 'identities.json'), JSON.stringify({
@@ -593,15 +593,13 @@ describe('operator-surface commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      status: 'error',
-      reason: 'site_identity_unregistered',
-      mutation_performed: false,
-      old_site_id: 'andrey-user',
-      registered_site_ids: ['andrey-user'],
-      canonical_site_id: 'andrey-user',
-      unblock_command: expect.stringContaining('Reconcile operator-surface identity Site ids before rename'),
+      status: 'success',
+      mutation_performed: true,
+      old_identity_id: 'andrey-user.architect',
+      new_identity_id: 'andrey-user.Kevin',
+      site_id: 'andrey-user',
     });
   });
 

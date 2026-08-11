@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { readOperatorSurfaceIdentities, type OperatorSurfaceIdentity } from './operator-surface-registry.js';
 import { loadRoster, saveRoster, type AgentRosterEntry } from './task-governance.js';
 
@@ -12,6 +14,7 @@ export interface OperatorSurfaceTaskAuthorityRepair {
 
 export interface AdmitOperatorSurfaceIdentityOptions {
   cwd: string;
+  identityCwd?: string;
   identityId: string;
   by: string;
   role?: string;
@@ -38,9 +41,10 @@ export async function operatorSurfaceTaskAuthorityRepair(
   cwd: string,
   requestedIdentity: string | undefined,
 ): Promise<OperatorSurfaceTaskAuthorityRepair | null> {
-  const identity = await findOperatorSurfaceIdentity(cwd, requestedIdentity);
+  const roots = operatorSurfaceAuthorityRoots(cwd);
+  const identity = await findOperatorSurfaceIdentity(roots.identity, requestedIdentity);
   if (!identity || !requestedIdentity) return null;
-  const roster = await loadRoster(cwd);
+  const roster = await loadRoster(roots.task);
   const taskAuthorityEntry = roster.agents.find((agent) => agent.agent_id === requestedIdentity);
   if (taskAuthorityEntry) return null;
   return {
@@ -56,7 +60,7 @@ export async function operatorSurfaceTaskAuthorityRepair(
 export async function admitOperatorSurfaceIdentityToTaskAuthority(
   options: AdmitOperatorSurfaceIdentityOptions,
 ): Promise<AdmitOperatorSurfaceIdentityResult> {
-  const identity = await findOperatorSurfaceIdentity(options.cwd, options.identityId);
+  const identity = await findOperatorSurfaceIdentity(options.identityCwd ?? options.cwd, options.identityId);
   if (!identity) {
     throw new Error(`Operator Surface identity not found: ${options.identityId}`);
   }
@@ -85,6 +89,7 @@ export async function admitOperatorSurfaceIdentityToTaskAuthority(
   }
   roster.updated_at = now;
   await saveRoster(options.cwd, roster);
+
   return {
     status: 'success',
     identity_id: identity.identity_id,
@@ -113,6 +118,17 @@ function defaultTaskCapabilities(role: string): string[] {
   if (role === 'builder') return ['claim', 'execute', 'review'];
   if (role === 'implementer') return ['claim', 'execute'];
   return [];
+}
+
+function operatorSurfaceAuthorityRoots(cwd: string): { identity: string; task: string } {
+  const requested = resolve(cwd);
+  const parent = resolve(requested, '..');
+  if (requested === join(parent, '.narada')) return { identity: requested, task: parent };
+  const containedGovernance = join(requested, '.narada');
+  if (existsSync(join(containedGovernance, 'config.json'))) {
+    return { identity: containedGovernance, task: requested };
+  }
+  return { identity: requested, task: requested };
 }
 
 async function findOperatorSurfaceIdentity(

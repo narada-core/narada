@@ -5,6 +5,8 @@ export const MCP_CARRIER_LIFECYCLE_ADAPTERS = {
     activation_authority: 'nars_session_authority_handoff',
     activation_mechanism: 'pc_owned_successor_drain_supervisor',
     requires_managed_nars_session: true,
+    identity_contract: 'materialized_carrier_id_required',
+    unbound_session_posture: 'refuse',
     supported_materialized_carrier_ids: ['codex-andrey', 'kimi-andrey', 'opencode-andrey'],
     postcondition: 'successor_ready_source_retired',
   },
@@ -36,5 +38,5 @@ export function assertMcpCarrierSessionBinding(siteRoot: string, sessionId: stri
   if (boundCarrierId !== carrierId) {
     throw new Error('mcp_carrier_session_binding_mismatch:' + sessionId + ':expected=' + carrierId + ':actual=' + boundCarrierId);
   }
-  return { session_id: session.session_id ?? sessionId, materialized_carrier_id: boundCarrierId, record_path: session.record_path ?? null };
+  return { session_id: session.session_id ?? sessionId, materialized_carrier_id: boundCarrierId, identity_contract: 'materialized_carrier_id_required', record_path: session.record_path ?? null };
 }

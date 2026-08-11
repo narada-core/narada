@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext, type CommanderOptionValues } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { carrierRecoverCommand, carrierRestartCommand, carrierRestartOutcomeCommand } from './carrier-restart.js';
+import { carrierRecoverCommand, carrierRestartAcknowledgementCommand, carrierRestartCommand, carrierRestartOutcomeCommand } from './carrier-restart.js';
 
 export function registerCarrierRestartCommands(program: Command): void {
   const carrier = program.command('carrier').description('PC-owned carrier lifecycle operations');
@@ -46,6 +46,25 @@ export function registerCarrierRestartCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));
+  carrier
+    .command('acknowledge-restart')
+    .description('Retry exact durable pressure acknowledgement after a carrier restart already succeeded; this never restarts the carrier.')
+    .option('--mcp-workspace-root <path>', 'mcp-surfaces workspace; otherwise use bounded standard discovery.')
+    .requiredOption('--carrier-id <carrier-id>', 'Materialized carrier id.')
+    .requiredOption('--expected-pressure-ref <ref>', 'Exact durable restart-pressure evidence reference to acknowledge.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[CommanderOptionValues]>({
+      command: 'carrier acknowledge-restart',
+      emit: emitCommandResult,
+      format: (opts: CommanderOptionValues) => opts.format,
+      invocation: (opts) => carrierRestartAcknowledgementCommand({
+        mcpWorkspaceRoot: opts.mcpWorkspaceRoot as string | undefined,
+        carrierId: opts.carrierId as string,
+        expectedPressureRef: opts.expectedPressureRef as string,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
   carrier
     .command('restart')
     .description('Restart one local NARS carrier through the PC-owned successor/drain supervisor.')

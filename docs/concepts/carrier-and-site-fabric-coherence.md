@@ -98,7 +98,11 @@ It fails when:
 
 Restart pressure is durable and generation-specific: no-op recovery does not erase it, and only a successful successor for the bound `materialized_carrier_id` may acknowledge the exact pending materialization evidence. The registrar also publishes a canonical installed-carrier index so custom config paths remain discoverable.
 
-All-carrier materialization and one-carrier activation are deliberately different scopes. Configuration convergence covers every registered carrier; a command invocation can control only the selected managed carrier lifecycle. The result therefore preserves `outstanding_carrier_ids` for affected sibling carriers instead of claiming they restarted. A dry run plans both phases without mutation.
+Carrier-bound lifecycle operations require an explicit session `materialized_carrier_id`. Runtime-proxy launches inject that identity. A direct or unproxied launcher must record the same identity itself; otherwise `narada carrier recover` fails closed with `mcp_carrier_session_binding_missing`. It never infers identity from process ancestry, executable name, or operator intent.
+
+A successful restart and durable-pressure acknowledgement are separate observable transitions. If restart succeeds but acknowledgement fails, recovery returns `restart_completed_acknowledgement_pending` with the exact pressure reference and does not conceal the completed restart. Operators retry only acknowledgement with `narada carrier acknowledge-restart --carrier-id <id> --expected-pressure-ref <ref>`; this retry never launches another successor.
+
+All-carrier materialization and one-carrier activation are deliberately different scopes. Configuration convergence covers every registered carrier; a command invocation can control only the selected managed carrier lifecycle. The result therefore preserves `outstanding_carrier_ids` for affected sibling carriers instead of claiming they restarted. A dry run plans both phases without mutation. The normal focused carrier-recovery suite includes a disposable real child process and real HTTP readiness boundary; this strongest path is not opt-in or environment-gated.
 
 The recovery emits a compact result plus a durable evidence reference. The evidence artifact, not terminal scrollback, owns the full inspection and materialization record. Recovery evidence preserves the current write and then uses a newest-first bounded retention policy so repeated no-op checks cannot grow storage without limit.
 

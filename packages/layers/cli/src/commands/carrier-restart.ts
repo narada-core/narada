@@ -9,6 +9,13 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { acknowledgeMcpCarrierRestart, recoverMcpCarrierMaterialization } from '../lib/mcp-carrier-recovery.js';
 import { assertMcpCarrierSessionBinding, resolveMcpCarrierLifecycleAdapter } from '../lib/mcp-carrier-lifecycle-adapter.js';
 
+export interface CarrierRestartAcknowledgementOptions {
+  mcpWorkspaceRoot?: string;
+  carrierId?: string;
+  expectedPressureRef?: string;
+  format?: CliFormat;
+}
+
 export interface CarrierRestartOptions {
   siteRoot?: string;
   pcSiteRoot?: string;
@@ -111,19 +118,62 @@ export async function carrierRecoverCommand(
     };
     return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, 'Carrier materialization recovered; selected carrier restart not required.', options.format ?? 'auto') };
   }
-  const restart = await restartCarrier(options);
-  const restartDecision = restart.exitCode === ExitCode.SUCCESS
-    ? decision
-    : { ...decision, outstanding_carrier_ids: decision.affected_carrier_ids };
   const carrierPressure = recovery.restart_pressure && typeof recovery.restart_pressure === 'object'
     ? (recovery.restart_pressure as Record<string, unknown>)[carrierId]
     : null;
   const pressureRef = carrierPressure && typeof carrierPressure === 'object' && typeof (carrierPressure as Record<string, unknown>).evidence_ref === 'string'
-    ? String((carrierPressure as Record<string, unknown>).evidence_ref)
-    : undefined;
-  const restartAcknowledgement = restart.exitCode === ExitCode.SUCCESS
-    ? await (dependencies.acknowledgeRestart ?? acknowledgeMcpCarrierRestart)(options.mcpWorkspaceRoot, carrierId, pressureRef)
-    : null;
+    ? String((carrierPressure as Record<string, unknown>).evidence_ref).trim()
+    : '';
+  if (!pressureRef) {
+    const result = {
+      schema: 'narada.carrier.recover_and_relaunch.v1',
+      status: 'restart_pressure_evidence_missing',
+      mutation_performed: recovery.status === 'recovered',
+      carrier_id: carrierId,
+      lifecycle_adapter: lifecycleAdapter,
+      session_binding: sessionBinding,
+      recovery,
+      restart_decision: { ...decision, outstanding_carrier_ids: decision.affected_carrier_ids },
+      restart_acknowledgement: null,
+      restart: null,
+    };
+    return { exitCode: ExitCode.INVALID_CONFIG, result: formattedResult(result, 'Carrier materialization recovered, but restart was refused because exact pressure evidence is missing.', options.format ?? 'auto') };
+  }
+  const restart = await restartCarrier(options);
+  const restartDecision = restart.exitCode === ExitCode.SUCCESS
+    ? decision
+    : { ...decision, outstanding_carrier_ids: decision.affected_carrier_ids };
+  let restartAcknowledgement: Record<string, unknown> | null = null;
+  if (restart.exitCode === ExitCode.SUCCESS) {
+    try {
+      restartAcknowledgement = await (dependencies.acknowledgeRestart ?? acknowledgeMcpCarrierRestart)(options.mcpWorkspaceRoot, carrierId, pressureRef);
+    } catch (error) {
+      const retry = {
+        action: 'carrier acknowledge-restart',
+        carrier_id: carrierId,
+        expected_pressure_ref: pressureRef,
+        mcp_workspace_root: options.mcpWorkspaceRoot ?? null,
+      };
+      const result = {
+        schema: 'narada.carrier.recover_and_relaunch.v1',
+        status: 'restart_completed_acknowledgement_pending',
+        mutation_performed: true,
+        carrier_id: carrierId,
+        lifecycle_adapter: lifecycleAdapter,
+        session_binding: sessionBinding,
+        recovery,
+        restart_decision: { ...decision, outstanding_carrier_ids: decision.affected_carrier_ids },
+        restart_acknowledgement: {
+          status: 'pending',
+          pressure_ref: pressureRef,
+          error: error instanceof Error ? error.message : String(error),
+          retry,
+        },
+        restart: restart.result,
+      };
+      return { exitCode: ExitCode.INVALID_CONFIG, result: formattedResult(result, 'Carrier restarted successfully; durable pressure acknowledgement remains pending and can be retried without another restart.', options.format ?? 'auto') };
+    }
+  }
   const result = {
     schema: 'narada.carrier.recover_and_relaunch.v1',
     status: restart.exitCode === ExitCode.SUCCESS ? 'completed' : 'restart_failed',
@@ -143,6 +193,29 @@ export async function carrierRecoverCommand(
       : 'Carrier materialization recovered but governed relaunch failed.', options.format ?? 'auto'),
   };
 }
+export async function carrierRestartAcknowledgementCommand(
+  options: CarrierRestartAcknowledgementOptions,
+  _context: CommandContext,
+  dependencies: { acknowledgeRestart?: typeof acknowledgeMcpCarrierRestart } = {},
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const carrierId = requireOption(options.carrierId, '--carrier-id');
+  const expectedPressureRef = requireOption(options.expectedPressureRef, '--expected-pressure-ref');
+  const acknowledgement = await (dependencies.acknowledgeRestart ?? acknowledgeMcpCarrierRestart)(
+    options.mcpWorkspaceRoot,
+    carrierId,
+    expectedPressureRef,
+  );
+  const result = {
+    schema: 'narada.carrier.restart_acknowledgement_reconcile.v1',
+    status: 'reconciled',
+    mutation_performed: true,
+    carrier_id: carrierId,
+    expected_pressure_ref: expectedPressureRef,
+    acknowledgement,
+  };
+  return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, 'Carrier restart pressure acknowledgement reconciled.', options.format ?? 'auto') };
+}
+
 export async function carrierRestartCommand(
   options: CarrierRestartOptions,
   _context: CommandContext,

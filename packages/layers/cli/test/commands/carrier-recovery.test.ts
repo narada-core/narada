@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
-import { carrierRecoverCommand, carrierRecoveryRestartDecision } from '../../src/commands/carrier-restart.js';
+import { carrierRecoverCommand, carrierRecoveryRestartDecision, carrierRestartAcknowledgementCommand } from '../../src/commands/carrier-restart.js';
 import { discoverMcpRecoveryWorkspace } from '../../src/lib/mcp-carrier-recovery.js';
 import { assertMcpCarrierSessionBinding, resolveMcpCarrierLifecycleAdapter } from '../../src/lib/mcp-carrier-lifecycle-adapter.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -116,6 +116,19 @@ describe('MCP carrier lifecycle adapter', () => {
     expect(() => assertMcpCarrierSessionBinding(root, sessionId, 'codex-andrey'))
       .toThrow(/mcp_carrier_session_binding_mismatch/);
   });
+  it('refuses carrier-bound lifecycle operations for a direct session without materialized identity', async () => {
+    const root = await temporaryRoot('narada-carrier-unbound-');
+    const sessionId = 'direct-unbound-session';
+    const paths = resolveNaradaSitePaths({ siteRoot: root, sessionId });
+    await mkdir(paths.narsSessionDir!, { recursive: true });
+    writeNarsSessionStartedIndex({
+      sessionStartedEvent: { event: 'session_started', session_id: sessionId, site_root: root },
+      sessionPath: paths.narsSessionPath,
+      siteRoot: root,
+    });
+    expect(() => assertMcpCarrierSessionBinding(root, sessionId, 'codex-andrey'))
+      .toThrow(/mcp_carrier_session_binding_missing/);
+  });
   it('requires explicit adapter selection and exposes NARS handoff semantics', () => {
     expect(() => resolveMcpCarrierLifecycleAdapter(undefined, 'codex-andrey'))
       .toThrow(/mcp_carrier_lifecycle_adapter_required/);
@@ -135,6 +148,7 @@ describe('carrier recover and relaunch', () => {
     expect(carrierRecoveryRestartDecision({
       restart_required: true,
       restart_carrier_ids: ['codex-andrey', 'kimi-andrey'],
+        restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' }, 'kimi-andrey': { evidence_ref: 'pressure:kimi-1' } },
     }, 'codex-andrey')).toEqual({
       restart_required: true,
       selected_carrier_affected: true,
@@ -157,6 +171,7 @@ describe('carrier recover and relaunch', () => {
         status: 'recovered',
         restart_required: true,
         restart_carrier_ids: ['codex-andrey', 'kimi-andrey'],
+        restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' }, 'kimi-andrey': { evidence_ref: 'pressure:kimi-1' } },
       }),
       verifyBinding: () => ({ session_id: 'source-1', materialized_carrier_id: 'codex-andrey' }),
       acknowledgeRestart: async () => ({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged' }),
@@ -184,6 +199,7 @@ describe('carrier recover and relaunch', () => {
         status: 'recovered',
         restart_required: true,
         restart_carrier_ids: ['codex-andrey', 'kimi-andrey'],
+        restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' }, 'kimi-andrey': { evidence_ref: 'pressure:kimi-1' } },
       }),
       verifyBinding: () => ({ session_id: 'source-1', materialized_carrier_id: 'codex-andrey' }),
       restart: async () => ({ exitCode: ExitCode.INVALID_CONFIG, result: { status: 'failed' } }),
@@ -192,6 +208,44 @@ describe('carrier recover and relaunch', () => {
     const result = response.result as { restart_decision: { outstanding_carrier_ids: string[] } };
     expect(result.restart_decision.outstanding_carrier_ids).toEqual(['codex-andrey', 'kimi-andrey']);
   });
+  it('reports successful restart with acknowledgement pending and supports exact-pressure retry', async () => {
+    const response = await carrierRecoverCommand({
+      carrierId: 'codex-andrey', lifecycleAdapter: 'nars-successor-v1', siteRoot: 'C:/site',
+      carrierSessionId: 'source-1', format: 'json',
+    }, context, {
+      recover: async () => ({
+        schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered',
+        restart_required: true, restart_carrier_ids: ['codex-andrey'],
+        restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:exact-1' } },
+      }),
+      verifyBinding: () => ({ session_id: 'source-1', materialized_carrier_id: 'codex-andrey' }),
+      restart: async () => ({ exitCode: ExitCode.SUCCESS, result: { status: 'completed', target_session_id: 'successor-1' } }),
+      acknowledgeRestart: async () => { throw new Error('durable_store_temporarily_unavailable'); },
+    });
+    expect(response.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(response.result).toMatchObject({
+      status: 'restart_completed_acknowledgement_pending',
+      mutation_performed: true,
+      restart: { status: 'completed' },
+      restart_acknowledgement: {
+        status: 'pending',
+        pressure_ref: 'pressure:exact-1',
+        retry: { action: 'carrier acknowledge-restart', expected_pressure_ref: 'pressure:exact-1' },
+      },
+    });
+
+    const acknowledgeRestart = vi.fn(async (_root, carrierId, pressureRef) => ({
+      schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged', carrier_id: carrierId, evidence_ref: pressureRef,
+    }));
+    const retry = await carrierRestartAcknowledgementCommand({
+      mcpWorkspaceRoot: 'C:/mcp-surfaces', carrierId: 'codex-andrey',
+      expectedPressureRef: 'pressure:exact-1', format: 'json',
+    }, context, { acknowledgeRestart });
+    expect(retry.exitCode).toBe(ExitCode.SUCCESS);
+    expect(retry.result).toMatchObject({ status: 'reconciled', expected_pressure_ref: 'pressure:exact-1' });
+    expect(acknowledgeRestart).toHaveBeenCalledWith('C:/mcp-surfaces', 'codex-andrey', 'pressure:exact-1');
+  });
+
   it('performs recovery then real governed successor activation without replacing either operation', async () => {
     const root = await temporaryRoot('narada-carrier-recover-e2e-');
     const mcp = await recoveryWorkspace(root, 'mcp-surfaces');
@@ -200,7 +254,7 @@ describe('carrier recover and relaunch', () => {
       "import { writeFileSync } from 'node:fs';",
       "if (process.argv.includes('--ack-carrier')) { process.stdout.write(JSON.stringify({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged' })); process.exit(0); }",
       `writeFileSync(${JSON.stringify(recoveryMarker)}, JSON.stringify({ status: 'recovered' }));`,
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'] }));",
+      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'], restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' } } }));",
     ].join('\n'));
 
     const sourceSessionId = 'carrier_recovery_source';
@@ -288,12 +342,12 @@ describe('carrier recover and relaunch', () => {
     expect(readAuthorityTransitionSourceState(statePath).source_write_admission).toBe('retired');
     expect(await readFile(sourcePaths.narsControlPath!, 'utf8')).toContain('session.close');
   });
-  it.skipIf(process.env.NARADA_CARRIER_RECOVERY_PROCESS_E2E !== '1')('uses a real disposable target process and real HTTP health boundary', async () => {
+  it('uses a real disposable target process and real HTTP health boundary', async () => {
     const root = await temporaryRoot('narada-carrier-process-e2e-');
     const mcp = await recoveryWorkspace(root, 'mcp-surfaces');
     await writeFile(join(mcp, 'scripts', 'recover-carrier-materialization.mjs'), [
       "if (process.argv.includes('--ack-carrier')) { process.stdout.write(JSON.stringify({ schema: 'narada.carrier_restart_acknowledgement.v1', status: 'acknowledged' })); process.exit(0); }",
-      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'] }));",
+      "process.stdout.write(JSON.stringify({ schema: 'narada.carrier_materialization_recovery.v1', status: 'recovered', restart_required: true, restart_carrier_ids: ['codex-andrey'], restart_pressure: { 'codex-andrey': { evidence_ref: 'pressure:codex-1' } } }));",
     ].join('\n'));
     const sourceSessionId = 'carrier_process_source';
     const sourcePaths = resolveNaradaSitePaths({ siteRoot: root, sessionId: sourceSessionId });

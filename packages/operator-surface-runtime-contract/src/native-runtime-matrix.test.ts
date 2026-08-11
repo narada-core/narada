@@ -16,6 +16,7 @@ const NATIVE_SURFACES = [
   'site-registry-mcp',
   'worker-delegation-mcp',
   'delegated-task-mcp',
+  'sop-mcp',
   'scheduler-mcp',
   'surface-feedback-mcp',
   'launcher-mcp',
@@ -63,13 +64,13 @@ test('native profile uses an explicitly admitted fallback until Rust operational
   }
 });
 
-test('SOP remains on Node until its native implementation owns operational authority', () => {
+test('SOP uses its admitted native Rust operational authority', () => {
   const matrix = loadRuntimeImplementationMatrixContract();
   const nativeEntries = runtimeProfileImplementationMatrix('native');
   const componentKind = 'sop-mcp';
   const row = matrix.rows?.find((candidate: any) => candidate.component_kind === componentKind);
   const entry = nativeEntries.find((candidate: any) => candidate.component_kind === componentKind);
-  assert.equal(row?.implementations?.rust?.status, 'unavailable', componentKind);
-  assert.equal(entry?.runtime_engine_kind, 'node', componentKind);
+  assert.equal(row?.implementations?.rust?.status, 'admitted', componentKind);
+  assert.equal(entry?.runtime_engine_kind, 'rust', componentKind);
   assert.equal(entry?.implementation_status, 'admitted', componentKind);
 });

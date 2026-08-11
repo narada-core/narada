@@ -196,14 +196,14 @@
       "package": "@narada-core/sop-mcp",
       "required": true,
       "profile_runtime_engine_kinds": {
-        "native": "node",
+        "native": "rust",
         "bun": "bun",
         "node-compat": "node"
       },
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests", "sop-protocol-tests", "sop-registry-and-execution-authority"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests", "sop-protocol-tests"] },
-        "rust": { "status": "unavailable", "evidence": ["native-sop-read-slice-only", "sop-authority-boundary-test", "native-sop-registry-and-execution-parity-missing"] }
+        "rust": { "status": "admitted", "evidence": ["native-sop-template-registry-parity", "native-sop-handoff-and-outbox-parity", "native-sop-run-engine-and-completion-parity", "native-sop-sqlite-snapshot-parity", "native-protocol-suite"] }
       }
     },
     {

@@ -2,6 +2,29 @@
 
 Reusable Windows overlay-window mechanics for Narada operator surfaces.
 
+## Toast Viewport
+
+The package also owns one lazy, user-local WPF toast viewport. It is a transient projection, not
+a durable notification store: a cold start discards stale inbox files. Producers submit a
+versioned `narada.window_toast.request.v1` request through `enqueueToast`; the returned ingress
+receipt proves atomic admission to the viewport inbox, not that a notification was rendered.
+
+The viewport shows at most three items and queues at most 32. Foreground items can displace the
+oldest visible background item, dedupe keys replace an older matching item, hover pauses expiry,
+and an idle empty host exits after five minutes. Supported actions are deliberately limited to
+opening HTTP(S) URLs and copying text. Toasts are topmost and initially non-activating, but remain
+independent of overlay presence, layer, focus, position, and tiling state. Each stack originates
+from the bottom-left of the foreground operator window's monitor; physical monitor bounds are
+converted to WPF coordinates so display scaling does not move the stack off-screen. A thin
+semantic-tone lifetime line contracts smoothly until dismissal and pauses with expiry on hover.
+
+CLI examples:
+
+- `narada-window-overlay-core toast enqueue --title "Sync complete" --tone success`;
+- `narada-window-overlay-core toast enqueue --request request.json`;
+- `narada-window-overlay-core toast inspect`;
+- `narada-window-overlay-core toast stop`.
+
 This package owns the mechanics extracted from the quota-meter overlay:
 
 - one overlay process per stable overlay id;

@@ -121,3 +121,4 @@ export function stopOverlay(options?: OverlayLifecycleOptions): Promise<OverlayS
 export function inspectOverlay(options?: OverlayLifecycleOptions): Promise<OverlayStatus>;
 export function readOverlayDocument(options?: OverlayLifecycleOptions): Promise<OverlayDocument | null>;
 export function removeOverlayState(options?: OverlayLifecycleOptions): Promise<OverlayStatus>;
+export * from './toast.js';

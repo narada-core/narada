@@ -1,3 +1,5 @@
+import { enqueueToast, type ToastRequestInput, type ToastViewportOptions } from "@narada-core/window-overlay-core";
+
 /**
  * Operator notification emission surface.
  *
@@ -60,6 +62,38 @@ export class LogNotificationAdapter implements NotificationAdapter {
         ...notification,
       }),
     );
+  }
+}
+
+export interface DesktopToastNotificationAdapterOptions extends ToastViewportOptions {
+  enqueue?: (request: ToastRequestInput, options?: ToastViewportOptions) => Promise<unknown>;
+}
+
+/** Opt-in Windows desktop projection of the existing operator-notification envelope. */
+export class DesktopToastNotificationAdapter implements NotificationAdapter {
+  readonly channel = "desktop-toast";
+  private readonly options: DesktopToastNotificationAdapterOptions;
+
+  constructor(options: DesktopToastNotificationAdapterOptions = {}) {
+    this.options = options;
+  }
+
+  async emit(notification: OperatorNotification): Promise<void> {
+    const isForeground = notification.severity === "critical" || notification.health_status === "auth_failed";
+    const action = /^https?:\/\//i.test(notification.suggested_action)
+      ? { kind: "open_url" as const, label: "Open", target: notification.suggested_action, alt_text: "Open suggested action" }
+      : { kind: "copy_text" as const, label: "Copy command", text: notification.suggested_action, alt_text: "Copy suggested command" };
+    const enqueue = this.options.enqueue ?? enqueueToast;
+    await enqueue({
+      origin: { kind: "operator_notification", ref: `${notification.site_id}:${notification.scope_id}` },
+      attention: isForeground ? "foreground" : "background",
+      tone: isForeground ? "danger" : "warning",
+      title: notification.summary,
+      description: notification.detail,
+      action,
+      dedupe_key: `${notification.site_id}:${notification.scope_id}:${notification.health_status}`,
+      duration_ms: isForeground ? 10_000 : 7_000,
+    }, this.options);
   }
 }
 

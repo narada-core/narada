@@ -20,7 +20,62 @@ import {
   requestOverlayFocus,
   setOverlayPresencePolicy,
   setOverlaySurfaceDefaultPresencePolicy,
+  createToastRequest,
+  defaultToastViewportStateRoot,
+  toastViewportPaths,
 } from './index.js';
+
+test('normalizes bounded toast requests with safe typed actions', () => {
+  const request = createToastRequest({
+    title: 'Authentication failed', attention: 'foreground', tone: 'danger', dedupe_key: 'sonar:mail:auth',
+    action: { kind: 'copy_text', label: 'Copy command', text: 'narada auth repair', alt_text: 'Copy repair command' },
+  });
+  assert.equal(request.schema, 'narada.window_toast.request.v1');
+  assert.equal(request.duration_ms, 8_000);
+  assert.equal(request.action?.kind, 'copy_text');
+  assert.throws(() => createToastRequest({
+    title: 'Unsafe', action: { kind: 'open_url', label: 'Open', target: 'file:///secret', alt_text: 'Open file' },
+  }), /toast_open_url_target_scheme_invalid/);
+  assert.throws(() => createToastRequest({ title: 'Too fast', duration_ms: 999 }), /toast_duration_ms_invalid/);
+});
+
+test('toast viewport state is user-local and separate from overlay state', () => {
+  const root = defaultToastViewportStateRoot({ LOCALAPPDATA: 'C:\\Local' });
+  assert.equal(root, 'C:\\Local\\Narada\\window-toast-viewport');
+  const paths = toastViewportPaths('C:\\ToastState');
+  assert.match(paths.inbox, /ToastState[\\/]inbox$/);
+  assert.match(paths.state, /viewport\.state\.json$/);
+});
+
+test('toast host owns one bounded transient viewport with typed actions', async () => {
+  const source = await readFile(new URL('./window-toast-viewport.ps1', import.meta.url), 'utf8');
+  const start = await readFile(new URL('./Start-WindowToastViewport.ps1', import.meta.url), 'utf8');
+  const closeButton = await readFile(new URL('./WindowOverlayCloseButton.ps1', import.meta.url), 'utf8');
+  assert.match(source, /\$visible\.Count -lt 3/);
+  assert.match(source, /\$queued\.Count -gt 32/);
+  assert.match(source, /request\.dedupe_key/);
+  assert.match(source, /ShowActivated = \$false/);
+  assert.match(source, /GetForegroundWindow/);
+  assert.match(source, /Screen\]::FromHandle/);
+  assert.doesNotMatch(source, /Screen\]::FromPoint/);
+  assert.match(source, /TransformFromDevice/);
+  assert.match(source, /\$window\.Left = \$topLeft\.X \+ 14/);
+  assert.match(source, /\$window\.Top = \$bottomRight\.Y - \$window\.ActualHeight - 14/);
+  assert.match(source, /Start-Process \$Request\.action\.target/);
+  assert.match(source, /Windows\.Clipboard/);
+  assert.match(source, /New-NaradaOverlayCloseButton 'Dismiss notification'/);
+  assert.match(source, /DoubleAnimation/);
+  assert.match(source, /ApplyAnimationClock/);
+  assert.match(source, /clock\.Controller\.Pause\(\)/);
+  assert.match(source, /clock\.Controller\.Resume\(\)/);
+  assert.match(source, /\$lifetime\.Background = Get-ToneBrush \$request\.tone/);
+  assert.match(closeButton, /\$button\.Width = 22/);
+  assert.match(closeButton, /\$button\.Opacity = 0\.7/);
+  assert.match(closeButton, /CornerRadius\]::new\(4\)/);
+  assert.doesNotMatch(source, /Invoke-Expression/);
+  assert.match(start, /cold host start never replays stale ingress/i);
+  assert.match(start, /NaradaWindowToastViewport_/);
+});
 
 test('creates a versioned generic document with controlled actions', () => {
   const document = createOverlayDocument({

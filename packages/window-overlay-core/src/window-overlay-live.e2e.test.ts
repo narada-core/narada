@@ -12,7 +12,36 @@ import {
   setOverlaySurfaceDefaultPresencePolicy,
   startOverlay,
   stopOverlay,
+  enqueueToast,
+  inspectToastViewport,
+  stopToastViewport,
 } from './index.js';
+
+test('live toast viewport admits, renders, expires, and stops as one shared host', { skip: process.platform !== 'win32' }, async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-toast-live-'));
+  try {
+    const first = await enqueueToast({
+      title: 'First live toast', attention: 'background', tone: 'success', duration_ms: 1_200,
+      dedupe_key: 'live:dedupe',
+    }, { stateRoot, idleTimeoutSeconds: 30 });
+    const second = await enqueueToast({
+      title: 'Replacement live toast', attention: 'foreground', tone: 'warning', duration_ms: 1_200,
+      dedupe_key: 'live:dedupe',
+    }, { stateRoot, idleTimeoutSeconds: 30 });
+    assert.equal(first.viewport_pid, second.viewport_pid);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const running = await inspectToastViewport({ stateRoot });
+    assert.equal(running.state, 'running');
+    assert.deepEqual(running.viewport?.visible.map((item) => item.title), ['Replacement live toast']);
+    await new Promise((resolve) => setTimeout(resolve, 1_300));
+    const expired = await inspectToastViewport({ stateRoot });
+    assert.equal(expired.viewport?.visible.length, 0);
+    assert.equal(expired.viewport?.last_outcome?.outcome, 'expired');
+  } finally {
+    await stopToastViewport({ stateRoot }).catch(() => undefined);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
 
 type NativeWindowSnapshot = {
   TargetPid: number;

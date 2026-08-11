@@ -20,6 +20,7 @@ $restartCommandPath = Get-OverlayPath 'restart.command.json'
 $actionStatePath = Get-OverlayPath 'action-state.json'
 $tileCommandPath = Get-OverlayPath 'tile.command.json'
 . (Join-Path $PSScriptRoot 'WindowSurfaceOverlayCoordinator.ps1')
+. (Join-Path $PSScriptRoot 'WindowOverlayCloseButton.ps1')
 $visibilityStatePath = Get-OverlayPath 'visibility.state.json'
 $surfaceRoot = Split-Path -Parent -Path $StateRoot
 $VisibilityPolicy = Normalize-OverlayVisibilityPolicy $VisibilityPolicy
@@ -834,9 +835,9 @@ $script:LayerButton.Height = 20
 $script:LayerButton.MinWidth = 20
 $script:PresenceButton.ToolTip = Get-OverlayPresenceButtonLabel
 $script:LayerButton.ToolTip = if ($window.Topmost) { 'Layer: Above other windows' } else { 'Layer: Normal z-order' }
-$closeButton = Add-Button $headerActions '×' 'Close overlay' { $window.Close() } -icon
-$closeButton.Foreground = New-Brush 170 215 215 225
-$closeButton.Opacity = 0.7
+$closeButton = New-NaradaOverlayCloseButton 'Close overlay'
+$closeButton.Add_Click({ $window.Close() })
+$headerActions.Children.Add($closeButton) | Out-Null
 $titlePanel.Add_MouseLeftButtonDown({
     if ($_.ChangedButton -eq [Windows.Input.MouseButton]::Left) {
         Drag-OverlayAndPersistPosition

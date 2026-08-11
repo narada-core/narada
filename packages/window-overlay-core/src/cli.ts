@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
-import { createOverlayDocument, inspectOverlay, normalizeOverlayVisibilityPolicy, requestOverlayFocus, requestOverlayRefresh, setOverlayPresencePolicy, setOverlaySurfaceDefaultPresencePolicy, startOverlay, stopOverlay } from './index.js';
+import { createOverlayDocument, createToastRequest, enqueueToast, inspectOverlay, inspectToastViewport, normalizeOverlayVisibilityPolicy, requestOverlayFocus, requestOverlayRefresh, setOverlayPresencePolicy, setOverlaySurfaceDefaultPresencePolicy, startOverlay, stopOverlay, stopToastViewport } from './index.js';
 import type { OverlayPresenceSelection } from './overlay-surface-fsm.js';
 
 const args = process.argv.slice(2);
@@ -16,7 +16,27 @@ const isPresenceSelection = (value: string | undefined): value is OverlayPresenc
   value === 'surface-default' || value === 'always' || value === 'terminal-group' || value === 'hidden'
 );
 
-if (command === 'start') {
+if (command === 'toast') {
+  const toastCommand = args.shift() || 'inspect';
+  if (toastCommand === 'enqueue') {
+    const requestPath = valueOf('--request');
+    const request = requestPath
+      ? JSON.parse(await readFile(requestPath, 'utf8'))
+      : createToastRequest({
+          title: valueOf('--title'), description: valueOf('--description'),
+          attention: valueOf('--attention', 'background'), tone: valueOf('--tone', 'default'),
+          dedupe_key: valueOf('--dedupe-key'),
+          duration_ms: valueOf('--duration-ms') ? Number(valueOf('--duration-ms')) : undefined,
+        });
+    emit(await enqueueToast(request, { stateRoot }));
+  } else if (toastCommand === 'inspect' || toastCommand === 'status') {
+    emit(await inspectToastViewport({ stateRoot }));
+  } else if (toastCommand === 'stop') {
+    emit(await stopToastViewport({ stateRoot }));
+  } else {
+    throw new Error('toast_command_unknown:' + toastCommand);
+  }
+} else if (command === 'start') {
   const documentPath = valueOf('--document');
   const document = documentPath
     ? JSON.parse(await readFile(documentPath, 'utf8'))

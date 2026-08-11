@@ -25,6 +25,8 @@ This package owns the generic overlay contract and mechanics:
 - lifecycle operations: start, inspect, refresh request, explicit focus request, and stop;
 - PowerShell host scripts exported through this package;
 - bounded diagnostics for lifecycle failures.
+- one shared lazy desktop-toast viewport with bounded transient ingress, dedupe, priority,
+  expiry, and typed `open_url`/`copy_text` actions.
 
 The public TypeScript entry point is `src/index.ts`. The generic executable is
 `narada-window-overlay-core`.
@@ -37,6 +39,12 @@ The public API groups are:
 - observation: `overlayStatus`, `readOverlayDocument`, and `overlayHostScriptPath`;
 - lifecycle: `startOverlay`, `requestOverlayRefresh`, `requestOverlayFocus`, `stopOverlay`,
   `inspectOverlay`, and `removeOverlayState`.
+- toast projection: `createToastRequest`, `enqueueToast`, `inspectToastViewport`, and
+  `stopToastViewport`.
+
+Keep toast state separate from overlay presence, layer, focus, position, and tiling. An ingress
+receipt proves atomic inbox admission, not rendering. Domain packages may adapt their notification
+envelopes to this API, but this package must not acquire Site or health-policy semantics.
 
 Do not put these concerns here:
 

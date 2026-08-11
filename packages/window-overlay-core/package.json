@@ -19,6 +19,9 @@
     "./install": "./src/Install-WindowSurfaceOverlay.ps1",
     "./start": "./src/Start-WindowSurfaceOverlay.ps1",
     "./stop": "./src/Stop-WindowSurfaceOverlay.ps1",
+    "./toast-host": "./src/window-toast-viewport.ps1",
+    "./toast-start": "./src/Start-WindowToastViewport.ps1",
+    "./toast-stop": "./src/Stop-WindowToastViewport.ps1",
     "./package.json": "./package.json"
   },
   "files": ["dist", "src", "README.md"],

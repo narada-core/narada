@@ -175,6 +175,8 @@ export {
   type NotificationRateLimiter,
   type NotificationEmitter,
   LogNotificationAdapter,
+  DesktopToastNotificationAdapter,
+  type DesktopToastNotificationAdapterOptions,
   DefaultNotificationEmitter,
   NullNotificationEmitter,
   notifyOperator,

@@ -7,9 +7,40 @@ import {
   SqliteNotificationRateLimiter,
   NullNotificationEmitter,
   DEFAULT_NOTIFICATION_COOLDOWN_MS,
+  DesktopToastNotificationAdapter,
 } from "../../src/notification.js";
 
 describe("notification", () => {
+  describe("DesktopToastNotificationAdapter", () => {
+    it("projects critical notifications as deduplicated foreground toasts", async () => {
+      const enqueue = vi.fn().mockResolvedValue({ status: "ingress_accepted" });
+      const adapter = new DesktopToastNotificationAdapter({ enqueue });
+      await adapter.emit({
+        site_id: "sonar", scope_id: "mail", severity: "critical", health_status: "auth_failed",
+        summary: "Authentication failed", detail: "Reconnect the account", suggested_action: "narada auth repair",
+        occurred_at: "2026-08-11T00:00:00Z", cooldown_until: "2026-08-11T00:15:00Z",
+      });
+      expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        attention: "foreground", tone: "danger", dedupe_key: "sonar:mail:auth_failed",
+        action: expect.objectContaining({ kind: "copy_text", text: "narada auth repair" }),
+      }), expect.any(Object));
+    });
+
+    it("maps warning URLs to background open actions", async () => {
+      const enqueue = vi.fn().mockResolvedValue({ status: "ingress_accepted" });
+      const adapter = new DesktopToastNotificationAdapter({ enqueue });
+      await adapter.emit({
+        site_id: "sonar", scope_id: "sync", severity: "warning", health_status: "degraded",
+        summary: "Sync delayed", detail: "Review status", suggested_action: "https://example.test/status",
+        occurred_at: "2026-08-11T00:00:00Z", cooldown_until: "2026-08-11T00:15:00Z",
+      });
+      expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        attention: "background", tone: "warning", duration_ms: 7_000,
+        action: expect.objectContaining({ kind: "open_url" }),
+      }), expect.any(Object));
+    });
+  });
+
   describe("LogNotificationAdapter", () => {
     it("emits structured JSON to console.warn", async () => {
       const adapter = new LogNotificationAdapter();

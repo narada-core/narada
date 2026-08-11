@@ -12,6 +12,7 @@ import {
   type OverlayVisibilityPolicyInput,
 } from './overlay-surface-fsm.js';
 export * from './overlay-surface-fsm.js';
+export * from './toast.js';
 
 export type OverlayTone = 'default' | 'muted' | 'success' | 'warning' | 'danger' | 'accent';
 export type OverlayActionKind = 'open_url' | 'refresh' | 'close' | 'restart';

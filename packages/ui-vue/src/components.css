@@ -184,4 +184,37 @@
 @keyframes narada-tooltip-show {
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: scale(1); }
+
+
+  .narada-button {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--button-text);
+    font: 700 0.875rem/1 var(--sans);
+  }
+
+  .narada-button:hover { background: var(--button-hover-bg); }
+  .narada-button:focus-visible,
+  .narada-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .narada-button:disabled { cursor: not-allowed; opacity: 0.55; }
+  .narada-button[data-variant="secondary"] { border-color: var(--line-strong); background: var(--surface); color: var(--text); }
+  .narada-button[data-variant="quiet"] { border-color: transparent; background: transparent; color: var(--accent); }
+
+  .narada-select {
+    min-height: 38px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    padding: 7px 32px 7px 10px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 650 0.875rem/1 var(--sans);
+  }
 }

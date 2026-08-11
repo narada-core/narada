@@ -23,7 +23,7 @@
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "pretest": "pnpm --filter @narada-core/ui build",
-    "test": "pnpm run typecheck && pnpm --filter @narada-core/ui build && vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts"
+    "test": "pnpm run typecheck && pnpm --filter @narada-core/ui build && vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts test/component-registry.test.ts"
   },
   "dependencies": {
     "@narada-core/ui": "workspace:*",

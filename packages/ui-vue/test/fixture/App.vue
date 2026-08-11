@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Button,
   Command,
   CommandEmpty,
   CommandItem,
@@ -12,10 +13,17 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Select,
 } from '@narada-core/ui-vue';
 </script>
 
 <template>
+  <Button>Primary action</Button>
+  <Select aria-label="Playback speed" model-value="1">
+    <option value="1">1×</option>
+    <option value="2">2×</option>
+  </Select>
+
   <TooltipProvider>
     <Tooltip>
       <TooltipTrigger as-child>

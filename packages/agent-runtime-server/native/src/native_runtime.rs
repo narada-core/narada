@@ -1089,6 +1089,10 @@ impl NativeRuntime {
         let mut event = map_event("session_started");
         put(&mut event, "runtime", "narada-agent-runtime-server");
         put(&mut event, "runtime_engine_kind", "rust");
+        put(&mut event, "session_id", self.config.session_id.clone());
+        put(&mut event, "carrier_session_id", self.config.session_id.clone());
+        put(&mut event, "agent_id", self.config.identity.clone());
+        put(&mut event, "site_id", env::var("NARADA_SITE_ID").ok());
         put(
             &mut event,
             "runtime_contract",
@@ -1103,6 +1107,11 @@ impl NativeRuntime {
                 .map(|authority| authority.implementation())
                 .unwrap_or("not_bound"),
         );
+        if let Some(authority) = self.authority.as_ref() {
+            put(&mut event, "source_write_admission", "active");
+            put(&mut event, "authority_epoch", authority.authority_epoch());
+            put(&mut event, "authority_runtime_id", authority.runtime_id());
+        }
         put(
             &mut event,
             "provider_adapter_kind",
@@ -2029,7 +2038,21 @@ impl NativeRuntime {
             .map_err(core_error)?;
         let mut input = json!({ "event_id": input_id, "request_id": request_id, "content": content, "source": "manual_operator", "source_kind": "operator", "transport": "jsonl_stdio", "delivery_mode": "immediate" });
         if let Some(params) = request_params(request) {
+            // Keep the public input-event identity and admission metadata when
+            // a carrier adapter forwards an already-shaped input.  The older
+            // path only copied a few session.submit fields, which caused the
+            // native authority to silently replace event ids and delivery
+            // semantics with runtime defaults.
             for key in [
+                "event_id",
+                "request_id",
+                "source",
+                "source_kind",
+                "source_id",
+                "transport",
+                "delivery_mode",
+                "created_at",
+                "received_at",
                 "idempotency_key",
                 "hold_condition",
                 "authority_ref",
@@ -3202,6 +3225,47 @@ mod tests {
             1
         );
         runtime.close(None).unwrap();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn session_submit_preserves_forwarded_input_identity_and_admission_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "narada-runtime-forwarded-input-{}",
+            Uuid::new_v4().simple()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let mut runtime = test_runtime(&root);
+        runtime.startup().unwrap();
+        let events = runtime
+            .handle(json!({
+                "id": "request-forwarded",
+                "method": "session.submit",
+                "params": {
+                    "event_id": "input-forwarded",
+                    "request_id": "request-forwarded",
+                    "content": "forwarded input",
+                    "source": "agent_control",
+                    "source_kind": "agent",
+                    "source_id": "adapter-test",
+                    "transport": "carrier_server_api",
+                    "delivery_mode": "admit_after_active_turn",
+                    "authority_ref": "nars-session-mcp:site:session:1",
+                    "directive_id": "directive-forwarded",
+                    "idempotency_key": "forwarded-key"
+                }
+            }))
+            .unwrap();
+        let queued = events
+            .iter()
+            .find(|event| event.get("event").and_then(Value::as_str) == Some("input_event_queued"))
+            .expect("queued event");
+        assert_eq!(queued["input_event_id"], "input-forwarded");
+        assert_eq!(queued["request_id"], "request-forwarded");
+        assert_eq!(queued["source"], "agent_control");
+        assert_eq!(queued["delivery_mode"], "admit_after_active_turn");
+        assert_eq!(queued["directive_id"], "directive-forwarded");
+        runtime.close(Some("close-forwarded".to_string())).unwrap();
         let _ = fs::remove_dir_all(root);
     }
 }

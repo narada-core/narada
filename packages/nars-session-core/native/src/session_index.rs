@@ -121,6 +121,7 @@ pub fn write_started(
         "authority_epoch": authority_epoch,
         "runtime_origin": runtime_origin,
         "authority_runtime_id": session_started.get("authority_runtime_id"),
+        "source_write_admission": session_started.get("source_write_admission"),
         "authority_transition_id": session_started.get("authority_transition_id"),
         "authority_handoff_evidence": session_started.get("authority_handoff_evidence"),
         "authority_reconciliation_evidence": session_started.get("authority_reconciliation_evidence"),

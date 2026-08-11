@@ -751,6 +751,19 @@ impl AuthorityBinding {
     pub fn implementation(&self) -> &'static str {
         "rust_sqlite"
     }
+
+    /// Stable runtime identity exposed to session projections and callers
+    /// that need to fence writes to the admitted authority.
+    pub fn runtime_id(&self) -> String {
+        format!(
+            "rust-session-authority:{}:{}",
+            self.session_id, self.authority_epoch
+        )
+    }
+
+    pub fn authority_epoch(&self) -> i64 {
+        self.authority_epoch
+    }
     pub fn activate(&mut self, now: &str, pid: Option<i64>) -> Result<Value, AuthorityError> {
         self.store.update_owned(
             &self.principal,

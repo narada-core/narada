@@ -237,7 +237,7 @@
       }
     },
     {
-      "component_kind": "mcp-javascript-surface",
+      "component_kind": "mcp-javascript-fallback-runtime",
       "package": "@narada-core/mcp-surfaces",
       "required": true,
       "profile_runtime_engine_kinds": {

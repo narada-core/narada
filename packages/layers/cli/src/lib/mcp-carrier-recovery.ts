@@ -10,8 +10,52 @@ export type McpWorkspaceDiscovery = {
 };
 
 export function isMcpRecoveryWorkspace(root: string): boolean {
-  return existsSync(join(root, 'scripts', 'recover-carrier-materialization.mjs'))
-    && existsSync(join(root, 'packages', 'mcp-registrar', 'package.json'));
+  return existsSync(join(root, 'packages', 'shared', 'mcp-materializer-native', 'package.json'))
+    || (existsSync(join(root, 'scripts', 'recover-carrier-materialization.mjs'))
+      && existsSync(join(root, 'packages', 'mcp-registrar', 'package.json')));
+}
+
+type NativeMaterializerRecovery = {
+  executable: string;
+  generationSidecar: string;
+  installedIndex: string;
+};
+
+function resolveNativeMaterializerRecovery(
+  workspaceRoot: string,
+  options: McpCarrierGenerationDiscoveryOptions = {},
+): NativeMaterializerRecovery {
+  const carrierHome = resolve(options.homeDirectory ?? process.env.NARADA_CARRIER_HOME?.trim() ?? homedir());
+  const installedIndex = resolve(options.installedCarrierIndexPath
+    ?? process.env.NARADA_INSTALLED_CARRIER_INDEX_PATH?.trim()
+    ?? join(carrierHome, '.narada', 'carriers', 'installed-carriers.json'));
+  if (!existsSync(installedIndex)) throw new Error('mcp_installed_carrier_index_missing:' + installedIndex);
+  const index = JSON.parse(readFileSync(installedIndex, 'utf8')) as { schema?: unknown; carriers?: unknown };
+  if (index.schema !== 'narada.installed_carrier_index.v1' || !Array.isArray(index.carriers)) {
+    throw new Error('mcp_installed_carrier_index_invalid:' + installedIndex);
+  }
+  for (const carrier of index.carriers) {
+    if (!carrier || typeof carrier !== 'object') continue;
+    const sidecar = (carrier as { generation_sidecar_path?: unknown }).generation_sidecar_path;
+    if (typeof sidecar !== 'string' || !existsSync(sidecar)) continue;
+    const generation = JSON.parse(readFileSync(sidecar, 'utf8')) as {
+      schema?: unknown;
+      artifact_manifest_path?: unknown;
+      registrar_entrypoint?: unknown;
+    };
+    if (generation.schema !== 'narada.mcp_materialization_generation.v1'
+      || typeof generation.artifact_manifest_path !== 'string'
+      || typeof generation.registrar_entrypoint !== 'string') continue;
+    const generationWorkspace = resolve(dirname(dirname(dirname(generation.artifact_manifest_path))));
+    const sameWorkspace = process.platform === 'win32'
+      ? generationWorkspace.toLowerCase() === resolve(workspaceRoot).toLowerCase()
+      : generationWorkspace === resolve(workspaceRoot);
+    if (!sameWorkspace) continue;
+    const executable = resolve(generation.registrar_entrypoint);
+    if (!existsSync(executable)) throw new Error('mcp_native_materializer_missing:' + executable);
+    return { executable, generationSidecar: resolve(sidecar), installedIndex };
+  }
+  throw new Error('mcp_native_materializer_generation_not_found:' + installedIndex);
 }
 
 export interface McpCarrierGenerationDiscoveryOptions {
@@ -162,16 +206,71 @@ export async function recoverMcpCarrierMaterialization(
   const discovery = discoverMcpRecoveryWorkspace(configuredRoot);
   if (!discovery) return { status: 'not_available', mutation_performed: false, workspace_discovery: { status: 'not_found' } };
   const mcpWorkspaceRoot = discovery.root;
-  const recoveryEntrypoint = join(mcpWorkspaceRoot, 'scripts', 'recover-carrier-materialization.mjs');
-  if (!existsSync(recoveryEntrypoint)) {
-    throw new Error('mcp_recovery_entrypoint_missing:' + recoveryEntrypoint);
+  let native: NativeMaterializerRecovery | null = null;
+  try {
+    native = resolveNativeMaterializerRecovery(mcpWorkspaceRoot);
+  } catch {
+    // Legacy fixtures and installations remain readable; native is preferred whenever installed.
+  }
+  const legacyEntrypoint = join(mcpWorkspaceRoot, 'scripts', 'recover-carrier-materialization.mjs');
+  if (!native && !existsSync(legacyEntrypoint)) {
+    throw new Error('mcp_recovery_entrypoint_missing:' + mcpWorkspaceRoot);
   }
   if (!execute) {
-    return { status: 'planned', mutation_performed: false, mcp_workspace_root: mcpWorkspaceRoot, recovery_entrypoint: recoveryEntrypoint, workspace_discovery: { status: 'found', source: discovery.source } };
+    return {
+      status: 'planned',
+      mutation_performed: false,
+      mcp_workspace_root: mcpWorkspaceRoot,
+      recovery_entrypoint: native?.executable ?? legacyEntrypoint,
+      recovery_args: native ? ['recover-generation', '--generation', native.generationSidecar] : [],
+      workspace_discovery: { status: 'found', source: discovery.source },
+    };
   }
   try {
-    const runtimeExecutable = resolveMcpRecoveryRuntimeExecutable();
-    const { stdout } = await execFileGoverned(runtimeExecutable, [recoveryEntrypoint], {
+    if (!native) {
+      const runtimeExecutable = resolveMcpRecoveryRuntimeExecutable();
+      const { stdout } = await execFileGoverned(runtimeExecutable, [legacyEntrypoint], {
+        cwd: mcpWorkspaceRoot,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        timeout: 600_000,
+        env: {
+          ...process.env,
+          NARADA_MCP_WORKSPACE_ROOT: mcpWorkspaceRoot,
+          ...(projectSiteRoot ? { NARADA_PROJECT_SITE_ROOT: projectSiteRoot } : {}),
+        },
+      });
+      const legacy = JSON.parse(String(stdout)) as Record<string, unknown>;
+      if (legacy.schema !== 'narada.carrier_materialization_recovery.v1'
+        || (legacy.status !== 'current' && legacy.status !== 'recovered')) {
+        throw new Error('mcp_recovery_invalid_result:' + String(stdout).slice(-2000));
+      }
+      return { ...legacy, workspace_discovery: { status: 'found', source: discovery.source } };
+    }
+    try {
+      const { stdout } = await execFileGoverned(native.executable, ['verify-all', '--installed-index', native.installedIndex], {
+        cwd: mcpWorkspaceRoot,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        timeout: 60_000,
+        env: process.env,
+      });
+      const verification = JSON.parse(String(stdout)) as Record<string, unknown>;
+      if (verification.schema === 'narada.mcp_materializer.verification.v1' && verification.status === 'current') {
+        return {
+          schema: 'narada.carrier_materialization_recovery.v1',
+          status: 'current',
+          mutation_performed: false,
+          restart_required: false,
+          restart_carrier_ids: [],
+          native_verification: verification,
+          workspace_discovery: { status: 'found', source: discovery.source },
+        };
+      }
+    } catch {
+      // Verification failure is the reason to invoke the native recovery authority.
+    }
+    const { stdout } = await execFileGoverned(native.executable, ['recover-generation', '--generation', native.generationSidecar], {
       cwd: mcpWorkspaceRoot,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
@@ -183,11 +282,26 @@ export async function recoverMcpCarrierMaterialization(
       },
     });
     const result = JSON.parse(String(stdout)) as Record<string, unknown>;
-    if (result.schema !== 'narada.carrier_materialization_recovery.v1'
-      || (result.status !== 'current' && result.status !== 'recovered')) {
+    if (result.schema !== 'narada.mcp_materializer.recovery_evidence.v1' || result.status !== 'recovered') {
       throw new Error('mcp_recovery_invalid_result:' + String(stdout).slice(-2000));
     }
-    return { ...result, workspace_discovery: { status: 'found', source: discovery.source } };
+    const verification = result.verification as { verified_carrier_ids?: unknown } | undefined;
+    const carrierIds = Array.isArray(verification?.verified_carrier_ids)
+      ? verification.verified_carrier_ids.map(String)
+      : [];
+    return {
+      schema: 'narada.carrier_materialization_recovery.v1',
+      status: 'recovered',
+      mutation_performed: true,
+      carrier_materialization_required: true,
+      all_carrier_materialization_performed: true,
+      restart_required: true,
+      restart_carrier_ids: carrierIds,
+      restart_pressure: result.restart_pressure,
+      restart_pressure_path: result.restart_pressure_path,
+      native_recovery_evidence: result,
+      workspace_discovery: { status: 'found', source: discovery.source },
+    };
   } catch (error) {
     const stderr = typeof (error as { stderr?: unknown }).stderr === 'string'
       ? (error as { stderr: string }).stderr.slice(-4000)

@@ -399,15 +399,21 @@ function selectLaunchRecords(records: WorkspaceLaunchRecord[], options: { all?: 
     throw new Error('launch_selection_required: specify --agent, --all, --site, --role, or --config-path');
   }
 
+  const initialSelectionCount = selected.length;
+  if (hasSiteSelector) {
+    selected = selected.filter((record) => recordMatchesSiteSelectors(record, siteSelectors));
+    if (selected.length === 0) {
+      throw new Error(`no_agents_match_site_filter: ${siteSelectors.join(', ')} (input_count=${initialSelectionCount})`);
+    }
+  }
+
+  const siteMatchCount = selected.length;
   if (hasRoleSelector) {
     const roles = new Set(roleSelectors.map((role) => role.toLowerCase()));
     selected = selected.filter((record) => roles.has(record.role.toLowerCase()));
-    if (selected.length === 0) throw new Error(`no_agents_match_role_filter: ${roleSelectors.join(', ')}`);
-  }
-
-  if (hasSiteSelector) {
-    selected = selected.filter((record) => recordMatchesSiteSelectors(record, siteSelectors));
-    if (selected.length === 0) throw new Error(`no_agents_match_site_filter: ${siteSelectors.join(', ')}`);
+    if (selected.length === 0) {
+      throw new Error(`no_agents_match_role_filter: ${roleSelectors.join(', ')} (site_match_count=${siteMatchCount})`);
+    }
   }
 
   return selected;

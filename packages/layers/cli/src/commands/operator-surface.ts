@@ -1799,6 +1799,40 @@ export async function operatorSurfaceAgentForkCommand(
   }
 }
 
+async function resolveOperatorSurfaceIdentityAuthorityRoot(cwd: string, siteId: string): Promise<string> {
+  const requestedRoot = resolve(cwd);
+  const configPaths = [
+    join(requestedRoot, '.narada', 'config.json'),
+    join(requestedRoot, 'config.json'),
+  ];
+  let discoveredSiteId: string | null = null;
+
+  for (const configPath of configPaths) {
+    if (!existsSync(configPath)) continue;
+    const config = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+    const configuredSiteId = typeof config.site_id === 'string' ? config.site_id.trim() : '';
+    if (configuredSiteId) discoveredSiteId = configuredSiteId;
+    const locus = config.locus && typeof config.locus === 'object' && !Array.isArray(config.locus)
+      ? config.locus as Record<string, unknown>
+      : {};
+    const configuredRoot = typeof locus.governance_root === 'string' && locus.governance_root.trim()
+      ? locus.governance_root.trim()
+      : typeof config.site_root === 'string' && config.site_root.trim()
+        ? config.site_root.trim()
+        : resolve(configPath, '..');
+    const siteArgumentTargetsAuthorityRoot = resolve(siteId) === resolve(configuredRoot);
+    if (configuredSiteId !== siteId && !siteArgumentTargetsAuthorityRoot) continue;
+    return resolve(configuredRoot);
+  }
+
+  if (discoveredSiteId) {
+    throw new Error(
+      `operator_surface_site_authority_mismatch: requested ${siteId}, discovered ${discoveredSiteId} under ${requestedRoot}`,
+    );
+  }
+  return requestedRoot;
+}
+
 export async function operatorSurfaceIdentityAddCommand(
   options: OperatorSurfaceIdentityAddOptions,
   _context: CommandContext,
@@ -1811,7 +1845,8 @@ export async function operatorSurfaceIdentityAddCommand(
     const agentKind = requireText(options.agentKind, '--agent-kind');
     const by = requireText(options.by, '--by');
     const now = new Date().toISOString();
-    const registry = await readOperatorSurfaceIdentities(cwd);
+    const authorityRoot = await resolveOperatorSurfaceIdentityAuthorityRoot(cwd, siteId);
+    const registry = await readOperatorSurfaceIdentities(authorityRoot);
     const existing = registry.identities.find((entry) => entry.identity_id === identityId);
     const inputCapabilities = parseInputCapabilities(options.inputCapabilities);
     const submitStrategy = parseSubmitStrategy(options.submitStrategy);
@@ -1857,7 +1892,7 @@ export async function operatorSurfaceIdentityAddCommand(
     } else {
       registry.identities.push(record);
     }
-    const path = await writeOperatorSurfaceIdentities(cwd, registry);
+    const path = await writeOperatorSurfaceIdentities(authorityRoot, registry);
     return {
       exitCode: ExitCode.SUCCESS,
       result: {

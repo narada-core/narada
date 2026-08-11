@@ -268,6 +268,52 @@ export interface SiteDoctorCheck {
   remediation?: string;
 }
 
+export type TaskLifecycleReadiness = 'required' | 'disabled' | 'unspecified';
+
+/**
+ * Task-lifecycle storage is an optional Site capability. Keep the baseline
+ * Site contract free of task storage unless a Site profile explicitly opts in
+ * through its task-lifecycle descriptor, required capability, MCP surface, or
+ * package selection.
+ */
+export function taskLifecycleReadiness(config: Record<string, unknown> | null): TaskLifecycleReadiness {
+  if (!config) return 'unspecified';
+
+  const taskLifecycle = config.task_lifecycle;
+  if (taskLifecycle && typeof taskLifecycle === 'object' && !Array.isArray(taskLifecycle)) {
+    const enable = (taskLifecycle as Record<string, unknown>).enable;
+    if (enable === false || enable === 'none' || enable === 'disabled') return 'disabled';
+    if (enable === true || (typeof enable === 'string' && enable.trim().length > 0)) return 'required';
+  }
+
+  const capabilities = config.capabilities;
+  if (capabilities && typeof capabilities === 'object' && !Array.isArray(capabilities)) {
+    const declared = (capabilities as Record<string, unknown>).required;
+    const denied = (capabilities as Record<string, unknown>).denied;
+    if (Array.isArray(declared) && declared.some((value) => String(value).toLowerCase() === 'task_lifecycle')) return 'required';
+    if (Array.isArray(denied) && denied.some((value) => String(value).toLowerCase() === 'task_lifecycle')) return 'disabled';
+  }
+
+  const mcp = config.mcp;
+  if (mcp && typeof mcp === 'object' && !Array.isArray(mcp)) {
+    const surfaces = (mcp as Record<string, unknown>).surfaces;
+    if (Array.isArray(surfaces) && surfaces.some((value) => {
+      const normalized = String(value).toLowerCase().replace(/[-_]/g, '');
+      return normalized === 'tasklifecycle' || normalized === 'sitetasklifecycle';
+    })) return 'required';
+  }
+
+  const packages = Array.isArray(config.packages) ? config.packages : [];
+  if (packages.some((value) => {
+    const packageName = value && typeof value === 'object'
+      ? (value as Record<string, unknown>).name ?? (value as Record<string, unknown>).package_name
+      : value;
+    return typeof packageName === 'string' && packageName.toLowerCase().includes('task-lifecycle');
+  })) return 'required';
+
+  return 'unspecified';
+}
+
 const SITE_SUBDIRECTORIES = [
   'state',
   'messages',
@@ -3278,6 +3324,8 @@ export interface SitesDoctorOptions extends SitesOptions {
   root?: string;
   authorityLocus?: string;
   kind?: string;
+  role?: string;
+  roleRequired?: boolean;
 }
 
 export interface SitesReconcileAgentCliWrapperOptions extends SitesOptions {
@@ -3845,6 +3893,18 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       surface: 'legacy-launcher',
       package: '',
       version: '',
+      hash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  if (text.includes('legacy_agent_context_server_retired')) {
+    return {
+      path: relativePath,
+      class: 'retired_refusal',
+      owner: 'narada-proper',
+      surface: 'agent-context-compatibility',
+      package: '@narada-core/agent-context-tools',
+      version: '0.1.0',
       hash,
       allowed_root_refs: allowedRootRefs,
     };
@@ -4606,7 +4666,7 @@ async function sitesClientDoctorCommand(
       workspace_root: workspaceRoot,
       site_root: siteRoot,
       governance_root: configRoot,
-      readiness: await assessSiteReadiness({ site: siteRoot, role: 'architect' }),
+      readiness: await assessSiteReadiness({ site: siteRoot }),
       checks,
     },
   };
@@ -4689,6 +4749,59 @@ async function sitesProjectDoctorCommand(
     );
   }
 
+  const rolePlanePath = join(siteRoot, '.ai', 'agents', 'role-plane.json');
+  if (!existsSync(rolePlanePath)) {
+    addCheck(
+      checks,
+      'role_runtime_plane_exists',
+      'fail',
+      `Role runtime plane is missing: ${rolePlanePath}`,
+      'Rerun narada sites bootstrap-project --workspace <path> --execute, then admit deferred role runtimes through their next_action commands',
+    );
+  } else {
+    addCheck(checks, 'role_runtime_plane_exists', 'pass', `Role runtime plane exists: ${rolePlanePath}`);
+    try {
+      const rolePlane = JSON.parse(await readFile(rolePlanePath, 'utf8')) as Record<string, unknown>;
+      const roles = Array.isArray(rolePlane.roles) ? rolePlane.roles as Array<Record<string, unknown>> : [];
+      addCheck(
+        checks,
+        'role_obligation_target_policy',
+        rolePlane.roles_are_obligation_targets === true ? 'pass' : 'fail',
+        rolePlane.roles_are_obligation_targets === true
+          ? 'Declared architect and builder roles are valid obligation targets'
+          : 'Role plane does not admit declared roles as obligation targets',
+        'Set roles_are_obligation_targets=true in the role-plane contract or stop declaring construction roles',
+      );
+      for (const requiredRole of ['architect', 'builder']) {
+        const role = roles.find((entry) => entry.role_id === requiredRole);
+        const status = typeof role?.declaration_status === 'string' ? role.declaration_status : '';
+        const nextAction = role?.next_action && typeof role.next_action === 'object' && !Array.isArray(role.next_action)
+          ? role.next_action as Record<string, unknown>
+          : null;
+        const active = status === 'active'
+          && role?.roster_status === 'active'
+          && role?.launcher_binding_status === 'active';
+        const coherentlyDeferred = status === 'declared_pending_runtime_admission'
+          && typeof nextAction?.command === 'string'
+          && nextAction.command.trim().length > 0;
+        addCheck(
+          checks,
+          `role_runtime_${requiredRole}`,
+          active || coherentlyDeferred ? 'pass' : 'fail',
+          active
+            ? `${requiredRole} has admitted roster and launcher bindings`
+            : coherentlyDeferred
+              ? `${requiredRole} is truthfully deferred with a machine-readable admission action`
+              : `${requiredRole} is declared without an admitted runtime or executable deferred action`,
+          `Admit the ${requiredRole} roster/launcher binding or publish its deferred next_action command`,
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addCheck(checks, 'role_runtime_plane_parse', 'fail', `Role runtime plane is invalid JSON: ${message}`);
+    }
+  }
+
   for (const directory of CLIENT_SITE_DIRECTORIES) {
     const pathValue = join(siteRoot, directory);
     addCheck(
@@ -4738,7 +4851,7 @@ async function sitesProjectDoctorCommand(
       site_kind: 'project',
       workspace_root: workspaceRoot,
       site_root: siteRoot,
-      readiness: await assessSiteReadiness({ site: siteRoot, role: 'architect' }),
+      readiness: await assessSiteReadiness({ site: siteRoot, role: options.role ?? 'architect', roleRequired: options.roleRequired ?? true }),
       checks,
     },
   };
@@ -5075,8 +5188,16 @@ export async function sitesDoctorCommand(
       addCheck(checks, 'registry_db_exists', 'fail', `Registry DB is missing: ${registryPath}`, 'Run narada sites init or registry discovery for this locus');
     }
 
-    const lifecycleDbPath = win32.join(siteRoot, '.ai', 'tasks', 'task-lifecycle.db');
-    if (existsSync(lifecycleDbPath)) {
+    const lifecycleDbCandidates = [
+      win32.join(siteRoot, '.ai', 'task-lifecycle.db'),
+      win32.join(siteRoot, '.ai', 'tasks', 'task-lifecycle.db'),
+    ];
+    const lifecycleReadiness = taskLifecycleReadiness(config);
+    const lifecycleDbPath = lifecycleDbCandidates.find((candidate) => existsSync(candidate)) ?? lifecycleDbCandidates[0];
+    const lifecycleDbExists = existsSync(lifecycleDbPath);
+    const lifecycleCheckRequired = lifecycleReadiness === 'required'
+      || (lifecycleReadiness === 'unspecified' && lifecycleDbExists);
+    if (lifecycleCheckRequired && lifecycleDbExists) {
       addCheck(checks, 'task_lifecycle_db_exists', 'pass', `Task lifecycle DB exists: ${lifecycleDbPath}`);
       try {
         const { Database } = await import('@narada-core/control-plane');
@@ -5096,8 +5217,18 @@ export async function sitesDoctorCommand(
         const message = err instanceof Error ? err.message : String(err);
         addCheck(checks, 'task_lifecycle_schema', 'fail', `Task lifecycle DB is not readable: ${message}`);
       }
+    } else if (lifecycleCheckRequired) {
+      addCheck(checks, 'task_lifecycle_db_exists', 'fail', `Task lifecycle DB is missing: ${lifecycleDbPath}`, 'Declare task_lifecycle capability only when this Site is intended to host task-lifecycle storage, then initialize it explicitly');
     } else {
-      addCheck(checks, 'task_lifecycle_db_exists', 'fail', `Task lifecycle DB is missing: ${lifecycleDbPath}`, 'Run narada sites init with current Windows User Site bootstrap');
+      addCheck(
+        checks,
+        'task_lifecycle_db_exists',
+        'declared_exception',
+        lifecycleReadiness === 'disabled'
+          ? 'Task lifecycle is disabled for this Site; storage is not required'
+          : 'Task lifecycle is not declared for this Site; storage is not required',
+        'Declare task_lifecycle in the Site profile before initializing task-lifecycle storage',
+      );
     }
     if (siteRoot) {
       await addSiteToolSurfaceChecks(checks, siteRoot);
@@ -5469,7 +5600,7 @@ function siteGovernanceCoordinates(args: {
       {
         role_id: 'architect',
         role_class: 'architect',
-        status: 'active',
+        status: 'declared_pending_runtime_admission',
         purpose: 'Specify governed work, preserve topology and doctrine, and frame review posture.',
         runtime_kind: 'codex_cli',
         authority_posture: 'specification',
@@ -5477,7 +5608,7 @@ function siteGovernanceCoordinates(args: {
       {
         role_id: 'builder',
         role_class: 'builder',
-        status: 'active',
+        status: 'declared_pending_runtime_admission',
         purpose: 'Execute approved local construction work packages and report verification evidence.',
         runtime_kind: 'codex_cli',
         authority_posture: 'construction',
@@ -5654,6 +5785,44 @@ function clientSiteConfig(args: {
   };
 }
 
+function projectRolePlane(args: {
+  siteId: string;
+  siteRoot: string;
+}): Record<string, unknown> {
+  const deferredRole = (role: 'architect' | 'builder') => ({
+    role_id: role,
+    declaration_status: 'declared_pending_runtime_admission',
+    obligation_target: true,
+    roster_status: 'pending',
+    launcher_binding_status: 'pending',
+    handoff_status: 'pending',
+    next_action: {
+      kind: 'operator_surface_identity_admission',
+      command: `narada operator-surface identity add ${args.siteId}.${role} --site ${args.siteId} --role ${role} --agent-kind codex_cli --by <principal> --cwd "${args.siteRoot}"`,
+    },
+  });
+  return {
+    schema: 'narada.site_role_runtime_plane.v1',
+    site_id: args.siteId,
+    authority_root: args.siteRoot,
+    roles_are_obligation_targets: true,
+    activation_rule: 'role_is_active_only_when_roster_and_launcher_binding_are_admitted',
+    roles: [
+      deferredRole('architect'),
+      deferredRole('builder'),
+      {
+        role_id: 'observer',
+        declaration_status: 'declared_on_demand',
+        obligation_target: false,
+        next_action: {
+          kind: 'operator_surface_identity_admission',
+          command: `narada operator-surface identity add ${args.siteId}.observer --site ${args.siteId} --role observer --agent-kind codex_cli --by <principal> --cwd "${args.siteRoot}"`,
+        },
+      },
+    ],
+  };
+}
+
 function projectSiteConfig(args: {
   siteId: string;
   workspaceRoot: string;
@@ -5686,13 +5855,21 @@ function projectSiteConfig(args: {
       governance_contained_in_dot_narada: true,
       project_artifacts_external_until_admitted: true,
     },
-    governance: siteGovernanceCoordinates({
-      siteId: args.siteId,
-      siteKind: 'project',
-      workspaceRoot: args.workspaceRoot,
-      siteRoot: args.siteRoot,
-      syncPosture: args.sync,
-    }),
+    governance: {
+      ...siteGovernanceCoordinates({
+        siteId: args.siteId,
+        siteKind: 'project',
+        workspaceRoot: args.workspaceRoot,
+        siteRoot: args.siteRoot,
+        syncPosture: args.sync,
+      }),
+      role_runtime_plane: {
+        schema: 'narada.site_role_runtime_plane.v1',
+        contract_path: join(args.siteRoot, '.ai', 'agents', 'role-plane.json'),
+        roles_are_obligation_targets: true,
+        activation_rule: 'role_is_active_only_when_roster_and_launcher_binding_are_admitted',
+      },
+    },
   };
 }
 
@@ -5970,10 +6147,6 @@ export async function sitesInitCommand(
           await mkdir(pathLib.join(siteRoot, subdir), { recursive: true });
         }
         await mkdir(join(siteRoot, '.ai'), { recursive: true });
-        await mkdir(pathLib.join(siteRoot, '.ai', 'tasks'), { recursive: true });
-        const { openTaskLifecycleStore } = await import('../lib/task-lifecycle-store.js');
-        const taskStore = openTaskLifecycleStore(siteRoot);
-        taskStore.db.close();
       }
 
       configContent = {
@@ -6327,11 +6500,17 @@ export async function sitesBootstrapProjectCommand(
     };
   }
   const config = projectSiteConfig({ siteId, workspaceRoot, siteRoot, sync });
-  const directories = CLIENT_SITE_DIRECTORIES.map((directory) => join(siteRoot, directory));
+  const rolePlanePath = join(siteRoot, '.ai', 'agents', 'role-plane.json');
+  const rolePlane = projectRolePlane({ siteId, siteRoot });
+  const directories = [
+    ...CLIENT_SITE_DIRECTORIES.map((directory) => join(siteRoot, directory)),
+    join(siteRoot, '.ai', 'agents'),
+  ];
   const files = [
     { path: join(siteRoot, 'config.json'), kind: 'config' },
     { path: join(siteRoot, 'README.md'), kind: 'guidance' },
     { path: join(siteRoot, 'AGENTS.md'), kind: 'guidance' },
+    { path: rolePlanePath, kind: 'role-runtime-plane' },
     { path: join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), kind: 'empty-directory-marker' },
     { path: join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), kind: 'empty-directory-marker' },
   ];
@@ -6342,6 +6521,7 @@ export async function sitesBootstrapProjectCommand(
       await mkdir(directory, { recursive: true });
     }
     await writeFile(join(siteRoot, 'config.json'), JSON.stringify(config, null, 2) + '\n', 'utf8');
+    await writeFile(rolePlanePath, JSON.stringify(rolePlane, null, 2) + '\n', 'utf8');
     await writeFile(
       join(siteRoot, 'README.md'),
       [

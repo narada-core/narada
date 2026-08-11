@@ -461,7 +461,7 @@ test('runtime profiles expose coherent user choices over the implementation matr
 
 test('runtime materialization plan is matrix-derived for every admitted profile', () => {
   const expected: Record<string, Record<string, string>> = {
-    native: { 'mcp-runtime-proxy': 'rust', 'mcp-loader-mcp': 'rust', 'filesystem-mcp': 'rust', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'rust', 'catalog-observation-mcp': 'rust', 'operator-routing-mcp': 'rust', 'site-inbox-mcp': 'rust' },
+    native: { 'mcp-runtime-proxy': 'rust', 'mcp-loader-mcp': 'rust', 'filesystem-mcp': 'rust', 'agent-context-mcp': 'bun', 'mcp-registrar': 'rust', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'rust', 'catalog-observation-mcp': 'rust', 'operator-routing-mcp': 'rust', 'site-inbox-mcp': 'rust' },
     bun: { 'mcp-runtime-proxy': 'bun', 'mcp-loader-mcp': 'bun', 'filesystem-mcp': 'bun', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun', 'structured-command-mcp': 'bun', 'catalog-observation-mcp': 'bun', 'operator-routing-mcp': 'bun', 'site-inbox-mcp': 'bun' },
     'node-compat': { 'mcp-runtime-proxy': 'node', 'mcp-loader-mcp': 'node', 'filesystem-mcp': 'node', 'agent-context-mcp': 'node', 'mcp-registrar': 'node', 'mcp-javascript-surface': 'node', 'structured-command-mcp': 'node', 'catalog-observation-mcp': 'node', 'operator-routing-mcp': 'node', 'site-inbox-mcp': 'node' },
   };

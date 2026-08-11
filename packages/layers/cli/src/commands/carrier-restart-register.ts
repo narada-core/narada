@@ -11,6 +11,7 @@ export function registerCarrierRestartCommands(program: Command): void {
     .description('Inspect/build/rematerialize all MCP carriers, then activate a governed successor for the selected managed carrier when required.')
     .option('--mcp-workspace-root <path>', 'mcp-surfaces workspace; otherwise use bounded standard discovery.')
     .requiredOption('--carrier-id <carrier-id>', 'Materialized carrier id, such as codex-andrey.')
+    .requiredOption('--lifecycle-adapter <adapter-id>', 'Explicit activation adapter; currently nars-successor-v1 for a NARS-managed carrier session.')
     .requiredOption('--site-root <path>', 'Owning Site root.')
     .requiredOption('--site-id <site-id>', 'Owning Site identifier.')
     .requiredOption('--carrier-session-id <session-id>', 'Active source carrier session identifier.')
@@ -30,6 +31,7 @@ export function registerCarrierRestartCommands(program: Command): void {
       invocation: (opts) => carrierRecoverCommand({
         mcpWorkspaceRoot: opts.mcpWorkspaceRoot as string,
         carrierId: opts.carrierId as string,
+        lifecycleAdapter: opts.lifecycleAdapter as string,
         siteRoot: opts.siteRoot as string,
         pcSiteRoot: opts.pcSiteRoot as string | undefined,
         siteId: opts.siteId as string,

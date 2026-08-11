@@ -1,8 +1,13 @@
-import { requestCarrierRestart, showCarrierRestartOutcome } from '@narada-core/site-common-tools/operator-surface/carrier-restart-supervisor';
+import {
+  requestCarrierRestart,
+  showCarrierRestartOutcome,
+  type CarrierRestartSupervisorDependencies,
+} from '@narada-core/site-common-tools/operator-surface/carrier-restart-supervisor';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { recoverMcpCarrierMaterialization } from '../lib/mcp-carrier-recovery.js';
+import { resolveMcpCarrierLifecycleAdapter } from '../lib/mcp-carrier-lifecycle-adapter.js';
 
 export interface CarrierRestartOptions {
   siteRoot?: string;
@@ -18,6 +23,7 @@ export interface CarrierRestartOptions {
   mutatingAuthorized?: string;
   mcpWorkspaceRoot?: string;
   carrierId?: string;
+  lifecycleAdapter?: string;
   format?: CliFormat;
 }
 
@@ -48,11 +54,15 @@ export async function carrierRecoverCommand(
   dependencies: {
     recover?: typeof recoverMcpCarrierMaterialization;
     restart?: typeof carrierRestartCommand;
+    restartSupervisor?: CarrierRestartSupervisorDependencies;
   } = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const recover = dependencies.recover ?? recoverMcpCarrierMaterialization;
-  const restartCarrier = dependencies.restart ?? carrierRestartCommand;
   const carrierId = requireOption(options.carrierId, '--carrier-id');
+  const lifecycleAdapter = resolveMcpCarrierLifecycleAdapter(options.lifecycleAdapter, carrierId);
+  const restartCarrier = (restartOptions: CarrierRestartOptions) => dependencies.restart
+    ? dependencies.restart(restartOptions, context)
+    : carrierRestartCommand(restartOptions, context, { supervisor: dependencies.restartSupervisor });
   const recovery = await recover(
     options.mcpWorkspaceRoot,
     options.siteRoot,
@@ -64,18 +74,20 @@ export async function carrierRecoverCommand(
       status: 'recovery_unavailable',
       mutation_performed: false,
       carrier_id: carrierId,
+      lifecycle_adapter: lifecycleAdapter,
       recovery,
       restart: null,
     };
     return { exitCode: ExitCode.INVALID_CONFIG, result: formattedResult(result, 'MCP recovery workspace unavailable.', options.format ?? 'auto') };
   }
   if (options.dryRun === true) {
-    const restart = await restartCarrier({ ...options, dryRun: true }, context);
+    const restart = await restartCarrier({ ...options, dryRun: true });
     const result = {
       schema: 'narada.carrier.recover_and_relaunch.v1',
       status: 'planned',
       mutation_performed: false,
       carrier_id: carrierId,
+      lifecycle_adapter: lifecycleAdapter,
       recovery,
       restart: restart.result,
     };
@@ -88,20 +100,25 @@ export async function carrierRecoverCommand(
       status: decision.restart_required ? 'recovered_restart_not_selected' : 'current',
       mutation_performed: recovery.status === 'recovered',
       carrier_id: carrierId,
+      lifecycle_adapter: lifecycleAdapter,
       recovery,
       restart_decision: decision,
       restart: null,
     };
     return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, 'Carrier materialization recovered; selected carrier restart not required.', options.format ?? 'auto') };
   }
-  const restart = await restartCarrier(options, context);
+  const restart = await restartCarrier(options);
+  const restartDecision = restart.exitCode === ExitCode.SUCCESS
+    ? decision
+    : { ...decision, outstanding_carrier_ids: decision.affected_carrier_ids };
   const result = {
     schema: 'narada.carrier.recover_and_relaunch.v1',
     status: restart.exitCode === ExitCode.SUCCESS ? 'completed' : 'restart_failed',
     mutation_performed: recovery.status === 'recovered' || restart.exitCode === ExitCode.SUCCESS,
     carrier_id: carrierId,
+    lifecycle_adapter: lifecycleAdapter,
     recovery,
-    restart_decision: decision,
+    restart_decision: restartDecision,
     restart: restart.result,
   };
   return {
@@ -114,6 +131,7 @@ export async function carrierRecoverCommand(
 export async function carrierRestartCommand(
   options: CarrierRestartOptions,
   _context: CommandContext,
+  dependencies: { supervisor?: CarrierRestartSupervisorDependencies } = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const expectedState = parseExpectedState(options.expectedStateJson);
   const outcome = await requestCarrierRestart({
@@ -129,6 +147,7 @@ export async function carrierRestartCommand(
   }, {
     siteRoot: options.siteRoot ?? process.cwd(),
     pcSiteRoot: options.pcSiteRoot ?? process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2',
+    ...dependencies.supervisor,
   });
   const success = outcome.status === 'completed' || outcome.status === 'planned';
   return {

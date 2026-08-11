@@ -40,11 +40,13 @@ async function tempWorkspace(prefix: string): Promise<string> {
 const originalAutoDiscovery = process.env.NARADA_MCP_AUTO_DISCOVERY;
 const originalSourceRoot = process.env.NARADA_SRC_ROOT;
 const originalCodexHome = process.env.CODEX_HOME;
+const originalCarrierHome = process.env.NARADA_CARRIER_HOME;
 
 beforeEach(() => {
   process.env.NARADA_MCP_AUTO_DISCOVERY = '0';
   delete process.env.NARADA_SRC_ROOT;
   delete process.env.CODEX_HOME;
+  delete process.env.NARADA_CARRIER_HOME;
 });
 afterEach(async () => {
   if (originalAutoDiscovery === undefined) delete process.env.NARADA_MCP_AUTO_DISCOVERY;
@@ -53,6 +55,8 @@ afterEach(async () => {
   else process.env.NARADA_SRC_ROOT = originalSourceRoot;
   if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
   else process.env.CODEX_HOME = originalCodexHome;
+  if (originalCarrierHome === undefined) delete process.env.NARADA_CARRIER_HOME;
+  else process.env.NARADA_CARRIER_HOME = originalCarrierHome;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -252,6 +256,7 @@ describe('sitesBootstrapProjectCommand', () => {
     }));
     process.env.NARADA_MCP_AUTO_DISCOVERY = '1';
     process.env.CODEX_HOME = codexHome;
+    process.env.NARADA_CARRIER_HOME = codexHome;
 
     const result = await sitesBootstrapProjectCommand({
       workspace,

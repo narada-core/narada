@@ -6,6 +6,7 @@ import { execFileGoverned } from '@narada-core/process-launch-posture';
 export type McpWorkspaceDiscovery = {
   root: string;
   source: 'cli_option' | 'environment' | 'carrier_generation' | 'source_root' | 'user_source_root' | 'source_sibling';
+  carrier_ids?: Array<'codex-andrey' | 'kimi-andrey' | 'opencode-andrey'>;
 };
 
 export function isMcpRecoveryWorkspace(root: string): boolean {
@@ -13,9 +14,12 @@ export function isMcpRecoveryWorkspace(root: string): boolean {
     && existsSync(join(root, 'packages', 'mcp-registrar', 'package.json'));
 }
 
-function carrierGenerationWorkspace(): string | null {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');
-  const sidecarPath = join(codexHome, 'config.toml.narada-generation.json');
+export interface McpCarrierGenerationDiscoveryOptions {
+  homeDirectory?: string;
+  codexHome?: string;
+}
+
+function workspaceFromGenerationSidecar(sidecarPath: string): string | null {
   if (!existsSync(sidecarPath)) return null;
   try {
     const generation = JSON.parse(readFileSync(sidecarPath, 'utf8')) as { artifact_manifest_path?: unknown };
@@ -26,7 +30,31 @@ function carrierGenerationWorkspace(): string | null {
   }
 }
 
-export function discoverMcpRecoveryWorkspace(configuredRoot: string | undefined): McpWorkspaceDiscovery | null {
+export function carrierGenerationWorkspaces(
+  options: McpCarrierGenerationDiscoveryOptions = {},
+): McpWorkspaceDiscovery[] {
+  const home = resolve(options.homeDirectory ?? process.env.NARADA_CARRIER_HOME?.trim() ?? homedir());
+  const codexHome = options.codexHome?.trim()
+    || (options.homeDirectory ? join(home, '.codex') : process.env.CODEX_HOME?.trim())
+    || join(home, '.codex');
+  const candidates = [
+    {
+      carrier_id: 'codex-andrey' as const,
+      sidecar_path: join(codexHome, 'config.toml.narada-generation.json'),
+    },
+    { carrier_id: 'kimi-andrey' as const, sidecar_path: join(home, '.kimi-code', 'mcp.json.narada-generation.json') },
+    { carrier_id: 'opencode-andrey' as const, sidecar_path: join(home, '.config', 'opencode', 'opencode.jsonc.narada-generation.json') },
+  ];
+  return candidates.flatMap((candidate) => {
+    const root = workspaceFromGenerationSidecar(candidate.sidecar_path);
+    return root ? [{ root, source: 'carrier_generation' as const, carrier_ids: [candidate.carrier_id] }] : [];
+  });
+}
+
+export function discoverMcpRecoveryWorkspace(
+  configuredRoot: string | undefined,
+  discoveryOptions: McpCarrierGenerationDiscoveryOptions = {},
+): McpWorkspaceDiscovery | null {
   const declared = [
     { value: configuredRoot, source: 'cli_option' as const },
     { value: process.env.NARADA_MCP_WORKSPACE_ROOT, source: 'environment' as const },
@@ -35,14 +63,26 @@ export function discoverMcpRecoveryWorkspace(configuredRoot: string | undefined)
     if (candidate.value?.trim()) return { root: resolve(candidate.value), source: candidate.source };
   }
   if (process.env.NARADA_MCP_AUTO_DISCOVERY === '0') return null;
-  const generatedWorkspace = carrierGenerationWorkspace();
+  const sourceRootWorkspace = process.env.NARADA_SRC_ROOT?.trim()
+    ? resolve(process.env.NARADA_SRC_ROOT, 'mcp-surfaces')
+    : null;
+  if (sourceRootWorkspace && isMcpRecoveryWorkspace(sourceRootWorkspace)) {
+    return { root: sourceRootWorkspace, source: 'source_root' };
+  }
+  const generatedWorkspaces = carrierGenerationWorkspaces(discoveryOptions);
+  const generatedByRoot = new Map<string, McpWorkspaceDiscovery>();
+  for (const generated of generatedWorkspaces) {
+    const key = process.platform === 'win32' ? generated.root.toLowerCase() : generated.root;
+    const existing = generatedByRoot.get(key);
+    if (existing) existing.carrier_ids = [...(existing.carrier_ids ?? []), ...(generated.carrier_ids ?? [])];
+    else generatedByRoot.set(key, { ...generated });
+  }
+  if (generatedByRoot.size > 1) {
+    throw new Error('mcp_carrier_generation_workspace_conflict:' + JSON.stringify([...generatedByRoot.values()]));
+  }
+  const generatedWorkspace = [...generatedByRoot.values()][0];
   const inferred = [
-    ...(process.env.NARADA_SRC_ROOT?.trim()
-      ? [{ root: resolve(process.env.NARADA_SRC_ROOT, 'mcp-surfaces'), source: 'source_root' as const }]
-      : []),
-    ...(generatedWorkspace
-      ? [{ root: generatedWorkspace, source: 'carrier_generation' as const }]
-      : []),
+    ...(generatedWorkspace ? [generatedWorkspace] : []),
     { root: resolve(homedir(), 'src', 'mcp-surfaces'), source: 'user_source_root' as const },
     {
       root: resolve(fileURLToPath(new URL('../../../../../../mcp-surfaces', import.meta.url))),
@@ -57,6 +97,19 @@ export function discoverMcpRecoveryWorkspace(configuredRoot: string | undefined)
     if (isMcpRecoveryWorkspace(candidate.root)) return candidate;
   }
   return null;
+}
+export function resolveMcpRecoveryRuntimeExecutable(): string {
+  const candidates = [
+    process.env.NARADA_NODE_EXECUTABLE?.trim(),
+    process.execPath,
+    process.platform === 'win32' && process.env.FNM_DIR?.trim()
+      ? join(process.env.FNM_DIR, 'node-versions', 'v' + process.versions.node, 'installation', 'node.exe')
+      : undefined,
+    process.platform === 'win32' && process.env.APPDATA?.trim()
+      ? join(process.env.APPDATA, 'fnm', 'node-versions', 'v' + process.versions.node, 'installation', 'node.exe')
+      : undefined,
+  ];
+  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate))) ?? 'node';
 }
 export async function recoverMcpCarrierMaterialization(
   configuredRoot: string | undefined,
@@ -74,7 +127,8 @@ export async function recoverMcpCarrierMaterialization(
     return { status: 'planned', mutation_performed: false, mcp_workspace_root: mcpWorkspaceRoot, recovery_entrypoint: recoveryEntrypoint, workspace_discovery: { status: 'found', source: discovery.source } };
   }
   try {
-    const { stdout } = await execFileGoverned(process.execPath, [recoveryEntrypoint], {
+    const runtimeExecutable = resolveMcpRecoveryRuntimeExecutable();
+    const { stdout } = await execFileGoverned(runtimeExecutable, [recoveryEntrypoint], {
       cwd: mcpWorkspaceRoot,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,

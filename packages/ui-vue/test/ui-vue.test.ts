@@ -20,3 +20,11 @@ test('Vue consumer fixture imports the internal source component package', async
   assert.match(app, /<DropdownMenuItem/);
   assert.match(html, /assets\//);
 });
+
+test('component primitives remain outside animation keyframes', async () => {
+  const styles = await readFile(resolve(packageRoot, 'src/components.css'), 'utf8');
+
+  assert.match(styles, /@keyframes narada-tooltip-show[\s\S]*?\n}\s*\n\s*@layer narada-vue-primitives \{/);
+  assert.match(styles, /@layer narada-vue-primitives \{[\s\S]*?\.narada-button \{/);
+  assert.match(styles, /@layer narada-vue-primitives \{[\s\S]*?\.narada-select \{/);
+});

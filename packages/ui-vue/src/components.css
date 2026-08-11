@@ -184,8 +184,9 @@
 @keyframes narada-tooltip-show {
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: scale(1); }
+}
 
-
+@layer narada-vue-primitives {
   .narada-button {
     display: inline-flex;
     min-height: 38px;

@@ -1214,6 +1214,7 @@ export function createSessionCoreRuntimeService({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
       runtime_engine_kind: runtimeContext.runtimeEngineKind ?? process.env.NARADA_RUNTIME_ENGINE ?? DEFAULT_RUNTIME_ENGINE,
+      materialized_carrier_id: process.env.NARADA_MATERIALIZED_CARRIER_ID?.trim() || null,
       transport: 'jsonl_stdio',
       runtime_contract: 'nars_session_core_control.v1',
       runtime_origin: 'local',

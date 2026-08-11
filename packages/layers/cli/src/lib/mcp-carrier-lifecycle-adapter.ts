@@ -1,3 +1,4 @@
+import { discoverNarsSessions } from '@narada-core/nars-session-core/session-index';
 export const MCP_CARRIER_LIFECYCLE_ADAPTERS = {
   'nars-successor-v1': {
     adapter_id: 'nars-successor-v1',
@@ -25,4 +26,15 @@ export function resolveMcpCarrierLifecycleAdapter(
     throw new Error('mcp_carrier_lifecycle_adapter_carrier_unsupported:' + adapterId + ':' + carrierId);
   }
   return adapter;
+}
+export function assertMcpCarrierSessionBinding(siteRoot: string, sessionId: string, carrierId: string): Record<string, unknown> {
+  const discovery = discoverNarsSessions({ siteRoot });
+  const session = discovery.sessions.find((candidate) => candidate.session_id === sessionId || candidate.carrier_session_id === sessionId);
+  if (!session) throw new Error('mcp_carrier_session_not_found:' + sessionId);
+  const boundCarrierId = typeof session.materialized_carrier_id === 'string' ? session.materialized_carrier_id.trim() : '';
+  if (!boundCarrierId) throw new Error('mcp_carrier_session_binding_missing:' + sessionId);
+  if (boundCarrierId !== carrierId) {
+    throw new Error('mcp_carrier_session_binding_mismatch:' + sessionId + ':expected=' + carrierId + ':actual=' + boundCarrierId);
+  }
+  return { session_id: session.session_id ?? sessionId, materialized_carrier_id: boundCarrierId, record_path: session.record_path ?? null };
 }

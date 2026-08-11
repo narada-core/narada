@@ -17,6 +17,7 @@ export function isMcpRecoveryWorkspace(root: string): boolean {
 export interface McpCarrierGenerationDiscoveryOptions {
   homeDirectory?: string;
   codexHome?: string;
+  installedCarrierIndexPath?: string;
 }
 
 function workspaceFromGenerationSidecar(sidecarPath: string): string | null {
@@ -37,11 +38,30 @@ export function carrierGenerationWorkspaces(
   const codexHome = options.codexHome?.trim()
     || (options.homeDirectory ? join(home, '.codex') : process.env.CODEX_HOME?.trim())
     || join(home, '.codex');
+  const indexPath = resolve(options.installedCarrierIndexPath
+    ?? process.env.NARADA_INSTALLED_CARRIER_INDEX_PATH?.trim()
+    ?? join(home, '.narada', 'carriers', 'installed-carriers.json'));
+  const indexedCandidates: Array<{ carrier_id: 'codex-andrey' | 'kimi-andrey' | 'opencode-andrey'; sidecar_path: string }> = [];
+  if (existsSync(indexPath)) {
+    try {
+      const index = JSON.parse(readFileSync(indexPath, 'utf8')) as { schema?: unknown; carriers?: unknown };
+      if (index.schema !== 'narada.installed_carrier_index.v1' || !Array.isArray(index.carriers)) throw new Error('invalid_schema');
+      for (const entry of index.carriers) {
+        if (!entry || typeof entry !== 'object') continue;
+        const carrierId = (entry as { carrier_id?: unknown }).carrier_id;
+        const sidecarPath = (entry as { generation_sidecar_path?: unknown }).generation_sidecar_path;
+        if ((carrierId === 'codex-andrey' || carrierId === 'kimi-andrey' || carrierId === 'opencode-andrey')
+          && typeof sidecarPath === 'string' && sidecarPath.trim()) {
+          indexedCandidates.push({ carrier_id: carrierId, sidecar_path: resolve(sidecarPath) });
+        }
+      }
+    } catch (error) {
+      throw new Error('mcp_installed_carrier_index_invalid:' + indexPath + ':' + (error instanceof Error ? error.message : String(error)));
+    }
+  }
   const candidates = [
-    {
-      carrier_id: 'codex-andrey' as const,
-      sidecar_path: join(codexHome, 'config.toml.narada-generation.json'),
-    },
+    ...indexedCandidates,
+    { carrier_id: 'codex-andrey' as const, sidecar_path: join(codexHome, 'config.toml.narada-generation.json') },
     { carrier_id: 'kimi-andrey' as const, sidecar_path: join(home, '.kimi-code', 'mcp.json.narada-generation.json') },
     { carrier_id: 'opencode-andrey' as const, sidecar_path: join(home, '.config', 'opencode', 'opencode.jsonc.narada-generation.json') },
   ];
@@ -97,6 +117,29 @@ export function discoverMcpRecoveryWorkspace(
     if (isMcpRecoveryWorkspace(candidate.root)) return candidate;
   }
   return null;
+}
+export async function acknowledgeMcpCarrierRestart(
+  configuredRoot: string | undefined,
+  carrierId: string,
+  expectedPressureRef?: string,
+): Promise<Record<string, unknown>> {
+  const discovery = discoverMcpRecoveryWorkspace(configuredRoot);
+  if (!discovery) throw new Error('mcp_recovery_workspace_not_found_for_restart_ack');
+  const recoveryEntrypoint = join(discovery.root, 'scripts', 'recover-carrier-materialization.mjs');
+  const runtimeExecutable = resolveMcpRecoveryRuntimeExecutable();
+  const args = [recoveryEntrypoint, '--ack-carrier', carrierId, ...(expectedPressureRef ? ['--expected-pressure-ref', expectedPressureRef] : [])];
+  const { stdout } = await execFileGoverned(runtimeExecutable, args, {
+    cwd: discovery.root,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    timeout: 30_000,
+    env: { ...process.env, NARADA_MCP_WORKSPACE_ROOT: discovery.root },
+  });
+  const result = JSON.parse(String(stdout)) as Record<string, unknown>;
+  if (result.schema !== 'narada.carrier_restart_acknowledgement.v1') {
+    throw new Error('mcp_restart_ack_invalid_result:' + String(stdout).slice(-2000));
+  }
+  return result;
 }
 export function resolveMcpRecoveryRuntimeExecutable(): string {
   const candidates = [

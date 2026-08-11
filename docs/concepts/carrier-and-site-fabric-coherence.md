@@ -96,6 +96,8 @@ It fails when:
 
 `narada carrier recover` is the composed operator operation for an installed MCP workspace and one managed carrier. It discovers or accepts the workspace, performs stale-only all-carrier build/materialization, and activates a governed successor for the selected carrier only when that carrier appears in the recovery result's affected set. Required Site/session/operation/authority fields are the same evidence required by `narada carrier restart`. The caller must also select `--lifecycle-adapter nars-successor-v1`; this makes explicit that activation is a PC-owned NARS session authority handoff, not an ungoverned process kill or an assertion that a carrier can restart itself.
 
+Restart pressure is durable and generation-specific: no-op recovery does not erase it, and only a successful successor for the bound `materialized_carrier_id` may acknowledge the exact pending materialization evidence. The registrar also publishes a canonical installed-carrier index so custom config paths remain discoverable.
+
 All-carrier materialization and one-carrier activation are deliberately different scopes. Configuration convergence covers every registered carrier; a command invocation can control only the selected managed carrier lifecycle. The result therefore preserves `outstanding_carrier_ids` for affected sibling carriers instead of claiming they restarted. A dry run plans both phases without mutation.
 
 The recovery emits a compact result plus a durable evidence reference. The evidence artifact, not terminal scrollback, owns the full inspection and materialization record. Recovery evidence preserves the current write and then uses a newest-first bounded retention policy so repeated no-op checks cannot grow storage without limit.

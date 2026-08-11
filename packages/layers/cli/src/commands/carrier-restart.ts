@@ -6,8 +6,8 @@ import {
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { recoverMcpCarrierMaterialization } from '../lib/mcp-carrier-recovery.js';
-import { resolveMcpCarrierLifecycleAdapter } from '../lib/mcp-carrier-lifecycle-adapter.js';
+import { acknowledgeMcpCarrierRestart, recoverMcpCarrierMaterialization } from '../lib/mcp-carrier-recovery.js';
+import { assertMcpCarrierSessionBinding, resolveMcpCarrierLifecycleAdapter } from '../lib/mcp-carrier-lifecycle-adapter.js';
 
 export interface CarrierRestartOptions {
   siteRoot?: string;
@@ -55,11 +55,15 @@ export async function carrierRecoverCommand(
     recover?: typeof recoverMcpCarrierMaterialization;
     restart?: typeof carrierRestartCommand;
     restartSupervisor?: CarrierRestartSupervisorDependencies;
+    verifyBinding?: typeof assertMcpCarrierSessionBinding;
+    acknowledgeRestart?: typeof acknowledgeMcpCarrierRestart;
   } = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const recover = dependencies.recover ?? recoverMcpCarrierMaterialization;
   const carrierId = requireOption(options.carrierId, '--carrier-id');
   const lifecycleAdapter = resolveMcpCarrierLifecycleAdapter(options.lifecycleAdapter, carrierId);
+  const carrierSessionId = requireOption(options.carrierSessionId, '--carrier-session-id');
+  const sessionBinding = (dependencies.verifyBinding ?? assertMcpCarrierSessionBinding)(options.siteRoot ?? process.cwd(), carrierSessionId, carrierId);
   const restartCarrier = (restartOptions: CarrierRestartOptions) => dependencies.restart
     ? dependencies.restart(restartOptions, context)
     : carrierRestartCommand(restartOptions, context, { supervisor: dependencies.restartSupervisor });
@@ -111,14 +115,25 @@ export async function carrierRecoverCommand(
   const restartDecision = restart.exitCode === ExitCode.SUCCESS
     ? decision
     : { ...decision, outstanding_carrier_ids: decision.affected_carrier_ids };
+  const carrierPressure = recovery.restart_pressure && typeof recovery.restart_pressure === 'object'
+    ? (recovery.restart_pressure as Record<string, unknown>)[carrierId]
+    : null;
+  const pressureRef = carrierPressure && typeof carrierPressure === 'object' && typeof (carrierPressure as Record<string, unknown>).evidence_ref === 'string'
+    ? String((carrierPressure as Record<string, unknown>).evidence_ref)
+    : undefined;
+  const restartAcknowledgement = restart.exitCode === ExitCode.SUCCESS
+    ? await (dependencies.acknowledgeRestart ?? acknowledgeMcpCarrierRestart)(options.mcpWorkspaceRoot, carrierId, pressureRef)
+    : null;
   const result = {
     schema: 'narada.carrier.recover_and_relaunch.v1',
     status: restart.exitCode === ExitCode.SUCCESS ? 'completed' : 'restart_failed',
     mutation_performed: recovery.status === 'recovered' || restart.exitCode === ExitCode.SUCCESS,
     carrier_id: carrierId,
     lifecycle_adapter: lifecycleAdapter,
+    session_binding: sessionBinding,
     recovery,
     restart_decision: restartDecision,
+    restart_acknowledgement: restartAcknowledgement,
     restart: restart.result,
   };
   return {

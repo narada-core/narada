@@ -16,16 +16,15 @@
     "types": [
       "node"
     ],
-    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "@narada-core/ui-vue": [
-        "src/index.ts"
+        "./src/index.ts"
       ],
       "@narada-core/ui-vue/styles.css": [
-        "src/styles.css"
+        "./src/styles.css"
       ],
       "@narada-core/ui/styles.css": [
         "../ui/src/styles.css"

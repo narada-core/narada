@@ -11,6 +11,8 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./button": "./src/components/button/index.ts",
+    "./select": "./src/components/select/index.ts",
     "./components.css": "./src/components.css",
     "./styles.css": "./src/styles.css",
     "./package.json": "./package.json"

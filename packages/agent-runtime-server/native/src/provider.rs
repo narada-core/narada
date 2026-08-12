@@ -188,7 +188,7 @@ impl<'a> NativeProviderAdapter<'a> {
             self.emit_invocation_state(sink, &invocation_id, turn_id, Some("admitting"), "admitted", json!({
                 "admission": {"admitted": true, "reason": "native_provider_subprocess_admitted"},
             }))?;
-            let response = match self.invoke_codex(&prompt) {
+            let (response, provider_session_id) = match self.invoke_codex(&prompt) {
                 Ok(response) => response,
                 Err(error) => {
                     self.emit_invocation_state(
@@ -212,6 +212,7 @@ impl<'a> NativeProviderAdapter<'a> {
                 "receiving",
                 json!({
                     "latency_ms": started.elapsed().as_millis(),
+                    "provider_session_id": provider_session_id,
                 }),
             )?;
             let tool_calls = parse_tool_calls(&response);
@@ -304,7 +305,7 @@ Answer the original request using this tool result.",
             "native_provider_tool_loop_limit:{max_rounds}"
         )))
     }
-    fn invoke_codex(&self, prompt: &str) -> Result<String, String> {
+    fn invoke_codex(&self, prompt: &str) -> Result<(String, Option<String>), String> {
         let command = env::var("NARADA_NATIVE_CODEX_COMMAND")
             .or_else(|_| env::var("NARADA_CODEX_EXEC_COMMAND"))
             .or_else(|_| env::var("NARADA_CODEX_COMMAND"))
@@ -337,11 +338,13 @@ Answer the original request using this tool result.",
         if let Some(model) = model {
             args.extend(["-m".to_string(), model]);
         }
-        args.extend([
-            "-C".to_string(),
-            cwd.to_string_lossy().to_string(),
-            "-".to_string(),
-        ]);
+        args.extend(["-C".to_string(), cwd.to_string_lossy().to_string()]);
+        if let Ok(session_id) = env::var("NARADA_NATIVE_CODEX_RESUME_SESSION_ID") {
+            if !session_id.trim().is_empty() {
+                args.extend(["resume".to_string(), session_id]);
+            }
+        }
+        args.push("-".to_string());
         let mut child = Command::new(command)
             .args(args)
             .current_dir(cwd)
@@ -377,6 +380,7 @@ Answer the original request using this tool result.",
         let stdout = String::from_utf8_lossy(&output.stdout);
         let mut text = String::new();
         let mut structured: Option<Value> = None;
+        let mut provider_session_id = None;
         let mut parsed = 0;
         for line in stdout.lines() {
             let clean = line.trim();
@@ -384,6 +388,12 @@ Answer the original request using this tool result.",
                 continue;
             };
             parsed += 1;
+            if event.get("type").and_then(Value::as_str) == Some("thread.started") {
+                provider_session_id = event
+                    .get("thread_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+            }
             if !parse_tool_calls_value(&event).is_empty() {
                 structured = Some(event.clone());
             }
@@ -405,9 +415,10 @@ Answer the original request using this tool result.",
         }
         if let Some(value) = structured {
             return serde_json::to_string(&value)
+                .map(|response| (response, provider_session_id))
                 .map_err(|error| format!("provider-response-encode-failed:{error}"));
         }
-        Ok(text)
+        Ok((text, provider_session_id))
     }
 }
 

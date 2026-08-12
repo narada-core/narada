@@ -343,10 +343,11 @@ Answer the original request using this tool result.",
             // sandbox setup payload exceed CreateProcess command-line limits.
             "--ignore-user-config".to_string(),
         ]);
-        if let Ok(sandbox) = env::var("NARADA_NATIVE_CODEX_SANDBOX") {
-            if matches!(sandbox.as_str(), "read-only" | "workspace-write") {
-                args.extend(["--sandbox".to_string(), sandbox]);
-            }
+        let sandbox = env::var("NARADA_NATIVE_CODEX_SANDBOX")
+            .ok()
+            .filter(|sandbox| matches!(sandbox.as_str(), "read-only" | "workspace-write"));
+        if let Some(sandbox) = sandbox.as_ref() {
+            args.extend(["--sandbox".to_string(), sandbox.clone()]);
         }
         if let Some(model) = model {
             args.extend(["-m".to_string(), model]);
@@ -358,9 +359,12 @@ Answer the original request using this tool result.",
             }
         }
         args.push("-".to_string());
-        let mut child = Command::new(command)
-            .args(args)
-            .current_dir(cwd)
+        let mut command = Command::new(command);
+        command.args(args).current_dir(cwd);
+        if let Some(sandbox) = sandbox {
+            command.env("CODEX_PERMISSION_PROFILE", sandbox);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

@@ -335,6 +335,11 @@ Answer the original request using this tool result.",
         })
         .unwrap_or_default();
         args.extend(["exec".to_string(), "--json".to_string()]);
+        if let Ok(sandbox) = env::var("NARADA_NATIVE_CODEX_SANDBOX") {
+            if matches!(sandbox.as_str(), "read-only" | "workspace-write") {
+                args.extend(["--sandbox".to_string(), sandbox]);
+            }
+        }
         if let Some(model) = model {
             args.extend(["-m".to_string(), model]);
         }

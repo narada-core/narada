@@ -342,6 +342,10 @@ Answer the original request using this tool result.",
             // MCP fleet here duplicates authority and, on Windows, can make the
             // sandbox setup payload exceed CreateProcess command-line limits.
             "--ignore-user-config".to_string(),
+            // Delegated invocations have their own authority, writable-root,
+            // and sandbox contract. Carrier/project exec-policy rules would
+            // add a second approval boundary with different semantics.
+            "--ignore-rules".to_string(),
         ]);
         let sandbox = env::var("NARADA_NATIVE_CODEX_SANDBOX")
             .ok()
@@ -350,7 +354,19 @@ Answer the original request using this tool result.",
             Some("read-only") => {
                 args.extend(["--sandbox".to_string(), "read-only".to_string()]);
             }
-            Some("workspace-write") => args.push("--approve-for-me".to_string()),
+            Some("workspace-write") => {
+                args.push("--approve-for-me".to_string());
+                let writable_roots = env::var("NARADA_NATIVE_CODEX_WRITABLE_ROOTS")
+                    .ok()
+                    .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
+                    .unwrap_or_default();
+                for root in writable_roots {
+                    let root = root.trim();
+                    if !root.is_empty() && std::path::Path::new(root) != cwd {
+                        args.extend(["--add-dir".to_string(), root.to_string()]);
+                    }
+                }
+            }
             _ => {}
         }
         if let Some(model) = model {
@@ -365,6 +381,9 @@ Answer the original request using this tool result.",
         args.push("-".to_string());
         let mut command = Command::new(command);
         command.args(args).current_dir(cwd);
+        if sandbox.as_deref() == Some("workspace-write") {
+            command.env("CODEX_PERMISSION_PROFILE", ":workspace-write");
+        }
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

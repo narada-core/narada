@@ -346,8 +346,12 @@ Answer the original request using this tool result.",
         let sandbox = env::var("NARADA_NATIVE_CODEX_SANDBOX")
             .ok()
             .filter(|sandbox| matches!(sandbox.as_str(), "read-only" | "workspace-write"));
-        if let Some(sandbox) = sandbox.as_ref() {
-            args.extend(["--sandbox".to_string(), sandbox.clone()]);
+        match sandbox.as_deref() {
+            Some("read-only") => {
+                args.extend(["--sandbox".to_string(), "read-only".to_string()]);
+            }
+            Some("workspace-write") => args.push("--approve-for-me".to_string()),
+            _ => {}
         }
         if let Some(model) = model {
             args.extend(["-m".to_string(), model]);
@@ -361,9 +365,6 @@ Answer the original request using this tool result.",
         args.push("-".to_string());
         let mut command = Command::new(command);
         command.args(args).current_dir(cwd);
-        if let Some(sandbox) = sandbox {
-            command.env("CODEX_PERMISSION_PROFILE", sandbox);
-        }
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

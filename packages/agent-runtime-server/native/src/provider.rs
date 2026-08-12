@@ -353,13 +353,6 @@ Answer the original request using this tool result.",
         let mut child = Command::new(command)
             .args(args)
             .current_dir(cwd)
-            // A nested Codex invocation must derive its sandbox from the explicit
-            // CLI policy above, not inherit the parent carrier's private sandbox
-            // markers. On Windows those stale markers can make the helper launch
-            // command exceed CreateProcess limits before the first tool runs.
-            .env_remove("CODEX_PERMISSION_PROFILE")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("CODEX_THREAD_ID")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

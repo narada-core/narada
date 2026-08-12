@@ -334,7 +334,15 @@ Answer the original request using this tool result.",
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-        args.extend(["exec".to_string(), "--json".to_string()]);
+        args.extend([
+            "exec".to_string(),
+            "--json".to_string(),
+            // Narada supplies the delegated run's model, sandbox, cwd, and
+            // capability boundary explicitly. Loading the carrier's generated
+            // MCP fleet here duplicates authority and, on Windows, can make the
+            // sandbox setup payload exceed CreateProcess command-line limits.
+            "--ignore-user-config".to_string(),
+        ]);
         if let Ok(sandbox) = env::var("NARADA_NATIVE_CODEX_SANDBOX") {
             if matches!(sandbox.as_str(), "read-only" | "workspace-write") {
                 args.extend(["--sandbox".to_string(), sandbox]);

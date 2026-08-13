@@ -166,7 +166,7 @@ const localMcpFabricModulePath: any = join(NARADA_PROPER_ROOT, 'packages', 'mcp-
 const mcpFabricModulePath: any = existsSync(localMcpFabricModulePath)
   ? localMcpFabricModulePath
   : packagedMcpFabricModulePath;
-const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex, projectFabricForKimi }: any = await import(pathToFileURL(mcpFabricModulePath).href);
+const { McpFabricError, compileMcpBindingAdmissionSet, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex, projectFabricForKimi }: any = await import(pathToFileURL(mcpFabricModulePath).href);
 const runtimeInput: any = args.runtime ?? null;
 const runtimeEngineInput: any = args.runtime_engine ?? null;
 const runtimeProfileInput: any = args.runtime_profile ?? null;
@@ -290,6 +290,8 @@ const DEFAULT_PI_MODEL: any = 'gpt-5.5';
 const DEFAULT_CLAUDE_CODE_COMMAND: any = 'claude';
 const DEFAULT_CLAUDE_CODE_MODEL: any = 'sonnet';
 let mcpFabric: any = null;
+let mcpBindingAdmissionPath: any = null;
+let mcpBindingAdmissionEnvelope: any = null;
 let mcpScopeResolution: any = null;
 let agentStartRenderer: any = null;
 function resolveToolFabricAdapter(carrierName: any, runtimeName: any) : any{
@@ -733,6 +735,13 @@ let orientationDeliveryReceipt: any = null;
 let orientationEntryArtifacts: any = null;
 const sessionAuthorityEnforced: any = runtime === 'narada-agent-runtime-server' && execFlag === true && dryRun !== true;
 const launchMaterializationRequired: any = execFlag === true && dryRun !== true;
+if (launchMaterializationRequired && mcpFabric === null) {
+  try {
+    mcpFabric = carrier === 'opencode' ? emptyScopedMcpFabric() : loadScopedMcpFabric();
+  } catch (error) {
+    await failToolFabricRefusal(error);
+  }
+}
 try {
   // Validate roster/role admission without creating a session event before the
   // singleton authority has admitted the principal. This keeps duplicate
@@ -823,7 +832,17 @@ try {
       },
       replaceAbandoned: Boolean(resumeSessionId),
       recoveryReason: 'operator_requested_resume_after_process_loss',
+      mcpBindingAdmission: {
+        ...compileMcpBindingAdmissionSet(mcpFabric),
+        carrier_kind: carrier,
+        runtime_kind: runtime,
+      },
     });
+    const admittedEnvelope: any = sessionAuthorityAdmission.mcp_binding_admission;
+    if (!admittedEnvelope) throw new Error('mcp_binding_admission_envelope_required');
+    mcpBindingAdmissionEnvelope = admittedEnvelope;
+    mcpBindingAdmissionPath = join(dirname(siteCarrierControlPath(plannedCarrierSessionId)), 'mcp-binding-admission.json');
+    writeJsonFile(mcpBindingAdmissionPath, admittedEnvelope);
     carrierSessionAdmissionReceipt = adaptNarsSessionAdmissionReceipt({
       authorityRecord: sessionAuthority.inspectSession({
         principal: sessionAuthorityAdmission.principal,
@@ -856,6 +875,32 @@ try {
       carrierKind: carrier,
       evaluatedAt: new Date().toISOString(),
     });
+  }
+  const governedDynamicLoaderPresent: any = Object.values(mcpFabric?.servers ?? {}).some((server: any) =>
+    String(server?.canonical_surface_id ?? server?.surface_id ?? '') === 'mcp-loader');
+  if (launchMaterializationRequired && governedDynamicLoaderPresent && !mcpBindingAdmissionEnvelope) {
+    const externalEnvelopePath: any = String(process.env.NARADA_LAUNCH_MCP_BINDING_ADMISSION_PATH ?? '').trim();
+    if (!externalEnvelopePath) {
+      throw new Error('mcp_binding_admission_required: direct carriers must supply NARADA_LAUNCH_MCP_BINDING_ADMISSION_PATH');
+    }
+    const envelope: any = JSON.parse(readFileSync(externalEnvelopePath, 'utf8'));
+    const { envelope_digest: suppliedDigest, ...unsignedEnvelope }: any = envelope;
+    const actualDigest: any = createHash('sha256').update(canonicalJson(unsignedEnvelope)).digest('hex');
+    if (envelope.schema !== 'narada.mcp.binding_admission_envelope.v1' || suppliedDigest !== actualDigest) {
+      throw new Error('mcp_binding_admission_envelope_digest_mismatch');
+    }
+    const compiled: any = compileMcpBindingAdmissionSet(mcpFabric);
+    if (envelope.carrier_session_id !== plannedCarrierSessionId
+      || envelope.carrier_session_admission_receipt_ref !== carrierSessionAdmissionReceipt?.receipt_id
+      || envelope.carrier_kind !== carrier
+      || envelope.runtime_kind !== runtime
+      || envelope.fabric_digest !== compiled.fabric_digest
+      || canonicalJson(envelope.bindings) !== canonicalJson(compiled.bindings)) {
+      throw new Error('mcp_binding_admission_external_authority_mismatch');
+    }
+    mcpBindingAdmissionEnvelope = envelope;
+    mcpBindingAdmissionPath = join(dirname(siteCarrierControlPath(plannedCarrierSessionId)), 'mcp-binding-admission.json');
+    writeJsonFile(mcpBindingAdmissionPath, envelope);
   }
   if (launchMaterializationRequired) {
     startResult = materializeAgentSessionStart({
@@ -1762,7 +1807,9 @@ const output: any = {
   }
 }
 
-if (carrier !== 'opencode') {
+if (mcpFabric !== null) {
+  // Session authority already bound the exact resolved fabric before admission.
+} else if (carrier !== 'opencode') {
   try {
     mcpFabric = loadScopedMcpFabric();
   } catch (error) {
@@ -1837,6 +1884,11 @@ const carrierEnvironment: any = {
       }
     : {}),
   ...(sessionAuthorityAdmission ? buildSessionAuthorityEnvironment(sessionAuthorityAdmission) : {}),
+  ...(mcpBindingAdmissionPath ? {
+    NARADA_MCP_BINDING_ADMISSION_REQUIRED: '1',
+    NARADA_MCP_BINDING_ADMISSION_PATH: mcpBindingAdmissionPath,
+    NARADA_MCP_BINDING_ADMISSION_DIGEST: mcpBindingAdmissionEnvelope.envelope_digest,
+  } : {}),
 };
 const agentTuiEnvironment: any = agentTuiTerminalEnvironment();
 const codexMcpScope: any = codexMcpScopeProjection();
@@ -2074,6 +2126,17 @@ const output: any = {
       status: 'not_required',
       required: false,
     },
+  mcp_binding_admission: mcpBindingAdmissionEnvelope
+    ? {
+      schema: mcpBindingAdmissionEnvelope.schema,
+      envelope_id: mcpBindingAdmissionEnvelope.envelope_id,
+      envelope_digest: mcpBindingAdmissionEnvelope.envelope_digest,
+      path: mcpBindingAdmissionPath,
+      binding_count: mcpBindingAdmissionEnvelope.bindings.length,
+      authority_epoch: mcpBindingAdmissionEnvelope.authority_epoch,
+      carrier_session_id: mcpBindingAdmissionEnvelope.carrier_session_id,
+    }
+    : null,
   starting_carrier_input: startingCarrierInputOutput(startingCarrierInput),
   exec: execFlag,
   agent_start_execution_mode: agentStartExecutionPosture.agent_start_execution_mode,

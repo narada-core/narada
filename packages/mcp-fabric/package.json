@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@narada-core/carrier-action-admission": "workspace:*",
+    "@narada-core/mcp-fabric-contracts": "workspace:*",
     "@narada-core/process-launch-posture": "workspace:*"
   },
   "description": "MCP fabric runtime boundary",

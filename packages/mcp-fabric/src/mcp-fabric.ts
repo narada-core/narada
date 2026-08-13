@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 export { McpFabricError } from './mcp-fabric-errors.js';
 export { loadSiteMcpFabric } from './mcp-fabric-loader.js';
+export {
+  compileMcpBindingAdmissionSet,
+} from './mcp-binding-admission.js';
 export { runMcpFabricDoctor, renderMcpFabricDoctorTable } from './mcp-fabric-doctor.js';
 export {
   MCP_FABRIC_RUNTIME_LIFECYCLE_SCHEMA,

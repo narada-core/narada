@@ -3,7 +3,7 @@ type AnyDatabase = AnyRecord;
 
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = (warning: any, ...args: any[]) => {
@@ -88,6 +88,29 @@ function parseJson(value: any, fallback: any = null): any {
   } catch {
     return fallback;
   }
+}
+
+function canonicalize(value: any): any {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, child]) => [key, canonicalize(child)]));
+  }
+  return value;
+}
+
+function bindingAdmissionEnvelopeDigest(value: AnyRecord): string {
+  return createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
+}
+
+function parseMcpBindingAdmissionEnvelopeV1(value: any): AnyRecord {
+  if (value?.schema !== 'narada.mcp.binding_admission_envelope.v1') throw new TypeError('mcp_binding_admission_schema_invalid');
+  const { envelope_digest: digest, ...unsigned } = value;
+  if (!/^[a-f0-9]{64}$/.test(String(digest ?? '')) || bindingAdmissionEnvelopeDigest(unsigned) !== digest) {
+    throw new TypeError('mcp_binding_admission_envelope_digest_mismatch');
+  }
+  const ids = (value.bindings ?? []).map((binding: AnyRecord) => requiredString(binding.binding_id, 'binding_id'));
+  if (new Set(ids).size !== ids.length) throw new TypeError('mcp_binding_admission_duplicate_binding_id');
+  return value;
 }
 
 function principalKey({ authorityScope, siteId, localAgentId }: AnyRecord): string {
@@ -346,6 +369,15 @@ function prepareSchema(db: AnyDatabase): void {
       occurred_at TEXT NOT NULL,
       details_json TEXT
     );
+    CREATE TABLE IF NOT EXISTS session_mcp_binding_admission (
+      session_id TEXT PRIMARY KEY,
+      principal_key TEXT NOT NULL,
+      authority_epoch INTEGER NOT NULL,
+      envelope_id TEXT NOT NULL UNIQUE,
+      envelope_digest TEXT NOT NULL,
+      envelope_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS session_authority_meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -378,6 +410,12 @@ export function openLocalSessionAuthority({
     return publicRecord(rowToRecord(getRow(normalized.principal_key)));
   };
 
+  const inspectMcpBindingAdmission = ({ sessionId } : AnyRecord = {}) => {
+    const session = requiredString(sessionId, 'session_id');
+    const row = db.prepare('SELECT envelope_json FROM session_mcp_binding_admission WHERE session_id = ?').get(session);
+    return row ? parseMcpBindingAdmissionEnvelopeV1(JSON.parse(String(row.envelope_json))) : null;
+  };
+
   const admitSession = ({
     principal,
     sessionId,
@@ -393,6 +431,7 @@ export function openLocalSessionAuthority({
     replaceAbandoned = false,
     processProbe = defaultProcessProbe,
     recoveryReason = 'explicit_operator_recovery',
+    mcpBindingAdmission = null,
   } : AnyRecord = {}) => {
     const normalized = principal?.principal_key ? principal : normalizeSessionPrincipal(principal);
     const session = requiredString(sessionId, 'session_id');
@@ -564,6 +603,45 @@ export function openLocalSessionAuthority({
         at,
         details: { authority_epoch: epoch, runtime_kind: runtimeKind, operator_surface_kind: operatorSurfaceKind },
       });
+      let mcpBindingAdmissionEnvelope = null;
+      if (mcpBindingAdmission) {
+        const envelopeId = `mcp-admission-${session}-${epoch}`;
+        const unsignedEnvelope: AnyRecord = {
+          schema: 'narada.mcp.binding_admission_envelope.v1',
+          envelope_id: envelopeId,
+          decision: 'admitted',
+          issued_at: at,
+          valid_until: null,
+          principal_key: normalized.principal_key,
+          site_id: normalized.site_id,
+          carrier_session_id: session,
+          carrier_kind: requiredString(mcpBindingAdmission.carrier_kind ?? operatorSurfaceKind, 'carrier_kind'),
+          runtime_kind: requiredString(mcpBindingAdmission.runtime_kind ?? runtimeKind, 'runtime_kind'),
+          authority_epoch: epoch,
+          carrier_session_admission_receipt_ref: `nars-admission:${session}:${epoch}`,
+          authority_readback_ref: `nars-session-authority:${normalized.principal_key}:${session}:${epoch}`,
+          fabric_digest: requiredString(mcpBindingAdmission.fabric_digest, 'fabric_digest'),
+          bindings: mcpBindingAdmission.bindings,
+        };
+        mcpBindingAdmissionEnvelope = parseMcpBindingAdmissionEnvelopeV1({
+          ...unsignedEnvelope,
+          envelope_digest: bindingAdmissionEnvelopeDigest(unsignedEnvelope),
+        });
+        db.prepare(`
+          INSERT INTO session_mcp_binding_admission (
+            session_id, principal_key, authority_epoch, envelope_id,
+            envelope_digest, envelope_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(session_id) DO UPDATE SET
+            principal_key = excluded.principal_key,
+            authority_epoch = excluded.authority_epoch,
+            envelope_id = excluded.envelope_id,
+            envelope_digest = excluded.envelope_digest,
+            envelope_json = excluded.envelope_json,
+            created_at = excluded.created_at
+        `).run(session, normalized.principal_key, epoch, envelopeId,
+          mcpBindingAdmissionEnvelope.envelope_digest, JSON.stringify(mcpBindingAdmissionEnvelope), at);
+      }
       return {
         schema: SESSION_AUTHORITY_SCHEMA,
         status: 'admitted',
@@ -575,6 +653,7 @@ export function openLocalSessionAuthority({
         db_path: path,
         lease_expires_at: leaseExpires,
         attach,
+        mcp_binding_admission: mcpBindingAdmissionEnvelope,
       };
     });
   };
@@ -764,6 +843,7 @@ export function openLocalSessionAuthority({
   return Object.freeze({
     db_path: path,
     inspectSession,
+    inspectMcpBindingAdmission,
     admitSession,
     activateSession,
     heartbeatSession,

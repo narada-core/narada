@@ -344,6 +344,7 @@ function normalizeServerConfig(serverName: string, rawServer: AnyRecord, siteRoo
   }
   return {
     transport: 'stdio',
+    ...(rawServer.binding_id ? { binding_id: String(rawServer.binding_id) } : {}),
     command,
     args,
     env: objectStringValues(rawServer.env),

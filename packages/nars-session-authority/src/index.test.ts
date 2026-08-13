@@ -37,6 +37,26 @@ test('atomically admits one session per principal and fences the second', () => 
   rmSync(root, { recursive: true, force: true });
 });
 
+test('atomically persists the exact MCP binding envelope with session admission', () => {
+  const root = mkdtempSync(join(process.env.TEMP ?? process.cwd(), 'narada-session-authority-'));
+  const authority = openLocalSessionAuthority({ dbPath: join(root, 'authority.sqlite') });
+  const principal = normalizeSessionPrincipal({ siteId: 'sonar', localAgentId: 'resident' });
+  const admission = authority.admitSession({
+    principal,
+    sessionId: 'carrier_mcp_one',
+    runtimeKind: 'narada-agent-runtime-server',
+    operatorSurfaceKind: 'codex',
+    mcpBindingAdmission: {
+      carrier_kind: 'codex', runtime_kind: 'narada-agent-runtime-server', fabric_digest: 'a'.repeat(64),
+      bindings: [{ binding_id: 'sonar-filesystem', surface_id: 'local-filesystem', projection_id: 'default', authority_locus: { kind: 'local_site', site_root: root }, injection_scope: 'local_site', operations: ['attach', 'discover', 'restart'], binding_digest: 'b'.repeat(64) }],
+    },
+  });
+  assert.equal(admission.mcp_binding_admission.bindings[0].binding_id, 'sonar-filesystem');
+  assert.equal(authority.inspectMcpBindingAdmission({ sessionId: 'carrier_mcp_one' })?.envelope_digest, admission.mcp_binding_admission.envelope_digest);
+  authority.close();
+  rmSync(root, { recursive: true, force: true });
+});
+
 test('authority conflict reports the exact lease, process, heartbeat, and health decision inputs', () => {
   const root = mkdtempSync(join(process.env.TEMP ?? process.cwd(), 'narada-session-authority-'));
   const dbPath = join(root, 'authority.sqlite');

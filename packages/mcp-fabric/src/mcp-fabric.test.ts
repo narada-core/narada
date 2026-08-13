@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import test from 'node:test';
 import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import {
   McpFabricError,
@@ -15,7 +16,46 @@ import {
   projectServerEnvironment,
   renderMcpFabricDoctorTable,
   runMcpFabricDoctor,
+  compileMcpBindingAdmissionSet,
 } from './mcp-fabric.js';
+
+test('binding-class selection compiles to an exact non-expanding binding set', () => {
+  const server = (bindingId: string) => ({
+    binding_id: bindingId, surface_id: 'fixture', projection_id: 'default', transport: 'stdio', command: 'fixture', args: [], env: {}, env_vars: [],
+    injection_scope: 'local_site', authority_locus: { kind: 'local_site', site_root: 'C:/site' }, target_site_root: 'C:/site',
+  });
+  const fabric: any = { servers: { first: server('first-binding') } };
+  const admitted = compileMcpBindingAdmissionSet(fabric);
+  fabric.servers.second = server('second-binding');
+  const recompiled = compileMcpBindingAdmissionSet(fabric);
+  assert.deepEqual(admitted.bindings.map((binding) => binding.binding_id), ['first-binding']);
+  assert.deepEqual(recompiled.bindings.map((binding) => binding.binding_id), ['first-binding', 'second-binding']);
+  assert.notEqual(admitted.fabric_digest, recompiled.fabric_digest);
+  assert.throws(() => compileMcpBindingAdmissionSet({ servers: { missing: { surface_id: 'fixture' } } }), /binding_id_required/);
+});
+
+test('binding identity defaults make omitted and explicit empty fields equivalent', () => {
+  const common: any = {
+    binding_id: 'defaulted-binding',
+    surface_id: 'fixture',
+    projection_id: 'default',
+    injection_scope: 'local_site',
+    authority_locus: { kind: 'local_site' },
+    command: 'fixture',
+  };
+  const omitted = compileMcpBindingAdmissionSet({ servers: { fixture: common } });
+  const explicit = compileMcpBindingAdmissionSet({ servers: { fixture: {
+    ...common,
+    transport: 'stdio',
+    command: 'fixture',
+    args: [],
+    env: {},
+    env_vars: [],
+    target_site_root: null,
+    surface_projection: null,
+  } } });
+  assert.deepEqual(omitted, explicit);
+});
 
 const carrierClientFixture = JSON.parse(readFileSync(new URL('../fixtures/agent-tui-carrier-client-config.json', import.meta.url), 'utf8'));
 assert.equal(carrierClientFixture.schema, 'narada.mcp.carrier_client_config.v0');

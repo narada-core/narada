@@ -15,10 +15,17 @@ export function resolveCodexCommand(
   const configured = typeof env.CODEX_COMMAND === 'string' ? env.CODEX_COMMAND.trim() : '';
   if (configured) return configured;
 
-  // Fnm and other Node version managers commonly install the `codex.cmd`
-  // shim beside the active node executable, while MCP hosts may provide a
-  // reduced PATH that does not include that directory.
   if (platform === 'win32') {
+    // Prefer the native OpenAI desktop installation over legacy npm shims.
+    // MCP and overlay processes may inherit a reduced PATH, so resolve the
+    // stable per-user installation directly when LOCALAPPDATA is available.
+    const localAppData = typeof env.LOCALAPPDATA === 'string' ? env.LOCALAPPDATA.trim() : '';
+    if (localAppData) {
+      const nativeCommand = path.join(localAppData, 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe');
+      if (fileExists(nativeCommand)) return nativeCommand;
+    }
+
+    // Temporary fallback for installations still provided by an fnm/npm shim.
     const siblingCommand = path.join(path.dirname(executablePath), 'codex.cmd');
     if (fileExists(siblingCommand)) return siblingCommand;
   }
@@ -26,11 +33,11 @@ export function resolveCodexCommand(
   return 'codex';
 }
 
-function spawnOptions() {
+function spawnOptions(command) {
   return {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
-    shell: process.platform === 'win32',
+    shell: process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command),
   };
 }
 
@@ -175,7 +182,7 @@ export async function fetchCodex(options = {}) {
   let rpc;
 
   try {
-    child = spawn(command, ['app-server', '--listen', 'stdio://'], spawnOptions());
+    child = spawn(command, ['app-server', '--listen', 'stdio://'], spawnOptions(command));
     rpc = new JsonRpcClient(child, options.timeoutMs || DEFAULT_TIMEOUT_MS);
 
     try {

@@ -213,11 +213,30 @@ impl SessionSupervisor {
         self.submit_with_adapter_and_sink(input, adapter, &mut sink)
     }
 
+    pub fn submit_front_system_with_adapter(
+        &mut self,
+        input: Value,
+        adapter: &mut dyn NarsProviderAdapter,
+    ) -> Result<Vec<Value>, CoreError> {
+        let mut sink = |_event: Value| -> Result<(), CoreError> { Ok(()) };
+        self.submit_with_adapter_and_sink_position(input, adapter, &mut sink, true)
+    }
+
     pub fn submit_with_adapter_and_sink(
         &mut self,
         input: Value,
         adapter: &mut dyn NarsProviderAdapter,
         event_sink: &mut EventSink<'_>,
+    ) -> Result<Vec<Value>, CoreError> {
+        self.submit_with_adapter_and_sink_position(input, adapter, event_sink, false)
+    }
+
+    fn submit_with_adapter_and_sink_position(
+        &mut self,
+        input: Value,
+        adapter: &mut dyn NarsProviderAdapter,
+        event_sink: &mut EventSink<'_>,
+        front: bool,
     ) -> Result<Vec<Value>, CoreError> {
         if self.core.lifecycle_state() != "ready" {
             return Err(CoreError(format!(
@@ -225,7 +244,11 @@ impl SessionSupervisor {
                 self.core.lifecycle_state()
             )));
         }
-        let mut output = self.core.enqueue(input)?;
+        let mut output = if front {
+            self.core.enqueue_front_system(input)?
+        } else {
+            self.core.enqueue(input)?
+        };
         if self.core.pending_count() == 0 {
             return Ok(output);
         }

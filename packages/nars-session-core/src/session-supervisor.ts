@@ -45,7 +45,7 @@ interface NarsToolGateway {
 interface NarsControlHandlerContext {
   request: NarsControlRequest;
   sessionCore: SessionCore;
-  submit: (input: SupervisorInput) => Promise<NarsQueueInputEvent>;
+  submit: (input: SupervisorInput, options?: JsonRecord) => Promise<NarsQueueInputEvent>;
   eventSink: (event: JsonRecord) => Promise<NarsSessionEvent>;
   toolGateway: NarsToolGateway;
 }
@@ -254,18 +254,29 @@ export function createNarsSessionSupervisor({
     }
   };
 
-  function start(): JsonRecord {
+  function beginRecoveryDrain(): Promise<unknown> | null {
+    if (!queue || queue.pendingCount === 0 || recoveryDrain || core.lifecycleState !== 'ready') {
+      return recoveryDrain;
+    }
+    recoveryMode = true;
+    recoveryDrain = queue.drainUntilIdle()
+      .catch(async (error) => {
+        await eventSink({ kind: 'session_recovery_drain_failed', error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(() => { recoveryMode = false; });
+    return recoveryDrain;
+  }
+
+  function start(options: JsonRecord = {}): JsonRecord {
     if (core.lifecycleState === 'starting') core.transition('ready', { supervisor: 'nars-session-core' });
     if (!queue) queue = core.createQueue({ drain });
-    if (queue.pendingCount > 0 && !recoveryDrain && core.lifecycleState === 'ready') {
-      recoveryMode = true;
-      recoveryDrain = queue.drainUntilIdle()
-        .catch(async (error) => {
-          await eventSink({ kind: 'session_recovery_drain_failed', error: error instanceof Error ? error.message : String(error) });
-        })
-        .finally(() => { recoveryMode = false; });
-    }
+    if (options.deferRecoveryDrain !== true) beginRecoveryDrain();
     return healthSnapshot();
+  }
+
+  async function resumeRecovery(): Promise<unknown> {
+    if (!queue) start({ deferRecoveryDrain: true });
+    return await (beginRecoveryDrain() ?? Promise.resolve());
   }
 
   async function cancel(evidence: JsonRecord = {}): Promise<boolean> {
@@ -277,14 +288,14 @@ export function createNarsSessionSupervisor({
     return true;
   }
 
-  async function dispatch(request: SupervisorInput = {}): Promise<JsonRecord> {
+  async function dispatch(request: SupervisorInput = {}, options: JsonRecord = {}): Promise<JsonRecord> {
     if (core.lifecycleState !== 'ready') throw new Error(`nars_session_not_ready:${core.lifecycleState}`);
     const requestRecord: NarsControlRequest = (isRecord(request) ? request : {}) as NarsControlRequest;
     const content = typeof request === 'string'
       ? request
       : requestRecord.content ?? recordValue(requestRecord.params, 'content') ?? recordValue(requestRecord.params, 'message') ?? null;
     if (content != null) {
-      const submitted = await submit({ ...requestRecord, content });
+      const submitted = await submit({ ...requestRecord, content }, options);
       const turnId = submitted.event_id ?? requestRecord.event_id ?? null;
       return {
         ...submitted,
@@ -313,7 +324,7 @@ export function createNarsSessionSupervisor({
     }
   }
 
-  async function submit(input: SupervisorInput): Promise<NarsQueueInputEvent> {
+  async function submit(input: SupervisorInput, options: JsonRecord = {}): Promise<NarsQueueInputEvent> {
     if (core.lifecycleState !== 'ready') throw new Error(`nars_session_not_ready:${core.lifecycleState}`);
     if (!queue) start();
     const activeQueue = queue;
@@ -321,7 +332,10 @@ export function createNarsSessionSupervisor({
     const queuedInput = isRecord(input)
       ? { ...input, request_id: input.request_id ?? input.id ?? null }
       : input;
-    return activeQueue.enqueue(queuedInput, { drain: true });
+    return activeQueue.enqueue(queuedInput, {
+      drain: options.drain === 'once' ? 'once' : true,
+      ...(options.position === 'front' ? { position: 'front' } : {}),
+    });
   }
 
   function health(): NarsSupervisorHealth {
@@ -370,6 +384,7 @@ export function createNarsSessionSupervisor({
   return Object.freeze({
     core,
     start,
+    resumeRecovery,
     submit,
     dispatch,
     cancel,

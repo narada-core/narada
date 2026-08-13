@@ -399,7 +399,18 @@ export function createInputQueue({
         idempotency_key: normalized.idempotency_key,
         terminal_state: null,
       });
-      pending.push(normalized);
+      const queuePosition = options.position === 'front' ? 'front' : 'back';
+      if (queuePosition === 'front') {
+        if (normalized.source_kind !== 'system') {
+          throw new Error('nars_input_front_enqueue_requires_system_source');
+        }
+        if (state.running) {
+          throw new Error('nars_input_front_enqueue_while_running');
+        }
+        pending.unshift(normalized);
+      } else {
+        pending.push(normalized);
+      }
       transitionAdmission(normalized, 'accepted', { reason: 'input_received' });
       persistQueueState('accepted', normalized);
       const queuedAdmission = transitionAdmission(normalized, 'queued', { reason: 'queued_for_turn' });
@@ -413,6 +424,7 @@ export function createInputQueue({
         source_kind: normalized.source_kind,
         authority_ref: normalized.authority_ref,
         directive_id: normalized.directive_id,
+        queue_position: queuePosition,
         idempotency_key: normalized.idempotency_key,
         turn_id: normalized.event_id,
         turn_state: 'accepted',
@@ -431,7 +443,8 @@ export function createInputQueue({
           ...(normalized.request_id ? { request_id: normalized.request_id } : {}),
         }));
       }
-      if (options.drain) await drainUntilIdle();
+      if (options.drain === 'once') await drainOnce();
+      else if (options.drain) await drainUntilIdle();
       return normalized;
     },
     drainOnce,

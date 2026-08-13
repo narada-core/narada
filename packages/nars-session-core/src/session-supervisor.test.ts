@@ -250,6 +250,61 @@ test('cancelled and failed turns remain recoverable and are replayed once', asyn
   await failed.close();
 });
 
+test('deferred recovery runs a front-priority system directive alone before recovered work', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'nars-session-deferred-recovery-'));
+  const sessionCoreOptions = {
+    sessionId: 'deferred-recovery-1',
+    sessionPath: join(root, 'session.json'),
+    eventsPath: join(root, 'events.jsonl'),
+  };
+  const failed = createNarsSessionSupervisor({
+    sessionCoreOptions,
+    carrier: { runTurn: async () => { throw new Error('leave_for_recovery'); } },
+  });
+  failed.start();
+  await assert.rejects(
+    failed.submit({ event_id: 'input_recovered_work', content: 'recovered work' }),
+    /leave_for_recovery/,
+  );
+  assert.equal(failed.health().operator_input_queue.pending_count, 1);
+
+  const order: string[] = [];
+  const recovered = createNarsSessionSupervisor({
+    sessionCoreOptions,
+    carrier: {
+      runTurn: async (context) => {
+        order.push(String(context.messages[0]?.content));
+        return { content: 'completed' };
+      },
+    },
+  });
+  recovered.start({ deferRecoveryDrain: true });
+  await Promise.resolve();
+  assert.deepEqual(order, []);
+  assert.equal(recovered.health().operator_input_queue.pending_count, 1);
+
+  await recovered.dispatch({
+    id: 'orientation-priority',
+    event_id: 'input_orientation_priority',
+    content: 'orientation first',
+    source: 'system_directive',
+    source_kind: 'system',
+    source_id: 'narada-agent-runtime-server',
+    transport: 'carrier_server_api',
+    delivery_mode: 'admit_for_current_turn',
+    authority_ref: 'runtime:orientation-entry',
+    directive_id: 'orientation-entry:test',
+  }, { position: 'front', drain: 'once' });
+  assert.deepEqual(order, ['orientation first']);
+  assert.equal(recovered.health().operator_input_queue.pending_count, 1);
+
+  await recovered.resumeRecovery();
+  assert.deepEqual(order, ['orientation first', 'recovered work']);
+  assert.equal(recovered.health().operator_input_queue.pending_count, 0);
+  await recovered.close();
+  await failed.close();
+});
+
 test('session supervisor records the complete tool-mediated turn state path', async () => {
   const root = mkdtempSync(join(tmpdir(), 'nars-session-turn-path-'));
   const supervisor = createNarsSessionSupervisor({

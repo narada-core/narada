@@ -967,7 +967,19 @@ impl SessionCore {
         Ok(record)
     }
 
-    pub fn enqueue(&mut self, mut input: Value) -> Result<Vec<Value>, CoreError> {
+    pub fn enqueue(&mut self, input: Value) -> Result<Vec<Value>, CoreError> {
+        self.enqueue_position(input, false)
+    }
+
+    pub fn enqueue_front_system(&mut self, input: Value) -> Result<Vec<Value>, CoreError> {
+        self.enqueue_position(input, true)
+    }
+
+    fn enqueue_position(
+        &mut self,
+        mut input: Value,
+        front: bool,
+    ) -> Result<Vec<Value>, CoreError> {
         if self.lifecycle != "ready" {
             return Err(CoreError(format!(
                 "nars_session_not_accepting_input:{}",
@@ -991,6 +1003,11 @@ impl SessionCore {
         let request_id = string_field(&input, "request_id");
         let source_kind =
             string_field(&input, "source_kind").unwrap_or_else(|| "operator".to_string());
+        if front && source_kind != "system" {
+            return Err(CoreError(
+                "nars_input_front_enqueue_requires_system_source".to_string(),
+            ));
+        }
         input["source_kind"] = json!(source_kind);
         input["admission_state"] = json!("queued");
         input["schema"] = json!("narada.carrier.input_event.v1");
@@ -1004,9 +1021,13 @@ impl SessionCore {
         }
         self.admission
             .insert(event_id.clone(), "queued".to_string());
-        events.push(self.append_event(json!({ "event": "input_event_queued", "event_id": event_id, "input_event_id": event_id, "request_id": request_id, "content": content, "source": input.get("source"), "source_kind": source_kind, "source_id": input.get("source_id"), "transport": input.get("transport"), "delivery_mode": input.get("delivery_mode"), "authority_ref": input.get("authority_ref"), "directive_id": input.get("directive_id"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_previous_state": "accepted", "admission_state": "queued", "turn_state": "accepted", "idempotency_key": idempotency_key }))?);
+        events.push(self.append_event(json!({ "event": "input_event_queued", "event_id": event_id, "input_event_id": event_id, "request_id": request_id, "content": content, "source": input.get("source"), "source_kind": source_kind, "source_id": input.get("source_id"), "transport": input.get("transport"), "delivery_mode": input.get("delivery_mode"), "authority_ref": input.get("authority_ref"), "directive_id": input.get("directive_id"), "queue_position": if front { "front" } else { "back" }, "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_previous_state": "accepted", "admission_state": "queued", "turn_state": "accepted", "idempotency_key": idempotency_key }))?);
         input["admission_state"] = json!("queued");
-        self.pending.push(input);
+        if front {
+            self.pending.insert(0, input);
+        } else {
+            self.pending.push(input);
+        }
         if let Some(key) = idempotency_key {
             self.idempotency
                 .insert(key, json!({ "event_id": event_id }));

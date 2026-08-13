@@ -16,13 +16,13 @@ writeFileSync(join(siteRoot, '.ai', 'mcp', 'site-agent-context-mcp.json'), `${JS
       command: 'node',
       args: ['server.ts'],
       surface_id: 'agent-context-mcp.local',
-      tools: ['agent_context_startup_sequence', 'mcp_output_show'],
+      tools: ['agent_orientation_read', 'mcp_output_show'],
     },
   },
   surfaces: [{
     surface_id: 'agent-context-mcp.local',
     tool_contract: {
-      read_only_tools: ['agent_context_startup_sequence', 'mcp_output_show'],
+      read_only_tools: ['agent_orientation_read', 'mcp_output_show'],
     },
   }],
 }, null, 2)}\n`, 'utf8');

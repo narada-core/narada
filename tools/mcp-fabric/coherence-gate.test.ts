@@ -14,7 +14,7 @@ writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture-mcp.json'), `${JSON.stringif
       command: 'node',
       args: ['agent-context.ts'],
       surface_id: 'fixture-agent-context.local',
-      tools: ['agent_context_startup_sequence', 'mcp_output_show'],
+      tools: ['agent_orientation_read', 'mcp_output_show'],
     },
     'fixture-task-lifecycle': {
       command: 'node',

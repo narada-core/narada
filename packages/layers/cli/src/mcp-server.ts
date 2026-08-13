@@ -104,13 +104,6 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     }),
   },
   {
-    name: 'agent_context_hydrate_current',
-    description: 'Hydrate the current agent session from launcher-provided Narada environment evidence without mutating.',
-    inputSchema: objectSchema({
-      target: targetSchema(),
-    }),
-  },
-  {
     name: 'narada_mcp_fabric_context',
     description: 'Inspect the governed MCP fabric posture and optional target Site resolution without mutating.',
     inputSchema: objectSchema({
@@ -365,6 +358,8 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         traversal,
       });
     case 'agent_context_hydrate_current':
+      // Compatibility-only direct call. Carrier entry uses the receipt-bound
+      // agent_orientation_read continuation protocol on Agent Context.
       return jsonToolResult(attachTraversal(buildAgentContextHydrateCurrent(traversal.target_site, siteContext), traversal));
     case 'narada_mcp_fabric_context':
       return jsonToolResult({

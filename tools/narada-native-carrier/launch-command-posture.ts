@@ -36,7 +36,7 @@ function buildLaunchCommandPosture({
       raw_secret_values_recorded: false,
     },
     startup_command: {
-      name: 'agent_context_startup_sequence',
+      name: 'agent_orientation_read',
       arguments: {},
       raw_prompt_recorded: false,
       raw_secret_values_recorded: false,

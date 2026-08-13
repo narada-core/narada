@@ -4,7 +4,7 @@
     {
       "id": "startup_sequence",
       "phrases": ["run startup sequence", "startup sequence"],
-      "tool_name": "agent_context_startup_sequence",
+      "tool_name": "agent_orientation_read",
       "arguments": {}
     }
   ],
@@ -33,7 +33,7 @@
   "tool_alias_groups": [
     {
       "id": "startup_sequence",
-      "tools": ["agent_context_startup_sequence", "startup_sequence"]
+      "tools": ["agent_orientation_read", "agent_context_startup_sequence", "startup_sequence"]
     },
     {
       "id": "mcp_payload_reader",

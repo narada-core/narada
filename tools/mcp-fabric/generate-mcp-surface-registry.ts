@@ -75,11 +75,7 @@ function inferredToolContract(serverName: any) {
     return {
       read_only_tools: [
         'agent_context_doctor',
-        'agent_context_whoami',
-        'agent_context_hydrate_current',
-        'agent_context_startup_sequence',
-        'agent_context_rehydrate',
-        'agent_context_list_sessions',
+        'agent_orientation_read',
         'mcp_output_show',
       ],
       mutating_tools: [

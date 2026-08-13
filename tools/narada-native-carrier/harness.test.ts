@@ -46,7 +46,7 @@ test('narada-native harness materializes and closes with reconstructable facade-
   assert.equal(start.session.capability_projection_statuses[0].consent_ref_present, true);
   assert.equal(start.session.capability_projection_statuses[0].values_omitted, true);
   assert.equal(JSON.stringify(start).includes('sk-should-not-persist'), false);
-  assert.equal(start.session.startup_command.name, 'agent_context_startup_sequence');
+  assert.equal(start.session.startup_command.name, 'agent_orientation_read');
   assert.equal(hydrate.hydration_result.target_local_mcp, 'narada-proper');
   assert.equal(capabilities.capability_posture, 'facade_only');
   assert.equal(capabilities.projected_capabilities_are_not_grants, true);

@@ -137,7 +137,7 @@ function agentContextReadiness() : any{
   const exposedTools: any = Array.isArray(surface?.tool_contract?.exposed_tools)
     ? surface.tool_contract.exposed_tools
     : [];
-  const requiredTools: any = ['agent_context_hydrate_current', 'agent_context_startup_sequence'];
+  const requiredTools: any = ['agent_orientation_read', 'mcp_output_show'];
   const missingTools: any = requiredTools.filter((tool: any) => !exposedTools.includes(tool));
   const ready: any = existsSync(db)
     && Boolean(surface)

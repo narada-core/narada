@@ -6,6 +6,7 @@ vi.unmock('node:fs');
 
 const root = join(process.cwd(), '..', '..', '..');
 const conceptPath = join(root, 'docs/concepts/orientation-manifest.md');
+const carrierEntryContractPath = join(root, 'docs/concepts/startup-sequence-contract.md');
 const sourceMapPath = join(root, 'docs/product/orientation-manifest-source-map.v0.md');
 const fixturePath = join(
   root,
@@ -47,6 +48,17 @@ function caseById(cases: AdversarialCase[], caseId: string): AdversarialCase {
 }
 
 describe('Orientation Manifest target-shape contract', () => {
+  it('gives a normal occupant one receipt-bound orientation path', () => {
+    const contract = readFileSync(carrierEntryContractPath, 'utf8');
+
+    expect(contract).toContain('`agent_orientation_read({})`');
+    expect(contract).toContain('opaque `continuation`');
+    expect(contract).toMatch(/Required reads,\s+paging, completion evidence, and final acknowledgement remain server-owned\./);
+    expect(contract).toContain('Normal discovery must not expose `startup_sequence`');
+    expect(contract).toContain('refused before that point');
+    expect(contract).toMatch(/successful performance of that\s+effect afterward/);
+  });
+
   it('assigns embodiment admission to Carrier Session Authority without creating Agent Context authority', () => {
     const concept = readFileSync(conceptPath, 'utf8');
     const sourceMap = readFileSync(sourceMapPath, 'utf8');

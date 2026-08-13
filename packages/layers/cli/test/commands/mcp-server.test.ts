@@ -42,7 +42,7 @@ describe('Narada MCP facade', () => {
 
     expect(tools).toContain('narada_site_context');
     expect(tools).toContain('narada_mcp_fabric_context');
-    expect(tools).toContain('agent_context_hydrate_current');
+    expect(tools).not.toContain('agent_context_hydrate_current');
     expect(tools).toContain('site_task_lifecycle.plan_init');
     expect(tools).toContain('site_task_lifecycle.admit_task');
     expect(tools).toContain('site_task_lifecycle.read_task');
@@ -132,7 +132,7 @@ describe('Narada MCP facade', () => {
     });
   });
 
-  it('hydrates current agent context from launcher environment', async () => {
+  it('keeps legacy current-context hydration callable but hidden from discovery', async () => {
     const response = await handleMcpRequest({
         jsonrpc: '2.0',
         id: 8,

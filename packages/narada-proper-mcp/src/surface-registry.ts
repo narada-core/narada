@@ -69,12 +69,9 @@ export interface RolePolicyValidationResult {
 }
 
 const EXPOSED_TOOL_NAMES = [
-  'agent_context_doctrinal_grounding',
-  'agent_context_hydrate_current',
   'agent_context_memory.plan_hydration',
   'agent_context_memory.read_checkpoint_summary',
   'agent_context_memory.record_checkpoint',
-  'agent_context_startup_sequence',
   'mcp_output_show',
   'inbox_stage_submission_workflow',
   'inbox_submit_observation',
@@ -123,9 +120,6 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
     tool_contract: {
       exposed_tools: EXPOSED_TOOL_NAMES,
       read_only_tools: [
-        'agent_context_doctrinal_grounding',
-        'agent_context_hydrate_current',
-        'agent_context_startup_sequence',
         'mcp_output_show',
         'agent_context_memory.plan_hydration',
         'agent_context_memory.read_checkpoint_summary',

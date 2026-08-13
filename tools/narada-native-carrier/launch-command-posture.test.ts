@@ -26,7 +26,7 @@ test('launch command posture exposes bounded runtime session capability authorit
 
   assert.equal(posture.carrier_session_id, 'carrier_session_launch_posture');
   assert.equal(posture.runtime.kind, 'local_process');
-  assert.equal(posture.startup_command.name, 'agent_context_startup_sequence');
+  assert.equal(posture.startup_command.name, 'agent_orientation_read');
   assert.equal(posture.capability_posture.registration_status, 'configured_provider_adapter');
   assert.equal(posture.capability_posture.provider_kind, 'openai_compatible');
   assert.ok(posture.withheld_authorities.includes('task_lifecycle_mutation_authority'));

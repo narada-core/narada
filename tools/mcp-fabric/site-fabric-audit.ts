@@ -37,12 +37,13 @@ function auditAgentTuiProjection(siteRoot: any, fabric: any) {
     .map(([tool, owners]: any) => ({ tool, owners }));
   const projectedTools = new Set(projectedServers.flatMap((server: any) => server.tools));
   const agentContextProjected = projectedServers.some((server: any) => {
-    return server.tools.some((tool: any) => String(tool).startsWith('agent_context_'));
+    return server.tools.some((tool: any) => String(tool) === 'agent_orientation_read'
+      || String(tool).startsWith('agent_context_'));
   });
   const missingStartupTools = agentContextProjected
-    ? ['agent_context_startup_sequence', 'mcp_output_show'].filter((tool: any) => !projectedTools.has(tool))
+    ? ['agent_orientation_read', 'mcp_output_show'].filter((tool: any) => !projectedTools.has(tool))
     : [];
-  const startupToolOwners = toolOwners.agent_context_startup_sequence ?? [];
+  const startupToolOwners = toolOwners.agent_orientation_read ?? [];
   const outputReaderOwners = toolOwners.mcp_output_show ?? [];
   const outputReaderSingular = outputReaderOwners.length === 1;
   const staleGlobalConfigPresent = existsSync(staleGlobalConfigPath);
@@ -69,7 +70,7 @@ function auditAgentTuiProjection(siteRoot: any, fabric: any) {
     projected_servers: projectedServers,
     duplicate_projected_tools: duplicateProjectedTools,
     agent_context_projected: agentContextProjected,
-    required_startup_tools: agentContextProjected ? ['agent_context_startup_sequence', 'mcp_output_show'] : [],
+    required_startup_tools: agentContextProjected ? ['agent_orientation_read', 'mcp_output_show'] : [],
     missing_startup_tools: missingStartupTools,
     startup_tool_server: startupToolOwners[0] ?? null,
     output_reader_server: outputReaderOwners[0] ?? null,

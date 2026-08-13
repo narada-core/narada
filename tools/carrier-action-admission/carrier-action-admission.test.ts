@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { classifyCarrierActionRequest } from '../../packages/carrier-action-admission/src/carrier-action-admission.ts';
 
-const classification = classifyCarrierActionRequest('agent_context_startup_sequence', {}, {
+const classification = classifyCarrierActionRequest('agent_orientation_read', {}, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
 });
 

@@ -34,7 +34,7 @@ test('operator routing contract exposes direct and reader routing vocabulary', (
   assert.deepEqual(toolAliasGroups(contract), [
     {
       id: 'startup_sequence',
-      tools: ['agent_context_startup_sequence', 'startup_sequence'],
+      tools: ['agent_orientation_read', 'agent_context_startup_sequence', 'startup_sequence'],
     },
     {
       id: 'mcp_payload_reader',

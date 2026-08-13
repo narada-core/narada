@@ -63,7 +63,7 @@ function startSession(options: any) {
     lifecycle_state: 'materialized',
     capability_projection_statuses: summarizeCapabilityProjections(options.capabilityProjections),
     startup_command: {
-      name: 'agent_context_startup_sequence',
+      name: 'agent_orientation_read',
       arguments: {},
     },
   };

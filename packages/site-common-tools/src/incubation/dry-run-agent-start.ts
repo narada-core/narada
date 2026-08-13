@@ -272,7 +272,7 @@ console.log(`\nresume_command: ${resumeCommand}`);
 console.log(`\n=== INCUBATION LIMIT ===`);
 console.log('This fixture does not issue Carrier Session admission or an Orientation Manifest.');
 console.log('Use the canonical Agent Start path to obtain an admitted manifest generation.');
-console.log('The admitted Carrier may then call agent_context_startup_sequence with its exact manifest id.');
+console.log('The admitted Carrier must then call agent_orientation_read({}) and follow its opaque continuations until ready.');
 
 function parseArgs(argv: any) : any{
   const result: any = {};

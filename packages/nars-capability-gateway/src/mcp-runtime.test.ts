@@ -79,7 +79,7 @@ test('runtime worker MCP preflight excludes servers without an admitted declared
     sop: { tools: ['sop_run_status'] },
     worker: { tools: ['worker_run'] },
     mailbox: { tools: ['mailbox_fact_show'] },
-    agent_context: { tools: ['agent_context_startup_sequence', 'agent_context_doctor'] },
+    agent_context: { tools: ['agent_orientation_read', 'agent_context_doctor'] },
   }, {
     native_mcp_mode: 'scoped',
     mcp_tool_allowlist: ['mailbox_fact_show'],

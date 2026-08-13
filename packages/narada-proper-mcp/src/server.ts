@@ -150,20 +150,6 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     }),
   },
   {
-    name: 'agent_context_hydrate_current',
-    description: 'Hydrate the current agent session from launcher-provided Narada environment evidence without mutating.',
-    inputSchema: objectSchema({
-      target: targetSchema(),
-    }),
-  },
-  {
-    name: 'agent_context_startup_sequence',
-    description: 'Run the canonical startup sequence: launcher/site identity hydration plus advisory checkpoint continuity.',
-    inputSchema: objectSchema({
-      target: targetSchema(),
-    }),
-  },
-  {
     name: 'mcp_output_show',
     description: 'Read a Narada proper mcp_output ref emitted by this MCP server.',
     inputSchema: objectSchema({
@@ -256,17 +242,6 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       credential_ref: stringSchema('Credential reference override; raw secret values are refused.'),
       target: targetSchema(),
     }, ['payload_file']),
-  },
-  {
-    name: 'agent_context_doctrinal_grounding',
-    description: 'Return read-only agent-context doctrine grounding for the current Site/session posture.',
-    inputSchema: objectSchema({
-      mode: { type: 'string', enum: ['reground'], description: 'Grounding mode; only reground is admitted in v1.' },
-      doctrine_ids: arrayStringSchema('Optional doctrine ids to include. When omitted, returns the default grounding catalog.'),
-      question: stringSchema('Optional bounded question used only to select supplemental proof-case refs.'),
-      require_inquiry_space_data: booleanSchema('Set true only when private Inquiry Space records are required; this returns blocked.'),
-      target: targetSchema(),
-    }, ['mode']),
   },
   {
     name: 'site_task_lifecycle.plan_init',

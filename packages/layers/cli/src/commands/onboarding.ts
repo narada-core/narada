@@ -1482,7 +1482,8 @@ function buildFirstUseVerification(
   const identityHydrated = events.some((event) => {
     const kind = kinds(event);
     return (kind === 'tool_result' || kind === 'carrier_tool_completed' || kind === 'item.completed')
-      && eventToolName(event).includes('agent_context_startup_sequence')
+      && ['agent_orientation_read', 'agent_context_startup_sequence']
+        .some((toolName) => eventToolName(event).includes(toolName))
       && eventSucceeded(event);
   }) || (
     // narada-agent-runtime-server does not run an MCP startup tool; its hydration

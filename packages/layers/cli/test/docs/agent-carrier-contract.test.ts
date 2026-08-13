@@ -56,10 +56,10 @@ describe('agent carrier concept and launch packet contract', () => {
     ]) {
       expect(contract.required_fields).toContain(required);
     }
-    expect(contract.field_contract.startup_command.required_shape.name).toBe('agent_context_startup_sequence');
+    expect(contract.field_contract.startup_command.required_shape.name).toBe('agent_orientation_read');
     expect(contract.field_contract.startup_sequence.required_first_steps).toHaveLength(1);
-    expect(contract.field_contract.startup_sequence.required_first_steps[0].tool).toBe('agent_context_startup_sequence');
-    expect(contract.field_contract.startup_sequence.required_first_steps[0].semantics).toBe('retrieve_exact_receipt_bound_orientation_manifest');
+    expect(contract.field_contract.startup_sequence.required_first_steps[0].tool).toBe('agent_orientation_read');
+    expect(contract.field_contract.startup_sequence.required_first_steps[0].semantics).toBe('deliver_exact_receipt_bound_orientation_until_ready');
     expect(contract.field_contract.startup_sequence.rule).toContain('ambient latest checkpoint selection');
     expect(contract.field_contract.required_environment.required_keys).toContain('NARADA_AGENT_ID');
     expect(contract.field_contract.required_environment.required_keys).toContain('NARADA_CARRIER_SESSION_ID');

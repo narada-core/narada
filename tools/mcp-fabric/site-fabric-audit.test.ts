@@ -76,7 +76,7 @@ assert.equal(agentContextAudit.agent_tui.startup_tool_server, 'agent_context');
 assert.equal(agentContextAudit.agent_tui.output_reader_server, 'agent_context');
 assert.deepEqual(agentContextAudit.agent_tui.duplicate_projected_tools, []);
 assert.deepEqual(agentContextAudit.agent_tui.projected_servers[0].tools, [
-  'agent_context_startup_sequence',
+  'agent_orientation_read',
   'mcp_output_show',
 ]);
 mkdirSync(join(agentContextSite, '.ai', 'mcp', 'agent-tui'), { recursive: true });

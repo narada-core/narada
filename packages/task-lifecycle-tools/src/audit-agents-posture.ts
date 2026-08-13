@@ -61,8 +61,8 @@ const checks: any = [
         'No `latest`, nearest-process, display-label, or conversational fallback',
       ]),
       registrySurface('narada-proper-agent-context.local', [
-        'agent_context_hydrate_current',
-        'agent_context_startup_sequence',
+        'agent_orientation_read',
+        'mcp_output_show',
       ]),
       fileContains('packages/agent-context-tools/src/session-start.ts', [
         'the only registrar-bound agent-context surface',

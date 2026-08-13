@@ -91,7 +91,7 @@ describe('narada proper MCP surface', () => {
         reconciliation_required_for_runtime: true,
       },
     });
-    expect(projection.tool_policy.canonical_allowed_tools).toContain('agent_context_startup_sequence');
+    expect(projection.tool_policy.canonical_allowed_tools).not.toContain('agent_context_startup_sequence');
     expect(projection.tool_policy.canonical_allowed_tools).toContain('narada_task_read');
     expect(projection.tool_policy.canonical_allowed_tools).not.toContain('inbox_submit_observation');
     expect(projection.tool_policy.optional_alias_tools).toEqual([
@@ -240,9 +240,9 @@ describe('narada proper MCP surface', () => {
     }
   });
 
-  it('exposes read-only agent context doctrinal grounding for telemetry ownership questions', async () => {
+  it('keeps doctrinal grounding callable only as hidden compatibility', async () => {
     const toolNames = NARADA_MCP_TOOLS.map((tool) => tool.name);
-    expect(toolNames).toContain('agent_context_doctrinal_grounding');
+    expect(toolNames).not.toContain('agent_context_doctrinal_grounding');
     expect(toolNames).not.toContain('narada_doctrine_grounding_refs');
 
     const response = await handleMcpRequest({
@@ -965,8 +965,8 @@ describe('narada proper MCP surface', () => {
     await running;
 
     const list = JSON.parse(output.lines[0]);
-    expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('agent_context_hydrate_current');
-    expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('agent_context_startup_sequence');
+    expect(list.result.tools.map((tool: { name: string }) => tool.name)).not.toContain('agent_context_hydrate_current');
+    expect(list.result.tools.map((tool: { name: string }) => tool.name)).not.toContain('agent_context_startup_sequence');
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('site_task_lifecycle.read_task');
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('site_task_lifecycle.materialize_task');
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('narada_task_read');

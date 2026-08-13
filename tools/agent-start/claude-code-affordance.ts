@@ -4,7 +4,7 @@ function buildAffordance({ siteRoot, launchResult = null }: any) {
   const latest = latestSessionReadback(siteRoot);
   const carrierSessionId = launchResult?.carrier_session_id ?? latest.carrier_session_id;
   const startupCommand = launchResult?.startup_command ?? {
-    name: 'agent_context_startup_sequence',
+    name: 'agent_orientation_read',
     arguments: {},
   };
   return {

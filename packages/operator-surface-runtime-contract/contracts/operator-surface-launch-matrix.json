@@ -21,7 +21,7 @@
         "startup_sequence_availability": "MCP tool if present in site fabric",
         "known_gaps": ["Full owner-side canonical materialization remains outside this carrier boundary slice."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
@@ -45,7 +45,7 @@
         "startup_sequence_availability": "MCP tool if present in site fabric; the Web UI projection is covered by separate live acceptance",
         "known_gaps": ["Full owner-side canonical materialization remains outside this carrier boundary slice."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
@@ -69,7 +69,7 @@
         "startup_sequence_availability": "MCP tool if present in site fabric",
         "known_gaps": ["The Rust TUI remains a projection client and must be attached to the runtime event endpoint after session startup."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
@@ -93,7 +93,7 @@
         "startup_sequence_availability": "MCP tool if present in site fabric",
         "known_gaps": ["The Pi-style TUI remains a projection client and must attach to the runtime event endpoint after session startup."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
@@ -116,7 +116,7 @@
         "startup_sequence_availability": "MCP tool if present in the projected fabric",
         "known_gaps": ["Tool execution provenance is carrier-native unless routed through Narada-owned MCP/admission surfaces.", "Codex approval settings are launcher configuration, not Agent Runtime Server code mediation."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
@@ -126,22 +126,22 @@
       "carrier_implementation_kind": "kimi",
       "runtime_host_kind": "kimi",
       "runtime_substrate_kind": "kimi",
-      "tool_fabric_adapter_kind": "ambient-carrier-tools",
-      "tool_fabric_source": "substrate-native",
+      "tool_fabric_adapter_kind": "kimi-project-mcp",
+      "tool_fabric_source": ".ai/mcp projected into workspace .kimi-code/mcp.json",
       "adapter_entrypoint": null,
       "projection_capabilities": [],
       "conformance": {
-        "evidence_level": "unverified",
+        "evidence_level": "config_enforced",
         "default_intelligence_auth_path": "Kimi native carrier/provider authentication",
-        "mcp_fabric_source": "No Narada MCP adapter is claimed; native carrier tools remain carrier-owned",
+        "mcp_fabric_source": "Narada launcher projects the exact scoped Site MCP fabric into Kimi's project-local .kimi-code/mcp.json while preserving non-Narada entries",
         "native_shell_posture": "Not enforced by Narada; Kimi manages its own tool execution",
         "mutating_call_handling": "No Narada code-mediated admission loop is claimed",
-        "startup_sequence_availability": "No Narada startup MCP tool is claimed",
-        "known_gaps": ["Kimi native carrier integration has not been verified through a Narada adapter."]
+        "startup_sequence_availability": "Required orientation tools are projected before Kimi starts; launch refuses an empty or conflicting projection",
+        "known_gaps": ["Tool execution provenance and approval UI remain Kimi-native after the launcher-owned MCP projection."]
       },
-      "expected_tools": [],
-      "expected_tools_scope": "none",
-      "states": ["runtime_known", "adapter_selected", "no_narada_mcp_claim"]
+      "expected_tools": ["agent_orientation_read", "mcp_output_show"],
+      "expected_tools_scope": "sentinel",
+      "states": ["runtime_known", "adapter_selected", "source_declared", "launch_ready"]
     },
     {
       "launch_selection_kind": "pi",
@@ -162,7 +162,7 @@
         "startup_sequence_availability": "MCP tool through the Narada Pi extension when the bridge loads correctly",
         "known_gaps": ["Pi native carrier behavior is not universally intercepted by Agent Runtime Server; only Narada MCP bridge calls are governed by the projected Site surfaces.", "Bridge startup should be smoke-tested per installed Pi version."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next", "task_lifecycle_un_defer"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next", "task_lifecycle_un_defer"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "narada_owned_extension_bridge", "launch_ready"],
       "admission_basis": "Narada-owned Pi extension bridges Site-local .ai/mcp tools into Pi; MCP servers remain Site-local authority surfaces."
@@ -186,7 +186,7 @@
         "startup_sequence_availability": "MCP tool if present in generated strict MCP config",
         "known_gaps": ["Not all Claude Code native tool behavior is Narada code-mediated.", "Effect mediation is explicit artifact flow, not universal interception of all carrier actions."]
       },
-      "expected_tools": ["agent_context_startup_sequence", "mcp_output_show", "task_lifecycle_next", "task_lifecycle_un_defer"],
+      "expected_tools": ["agent_orientation_read", "mcp_output_show", "task_lifecycle_next", "task_lifecycle_un_defer"],
       "expected_tools_scope": "sentinel",
       "states": ["runtime_known", "adapter_selected", "source_declared", "native_mcp_config_required", "launch_ready"]
     },

@@ -10,7 +10,7 @@ import { auditLauncherKnownSites } from './site-fabric-audit.ts';
 const DEFAULT_LAUNCH_REGISTRY = 'C:/Users/Andrey/Narada/config/launch/agents.psd1';
 
 const REQUIRED_STARTUP_TOOLS = [
-  'agent_context_startup_sequence',
+  'agent_orientation_read',
   'mcp_output_show',
 ];
 

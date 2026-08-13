@@ -144,7 +144,7 @@ function materializeLifecycleFixture({ siteRoot, launchResult, processAttempt, n
     index,
     now,
     runtimeHandle: { kind: 'pid_or_external_handle', value: 'fixture-handle' },
-    startupHydrationResult: state === 'ready' ? { status: 'hydrated', startup_command: 'agent_context_startup_sequence' } : null,
+    startupHydrationResult: state === 'ready' ? { status: 'ready', startup_command: 'agent_orientation_read' } : null,
     closeoutPosture: state === 'closed' ? { status: 'closed_with_evidence', handoff_required: false } : null,
     failure: state === 'failed' ? { reason: 'fixture_failure_after_close', terminal: false } : null,
   }));

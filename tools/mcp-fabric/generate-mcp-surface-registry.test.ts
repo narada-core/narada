@@ -41,11 +41,7 @@ assert.equal(registry.surfaces.every((surface: any) => surface.tool_contract.rea
 assert.equal(registry.surfaces.every((surface: any) => surface.authority_boundary.grants_tool_authority === false), true);
 assert.deepEqual(inferredToolContract('fixture-agent-context').read_only_tools, [
   'agent_context_doctor',
-  'agent_context_whoami',
-  'agent_context_hydrate_current',
-  'agent_context_startup_sequence',
-  'agent_context_rehydrate',
-  'agent_context_list_sessions',
+  'agent_orientation_read',
   'mcp_output_show',
 ]);
 assert.equal(inferredToolContract('fixture-task-lifecycle').read_only_tools.includes('task_lifecycle_next'), true);

@@ -1,4 +1,6 @@
-use narada_invokable_intelligence_runtime::{preflight, PreflightRequest, ResolverDigests};
+use narada_invokable_intelligence_runtime::{
+    preflight, PreflightOutcome, PreflightRequest, ResolverDigests,
+};
 use rusqlite::{params, Connection};
 use serde_json::json;
 use sha2::Digest;
@@ -98,6 +100,37 @@ fn registry(valid_until: &str) -> std::path::PathBuf {
 fn admits_only_current_matching_plan() {
     let path = registry("2026-08-12T13:00:00Z");
     assert!(preflight(&path, &request()).admitted());
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn refuses_plan_without_concrete_selected_model() {
+    let path = registry("2026-08-12T13:00:00Z");
+    let connection = Connection::open(&path).unwrap();
+    let plan_text: String = connection
+        .query_row(
+            "SELECT doc FROM invocation_plans WHERE id='plan:test'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let mut plan: serde_json::Value = serde_json::from_str(&plan_text).unwrap();
+    plan["selected"]["model"] = serde_json::Value::Null;
+    connection
+        .execute(
+            "UPDATE invocation_plans SET doc=?1 WHERE id='plan:test'",
+            [plan.to_string()],
+        )
+        .unwrap();
+    drop(connection);
+
+    match preflight(&path, &request()) {
+        PreflightOutcome::Refused { code, reasons, .. } => {
+            assert_eq!(code, "plan_invalid");
+            assert_eq!(reasons, vec!["selected-model-missing"]);
+        }
+        outcome => panic!("expected refusal, got {outcome:?}"),
+    }
     fs::remove_file(path).unwrap();
 }
 

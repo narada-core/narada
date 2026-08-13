@@ -135,6 +135,14 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
     {
         return refuse("plan_invalid", vec!["plan-identity-mismatch".to_string()]);
     }
+    let selected_model = plan
+        .pointer("/selected/model/id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty());
+    if selected_model.is_none() {
+        return refuse("plan_invalid", vec!["selected-model-missing".to_string()]);
+    }
     let snapshot = match plan.get("snapshot") {
         Some(Value::Object(snapshot)) => snapshot,
         _ => return refuse("plan_invalid", vec!["snapshot-missing".to_string()]),

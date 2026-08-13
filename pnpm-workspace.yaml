@@ -18,6 +18,7 @@ packages:
   - '../mcp-surfaces/packages/shared/mcp-transport'
   - '../mcp-surfaces/packages/shared/mcp-protocol'
   - '../mcp-surfaces/packages/shared/mcp-e2e-harness'
+  - '../mcp-surfaces/packages/shared/mcp-protocol'
   - '../mcp-surfaces/packages/shared/mcp-fabric-contracts'
   - '../mcp-surfaces/packages/shared/mcp-runtime-proxy'
   - '../mcp-surfaces/packages/shared/mcp-runtime-client'

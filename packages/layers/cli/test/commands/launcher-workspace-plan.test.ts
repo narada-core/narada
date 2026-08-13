@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkspaceLaunchAdmissionPolicy } from '../../src/commands/workspace-launch-admission.js';
 import { explainMcpCommand, workspaceLaunchCommand, workspaceLaunchPlanCommand } from '../../src/commands/workspace-launch-application.js';
@@ -36,6 +37,14 @@ vi.mock('../../src/lib/launcher-runtime.js', async () => {
     runAgentStartCommand: runAgentStartCommandMock,
   };
 });
+
+const testNaradaProperRoot = resolve(fileURLToPath(new URL('../../../../..', import.meta.url)));
+
+async function seedRuntimeEntrypoint(): Promise<void> {
+  const directory = join(testNaradaProperRoot, 'packages', 'layers', 'cli', 'dist');
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, 'main.js'), '// test runtime entrypoint\n', 'utf8');
+}
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -328,36 +337,14 @@ describe('launcher workspace planning', () => {
     });
     expect(result.selected_agents[0].wait_for_enter_before_exec).toBe(false);
     expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
-    expect(result.selected_agents[0].runtime_start_command).toEqual(expect.arrayContaining([
+    const runtimeStartCommand = result.selected_agents[0].runtime_start_command;
+    expect(runtimeStartCommand.slice(0, 4)).toEqual([
       'pnpm',
       '--dir',
-      'C:\\workspace\\narada',
+      testNaradaProperRoot,
       'exec',
-      'narada',
-      'operator-surface',
-      'runtime',
-      'start',
-      'agent-cli',
-      '--exec',
-    ]));
-    expect(result.selected_agents[0].runtime_start_cwd).toBe('C:/workspace/narada.sonar');
-    expect(result.selected_agents[0].wt_args).toEqual([]);
-    expect(result.selected_agents[0].hidden_runtime_start_command[0]).toBe(process.execPath);
-    expect(result.selected_agents[0].hidden_runtime_start_command[1]).toContain('packages');
-    expect(result.selected_agents[0].hidden_runtime_start_command).toEqual(expect.arrayContaining([
-      'operator-surface',
-      'runtime',
-      'start',
-      'agent-cli',
-      '--runtime',
-      'narada-agent-runtime-server',
-      '--workspace-root',
-      'C:/workspace/narada.sonar',
-      '--launch-session-id',
-      result.selected_agents[0].launch_session_id,
-    ]));
-    expect(result.selected_agents[0].hidden_runtime_start_command).not.toContain('--intelligence-provider');
-    expect(result.selected_agents[0].smoke_command).toEqual(expect.arrayContaining([
+    ]);
+    expect(runtimeStartCommand).toEqual(expect.arrayContaining([
       'narada',
       'operator-surface',
       'runtime',
@@ -367,12 +354,86 @@ describe('launcher workspace planning', () => {
       'C:/workspace/narada.sonar',
       '--agent',
       'sonar.resident',
+      '--target-site-id',
+      'sonar',
       '--runtime',
       'narada-agent-runtime-server',
-      '--launch-session-id',
-      result.selected_agents[0].launch_session_id,
-      '--dry-run',
+      '--runtime-engine',
+      'rust',
+      '--exec',
+      '--format',
+      'human',
+      '--workspace-root',
+      'C:/workspace/narada.sonar',
+      '--authority',
+      'auto',
+      '--mcp-scope',
+      'all',
     ]));
+    expect(result.selected_agents[0].runtime_start_cwd).toBe('C:/workspace/narada.sonar');
+    expect(result.selected_agents[0].wt_args).toEqual([]);
+    const hiddenRuntimeCommand = result.selected_agents[0].hidden_runtime_start_command;
+    expect(hiddenRuntimeCommand[0]).toBe(process.execPath);
+    expect(hiddenRuntimeCommand[1]).toContain('packages');
+    expect(hiddenRuntimeCommand).toEqual(expect.arrayContaining([
+      'operator-surface',
+      'runtime',
+      'start',
+      'agent-cli',
+      '--site-root',
+      'C:/workspace/narada.sonar',
+      '--agent',
+      'sonar.resident',
+      '--target-site-id',
+      'sonar',
+      '--runtime',
+      'narada-agent-runtime-server',
+      '--runtime-engine',
+      'rust',
+      '--exec',
+      '--format',
+      'human',
+      '--workspace-root',
+      'C:/workspace/narada.sonar',
+      '--authority',
+      'auto',
+      '--mcp-scope',
+      'all',
+    ]));
+    const hiddenBindingIndex = hiddenRuntimeCommand.indexOf('--launch-binding');
+    expect(hiddenBindingIndex).toBeGreaterThan(-1);
+    expect(hiddenRuntimeCommand[hiddenBindingIndex + 1]).toContain('operator-projection-launch-bindings');
+    expect(hiddenRuntimeCommand).not.toContain('--intelligence-provider');
+    const smokeCommand = result.selected_agents[0].smoke_command;
+    expect(smokeCommand).toEqual(expect.arrayContaining([
+      'narada',
+      'operator-surface',
+      'runtime',
+      'start',
+      'agent-cli',
+      '--site-root',
+      'C:/workspace/narada.sonar',
+      '--agent',
+      'sonar.resident',
+      '--target-site-id',
+      'sonar',
+      '--runtime',
+      'narada-agent-runtime-server',
+      '--runtime-engine',
+      'rust',
+      '--workspace-root',
+      'C:/workspace/narada.sonar',
+      '--authority',
+      'auto',
+      '--mcp-scope',
+      'all',
+      '--dry-run',
+      '--format',
+      'json',
+    ]));
+    const smokeBindingIndex = smokeCommand.indexOf('--launch-binding');
+    expect(smokeBindingIndex).toBeGreaterThan(-1);
+    expect(smokeCommand[smokeBindingIndex + 1]).toContain('operator-projection-launch-bindings');
     expect(result.wt_args).toEqual([]);
   });
 
@@ -448,6 +509,7 @@ describe('launcher workspace planning', () => {
 
   it('launches NARS runtime starts through hidden posture instead of Windows Terminal', async () => {
     const registryPath = await tempRegistry();
+    await seedRuntimeEntrypoint();
     const hiddenLog = join(tempDirs[0], 'hidden-runtime.jsonl');
     const terminalLog = join(tempDirs[0], 'terminal.jsonl');
     const resultPath = join(tempDirs[0], 'workspace-launch-result.json');

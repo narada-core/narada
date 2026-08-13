@@ -16,6 +16,12 @@ export interface NaradaSitePaths {
   workspaceRoot: string;
   siteRoot: string;
   siteAuthorityRoot: string;
+  /** Explicit canonical authority/governance root; legacy siteAuthorityRoot remains for compatibility. */
+  governanceRoot: string;
+  /** Workspace-local runtime state root, distinct from governance metadata under .narada. */
+  runtimeStateRoot: string;
+  /** Workspace-local MCP fabric root. */
+  mcpFabricRoot: string;
   aiRoot: string;
   runtimeRoot: string;
   crewRoot: string;
@@ -81,6 +87,9 @@ export function resolveNaradaSitePaths({
   const siteAuthorityRoot = rootKind === 'site_authority_root'
     ? inputRoot
     : join(inputRoot, SITE_AUTHORITY_DIR_NAME);
+  const governanceRoot = siteAuthorityRoot;
+  const runtimeStateRoot = join(resolvedWorkspaceRoot, '.ai');
+  const mcpFabricRoot = join(runtimeStateRoot, 'mcp');
   const aiRoot = join(siteAuthorityRoot, '.ai');
   const runtimeRoot = join(aiRoot, 'runtime');
   const crewRoot = join(siteAuthorityRoot, 'crew');
@@ -92,6 +101,9 @@ export function resolveNaradaSitePaths({
     workspaceRoot: resolvedWorkspaceRoot,
     siteRoot: inputRoot,
     siteAuthorityRoot,
+    governanceRoot,
+    runtimeStateRoot,
+    mcpFabricRoot,
     aiRoot,
     runtimeRoot,
     crewRoot,
@@ -99,7 +111,6 @@ export function resolveNaradaSitePaths({
     ...maybeSessionPaths(narsSessionsRoot, sessionId),
   });
 }
-
 export function siteAuthorityRootFromSiteRoot(siteRoot: string): string {
   return resolveNaradaSitePaths({ siteRoot }).siteAuthorityRoot;
 }

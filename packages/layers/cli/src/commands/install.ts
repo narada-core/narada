@@ -124,6 +124,52 @@ async function existingInstallationProfile(siteRoot: string): Promise<string | u
     return undefined;
   }
 }
+function configuredNaradaProperRoot(): string | null {
+  const candidates = [
+    process.env.NARADA_PROPER_ROOT,
+    process.env.NARADA_CLI_PACKAGE_ROOT
+      ? resolve(join(process.env.NARADA_CLI_PACKAGE_ROOT, '..', '..', '..'))
+      : undefined,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const root = resolve(candidate);
+    if (
+      existsSync(join(root, 'package.json'))
+      && existsSync(join(root, 'packages', 'layers', 'cli', 'package.json'))
+    ) {
+      return root;
+    }
+  }
+  return null;
+}
+
+async function persistNaradaProperRoot(siteRoot: string): Promise<string | null> {
+  const properRoot = configuredNaradaProperRoot();
+  if (!properRoot) return null;
+
+  const envPath = join(siteRoot, '.env');
+  let contents = '';
+  try {
+    contents = await readFile(envPath, 'utf8');
+  } catch {
+    // The User Site may not have an environment file yet.
+  }
+  const delimiter = contents.includes('\r\n') ? '\r\n' : '\n';
+  const lines = contents ? contents.split(/\r?\n/) : [];
+  let replaced = false;
+  const updated = lines.map((line) => {
+    if (/^\s*NARADA_PROPER_ROOT\s*=/.test(line)) {
+      replaced = true;
+      return `NARADA_PROPER_ROOT=${properRoot}`;
+    }
+    return line;
+  });
+  if (!replaced) updated.push(`NARADA_PROPER_ROOT=${properRoot}`);
+  const output = updated.join(delimiter).replace(new RegExp(`(${delimiter})+$`), '') + delimiter;
+  await writeFile(envPath, output, 'utf8');
+  return properRoot;
+}
 
 interface WindowsUserSiteInstallResult {
   schema: typeof WINDOWS_USER_SITE_INSTALL_SCHEMA;
@@ -140,6 +186,7 @@ interface WindowsUserSiteInstallResult {
     root: string;
     registry_path: string;
   };
+  dependency_narada_root: string | null;
   assets: InstalledAsset[];
   installation_manifest_path: string | null;
   next_action: string;
@@ -164,6 +211,7 @@ export async function windowsUserSiteInstallCommand(
     for (const asset of WINDOWS_ASSETS) {
       assets.push(await installAsset(root, asset));
     }
+    const dependencyNaradaRoot = await persistNaradaProperRoot(root);
     const manifestPath = join(siteAuthorityRootFromSiteRoot(root), 'runtime', 'installation', 'user-site-install.json');
     await mkdir(dirname(manifestPath), { recursive: true });
     const result: WindowsUserSiteInstallResult = {
@@ -174,6 +222,7 @@ export async function windowsUserSiteInstallCommand(
       optional_modules: [...profileDescriptor.optional_modules],
       package: packageInfo,
       user_site: { root: resolve(root), registry_path: resolve(registryPath) },
+      dependency_narada_root: dependencyNaradaRoot,
       assets,
       installation_manifest_path: manifestPath,
       next_action: 'Run `narada doctor --bootstrap`, then `narada onboarding start --platform windows --scope user-site`.',
@@ -194,6 +243,7 @@ export async function windowsUserSiteInstallCommand(
       optional_modules: [],
       package: packageMetadata(),
       user_site: { root: resolve(root), registry_path: resolve(registryPath) },
+      dependency_narada_root: null,
       assets: [],
       installation_manifest_path: null,
       next_action: `Resolve the reported prerequisite, then rerun \`${repairCommand}\`.`,

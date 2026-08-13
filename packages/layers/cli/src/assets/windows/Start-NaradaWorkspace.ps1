@@ -27,15 +27,64 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$narada = Get-Command narada -ErrorAction SilentlyContinue
-if ($null -eq $narada) {
-  throw 'narada_cli_not_found: install @narada-core/cli globally, then rerun this launcher'
+function Import-NaradaLauncherEnvironment {
+  $envPath = Join-Path $PSScriptRoot '.env'
+  if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) { return }
+  foreach ($line in Get-Content -LiteralPath $envPath) {
+    $trimmed = $line.Trim()
+    if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
+    if ($trimmed -match '^(NARADA_PROPER_ROOT|NARADA_CLI_PACKAGE_ROOT)=(.*)$') {
+      $name = $Matches[1]
+      $value = $Matches[2].Trim().Trim('"').Trim("'")
+      if (-not [Environment]::GetEnvironmentVariable($name, 'Process') -and $value) {
+        [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+      }
+    }
+  }
 }
 
+function Resolve-NaradaProperRoot {
+  $candidates = @()
+  if ($env:NARADA_PROPER_ROOT) { $candidates += $env:NARADA_PROPER_ROOT }
+  if ($env:NARADA_CLI_PACKAGE_ROOT) { $candidates += (Join-Path $env:NARADA_CLI_PACKAGE_ROOT '..\..\..') }
+
+  foreach ($candidate in $candidates) {
+    if (-not $candidate) { continue }
+    $rootPackagePath = Join-Path $candidate 'package.json'
+    $cliPackagePath = Join-Path $candidate 'packages\layers\cli\package.json'
+    if ((Test-Path -LiteralPath $rootPackagePath -PathType Leaf) -and (Test-Path -LiteralPath $cliPackagePath -PathType Leaf)) {
+      return [System.IO.Path]::GetFullPath($candidate)
+    }
+  }
+
+  throw 'narada_proper_root_missing: set NARADA_PROPER_ROOT to the Narada proper workspace root'
+}
+
+function Resolve-NaradaInvocation {
+  Import-NaradaLauncherEnvironment
+  $globalNarada = Get-Command narada -ErrorAction SilentlyContinue
+  if ($null -ne $globalNarada) {
+    return [pscustomobject]@{ Command = $globalNarada.Source; PrefixArgs = @() }
+  }
+
+  $properRoot = Resolve-NaradaProperRoot
+  $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
+  if ($null -eq $pnpm) {
+    throw 'narada_cli_not_found: global narada is unavailable and pnpm could not be resolved for the configured Narada proper root'
+  }
+
+  return [pscustomobject]@{
+    Command = $pnpm.Source
+    PrefixArgs = @('--dir', $properRoot, 'exec', 'narada')
+  }
+}
+
+$naradaInvocation = Resolve-NaradaInvocation
 if ($Onboarding) {
   $args = @('onboarding', 'start', '--platform', 'windows', '--scope', 'user-site')
   if ($DryRun) { $args += '--no-exec' }
-  & $narada.Source @args
+  $invocationArgs = @($naradaInvocation.PrefixArgs) + @($args)
+  & $naradaInvocation.Command @invocationArgs
   exit $LASTEXITCODE
 }
 
@@ -59,6 +108,6 @@ foreach ($value in @($Role)) { if ($value) { $args += @('--role', $value) } }
 foreach ($value in @($Agent)) { if ($value) { $args += @('--agent', $value) } }
 foreach ($value in @($OperatorSurface)) { if ($value) { $args += @('--operator-surface', $value) } }
 
-& $narada.Source @args
+$invocationArgs = @($naradaInvocation.PrefixArgs) + @($args)
+& $naradaInvocation.Command @invocationArgs
 exit $LASTEXITCODE
-

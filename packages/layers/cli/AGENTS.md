@@ -23,7 +23,7 @@ Boundary rules:
 
 Two package-owned scripts in `src/assets/windows/` are installed into the User Site by `narada install windows-user-site` (see `WINDOWS_ASSETS` in `src/commands/install.ts`):
 
-- `Start-NaradaWorkspace.ps1` — thin published shim; invokes the globally installed `narada` binary. This is the only launcher published-install users need.
+- `Start-NaradaWorkspace.ps1` — published shim; prefers a globally installed `narada`, then falls back to `pnpm --dir <NARADA_PROPER_ROOT> exec narada` using the persisted User Site `.env` root. This is the only launcher published-install users need.
 - `Start-NaradaWorkspace.Dev.ps1` — source-checkout development driver; resolves the checkout via `NARADA_PROPER_ROOT` (or `NARADA_CLI_PACKAGE_ROOT`), checks CLI dist freshness and carrier projections, and exposes the full selection surface (`-All`, `-Carrier`, `-ConfigPath`, `-Smoke`, ...). The launcher acceptance e2e (`test/integration/operator-launch-journey.test.ts`) drives this repo asset directly — it must stay interface-compatible with that suite.
 
 ## Verification

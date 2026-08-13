@@ -33,6 +33,7 @@ export interface SiteReadinessResult {
   posture: SiteReadinessPosture;
   target_locus: {
     site: string;
+    site_id: string;
     site_root: string;
     operation: string | null;
   };
@@ -47,9 +48,19 @@ export interface SiteReadinessResult {
     embodiments: unknown[];
     operator_surface_posture: {
       role: string;
+      required: boolean;
       identity_id: string | null;
+      identity_admitted: boolean;
+      submit_transport_declared: boolean;
+      runtime_handle_bound: boolean;
       bound_transport: boolean;
+      binding_status: 'bound' | 'unbound' | 'stale' | 'ambiguous';
+      runtime_locus: string | null;
       submit_strategy: string | null;
+      evidence_paths: {
+        identity_registry: string;
+        runtime_bindings: string;
+      };
     };
   };
   readiness_strata: {
@@ -77,6 +88,8 @@ export interface AssessSiteReadinessOptions {
   site: string;
   operation?: string | null;
   role?: string;
+  /** Require the requested role even when the Site has not declared one. */
+  roleRequired?: boolean;
 }
 
 function titleFromPayload(payload: unknown): string | null {
@@ -104,29 +117,144 @@ function listPendingInbox(siteRoot: string): SiteReadinessResult['pending_inbox'
   }
 }
 
-function hasTransport(identity: OperatorSurfaceIdentity | null): boolean {
+type RuntimeBindingRecord = {
+  binding_id?: string;
+  identity_id?: string;
+  runtime_locus?: string;
+  handle?: string;
+  transport?: string;
+  input_capabilities?: string[];
+  status?: string;
+  stale_after?: string;
+};
+
+type RuntimeBindingPosture = {
+  status: 'bound' | 'unbound' | 'stale' | 'ambiguous';
+  binding_id: string | null;
+  runtime_locus: string | null;
+  handle: string | null;
+};
+
+type IdentityRegistryRead = {
+  registry: { identities: OperatorSurfaceIdentity[] };
+  path: string;
+  source: 'canonical' | 'legacy' | 'missing';
+};
+
+function declaredTransport(identity: OperatorSurfaceIdentity | null): boolean {
   if (!identity) return false;
   const capabilities = identity.input_capabilities ?? [];
-  return capabilities.includes('focus') || capabilities.includes('type_text') || Boolean(identity.submit_strategy);
+  return capabilities.includes('type_text') || capabilities.includes('submit') || Boolean(identity.submit_strategy);
 }
 
-function nextCommandFor(posture: SiteReadinessPosture, siteRoot: string, role: string): string {
-  switch (posture) {
-    case 'site_absent':
-      return `narada sites init --root ${JSON.stringify(siteRoot)}`;
-    case 'initialized_unready':
-      return `narada sites doctor ${JSON.stringify(siteRoot)} --format json`;
-    case 'ready_missing_role_binding':
-      return `narada operator-surface agent instantiate --cwd ${JSON.stringify(siteRoot)} --site ${JSON.stringify(siteRoot)} --role ${role} --agent-kind codex_cli --by <principal>`;
-    case 'ready_missing_transport':
-      return 'narada operator-surface bind-focused --as self';
-    case 'ready_pending_inbox':
-      return `narada inbox work-next --by ${role}`;
-    case 'fully_idle':
-      return `narada work-next --agent ${role} --format json`;
+function isStaleRuntimeBinding(binding: RuntimeBindingRecord, now = Date.now()): boolean {
+  if (binding.status === 'stale' || binding.status === 'revoked') return true;
+  if (!binding.stale_after) return false;
+  const timestamp = Date.parse(binding.stale_after);
+  return Number.isFinite(timestamp) && timestamp <= now;
+}
+
+function runtimeBindingPosture(identityId: string | null, bindings: RuntimeBindingRecord[]): RuntimeBindingPosture {
+  if (!identityId) return { status: 'unbound', binding_id: null, runtime_locus: null, handle: null };
+  const matching = bindings.filter((binding) => binding.identity_id === identityId);
+  if (matching.length === 0) return { status: 'unbound', binding_id: null, runtime_locus: null, handle: null };
+  const active = matching.filter((binding) => !isStaleRuntimeBinding(binding));
+  if (active.length === 0) {
+    const binding = matching[0];
+    return { status: 'stale', binding_id: binding?.binding_id ?? null, runtime_locus: binding?.runtime_locus ?? null, handle: binding?.handle ?? null };
+  }
+  if (active.length > 1) return { status: 'ambiguous', binding_id: null, runtime_locus: null, handle: null };
+  const binding = active[0];
+  if (!binding?.runtime_locus || !binding.handle) {
+    return { status: 'unbound', binding_id: binding?.binding_id ?? null, runtime_locus: binding?.runtime_locus ?? null, handle: binding?.handle ?? null };
+  }
+  return { status: 'bound', binding_id: binding.binding_id ?? null, runtime_locus: binding.runtime_locus, handle: binding.handle };
+}
+
+async function readIdentityRegistry(siteRoot: string): Promise<IdentityRegistryRead> {
+  const authorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
+  const candidates: Array<{ root: string; source: 'canonical' | 'legacy' }> = [
+    { root: authorityRoot, source: 'canonical' },
+    { root: siteRoot, source: 'legacy' },
+  ];
+  for (const candidate of candidates) {
+    const path = join(candidate.root, 'operator-surfaces', 'identities.json');
+    if (!existsSync(path)) continue;
+    return { registry: await readOperatorSurfaceIdentities(candidate.root), path, source: candidate.source };
+  }
+  return {
+    registry: { identities: [] },
+    path: join(authorityRoot, 'operator-surfaces', 'identities.json'),
+    source: 'missing',
+  };
+}
+
+function readRuntimeBindings(siteRoot: string): { bindings: RuntimeBindingRecord[]; path: string } {
+  const authorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
+  const candidates = [
+    join(authorityRoot, 'operator-surfaces', 'runtime-bindings.json'),
+    join(siteRoot, 'operator-surfaces', 'runtime-bindings.json'),
+  ];
+  const path = candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+  if (!existsSync(path)) return { bindings: [], path };
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    const values: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray((parsed as Record<string, unknown>).bindings)
+        ? (parsed as { bindings: unknown[] }).bindings
+        : [];
+    return {
+      bindings: values.filter((binding): binding is RuntimeBindingRecord => Boolean(binding && typeof binding === 'object' && !Array.isArray(binding))),
+      path,
+    };
+  } catch {
+    return { bindings: [], path };
   }
 }
 
+function siteIdForReadiness(config: Record<string, unknown> | null, materialization: Record<string, unknown> | null): string {
+  const site = objectField(config, 'site');
+  const candidates = [
+    config?.site_id,
+    site?.site_id,
+    materialization?.site_id,
+    objectField(materialization, 'site')?.site_id,
+  ];
+  const value = candidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
+  return value?.trim() ?? '<site-id>';
+}
+
+function nextCommandFor(
+  posture: SiteReadinessPosture,
+  siteRoot: string,
+  authorityRoot: string,
+  siteId: string,
+  role: string,
+  identityId: string | null,
+  binding: RuntimeBindingPosture,
+): string {
+  switch (posture) {
+    case 'site_absent':
+      return 'narada sites init --root ' + JSON.stringify(siteRoot);
+    case 'initialized_unready':
+      return 'narada sites doctor ' + JSON.stringify(siteId) + ' --root ' + JSON.stringify(siteRoot) + ' --format json';
+    case 'ready_missing_role_binding':
+      return 'narada operator-surface agent instantiate --cwd ' + JSON.stringify(authorityRoot)
+        + ' --site ' + JSON.stringify(siteId)
+        + ' --role ' + role
+        + ' --identity ' + JSON.stringify(identityId ?? siteId + '.' + role)
+        + ' --agent-kind codex_cli --by <principal>';
+    case 'ready_missing_transport':
+      return 'narada operator-surface bind-focused --identity ' + JSON.stringify(identityId ?? '<identity>')
+        + ' --runtime-locus ' + JSON.stringify(binding.runtime_locus ?? '<runtime-locus>')
+        + ' --handle <captured-hwnd-or-stable-handle>';
+    case 'ready_pending_inbox':
+      return 'narada inbox work-next --by ' + role;
+    case 'fully_idle':
+      return 'narada work-next --agent ' + role + ' --format json';
+  }
+}
 function readJsonFile(path: string): Record<string, unknown> | null {
   if (!existsSync(path)) return null;
   try {
@@ -233,7 +361,16 @@ function readinessPhase(config: Record<string, unknown> | null): SiteReadinessRe
   return { state: 'not_yet_onboarded', source: 'default' };
 }
 
-function coordinates(config: Record<string, unknown> | null, roleIdentity: OperatorSurfaceIdentity | null, role: string): SiteReadinessResult['coordinates'] {
+function coordinates(
+  config: Record<string, unknown> | null,
+  roleIdentity: OperatorSurfaceIdentity | null,
+  role: string,
+  roleRequired: boolean,
+  transportDeclared: boolean,
+  binding: RuntimeBindingPosture,
+  identityRegistryPath: string,
+  runtimeBindingsPath: string,
+): SiteReadinessResult['coordinates'] {
   const governance = objectField(config, 'governance');
   const locus = objectField(config, 'locus');
   return {
@@ -243,9 +380,19 @@ function coordinates(config: Record<string, unknown> | null, roleIdentity: Opera
     embodiments: arrayField(governance, 'embodiments').length > 0 ? arrayField(governance, 'embodiments') : arrayField(config, 'embodiments'),
     operator_surface_posture: {
       role,
+      required: roleRequired,
       identity_id: roleIdentity?.identity_id ?? null,
-      bound_transport: hasTransport(roleIdentity),
+      identity_admitted: Boolean(roleIdentity),
+      submit_transport_declared: transportDeclared,
+      runtime_handle_bound: binding.status === 'bound',
+      bound_transport: binding.status === 'bound',
+      binding_status: binding.status,
+      runtime_locus: binding.runtime_locus,
       submit_strategy: roleIdentity?.submit_strategy ?? null,
+      evidence_paths: {
+        identity_registry: identityRegistryPath,
+        runtime_bindings: runtimeBindingsPath,
+      },
     },
   };
 }
@@ -283,26 +430,89 @@ function materializedRoleIdentity(
   };
 }
 
+function materializedIdentityProjection(
+  materialization: Record<string, unknown> | null,
+  role: string,
+): OperatorSurfaceIdentity | null {
+  return materializedRoleIdentity(materialization, role);
+}
+
+function roleFromIdentityValue(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const normalized = value.trim();
+  const role = normalized.includes('.') ? normalized.slice(normalized.lastIndexOf('.') + 1) : normalized;
+  return role || null;
+}
+
+function explicitlyDeclaredRole(
+  config: Record<string, unknown> | null,
+  materialization: Record<string, unknown> | null,
+): string | null {
+  const site = objectField(config, 'site');
+  const operationBinding = materializedOperationBinding(materialization);
+  const candidates = [
+    config?.default_agent_identity,
+    site?.default_agent_identity,
+    materialization?.agent_identity_default,
+    operationBinding?.agent_identity_default,
+  ];
+  for (const candidate of candidates) {
+    const role = roleFromIdentityValue(candidate);
+    if (role) return role;
+  }
+
+  const identity = objectField(config, 'identity');
+  for (const key of ['role_assignments', 'named_agents', 'role_compatibility_identities'] as const) {
+    for (const entry of arrayField(identity, key)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      const role = roleFromIdentityValue(record.role ?? record.role_id ?? record.agent_role);
+      if (role) return role;
+    }
+  }
+  return null;
+}
+
 export async function assessSiteReadiness(options: AssessSiteReadinessOptions): Promise<SiteReadinessResult> {
   const role = options.role?.trim() || 'architect';
   const siteRoot = resolve(options.site);
+  const authorityRoot = siteAuthorityRootFromSiteRoot(siteRoot);
   const siteExists = existsSync(siteRoot);
-  const aiExists = existsSync(join(siteRoot, '.ai'));
+  const aiExists = existsSync(join(siteRoot, '.ai')) || existsSync(join(authorityRoot, '.ai'));
   const config = siteExists ? readSiteConfig(siteRoot) : null;
   const configExists = config !== null;
   const materialization = siteExists ? readSiteMaterialization(siteRoot) : null;
   const pendingInbox = siteExists ? listPendingInbox(siteRoot) : [];
-  const identities = siteExists ? await readOperatorSurfaceIdentities(siteRoot) : { identities: [] };
-  const roleIdentity = identities.identities.find((identity) => identity.role === role) ?? materializedRoleIdentity(materialization, role);
+  const identityRead = siteExists ? await readIdentityRegistry(siteRoot) : {
+    registry: { identities: [] },
+    path: join(authorityRoot, 'operator-surfaces', 'identities.json'),
+    source: 'missing' as const,
+  };
+  const runtimeRead = siteExists ? readRuntimeBindings(siteRoot) : {
+    bindings: [],
+    path: join(authorityRoot, 'operator-surfaces', 'runtime-bindings.json'),
+  };
+  const identities = identityRead.registry;
+  const declaredRole = explicitlyDeclaredRole(config, materialization);
+  const roleBindingRequired = options.roleRequired ?? (Boolean(options.role?.trim()) || declaredRole === role);
+  const roleIdentity = roleBindingRequired
+    ? identities.identities.find((identity) => identity.role === role) ?? null
+    : null;
+  const projectedIdentity = roleBindingRequired && !roleIdentity
+    ? materializedIdentityProjection(materialization, role)
+    : null;
+  const transportDeclared = declaredTransport(roleIdentity);
+  const binding = runtimeBindingPosture(roleIdentity?.identity_id ?? null, runtimeRead.bindings);
+  const siteId = siteIdForReadiness(config, materialization);
 
   let posture: SiteReadinessPosture;
   if (!siteExists) {
     posture = 'site_absent';
   } else if (!configExists || !aiExists) {
     posture = 'initialized_unready';
-  } else if (!roleIdentity) {
+  } else if (roleBindingRequired && !roleIdentity) {
     posture = 'ready_missing_role_binding';
-  } else if (!hasTransport(roleIdentity)) {
+  } else if (roleBindingRequired && (!transportDeclared || binding.status !== 'bound')) {
     posture = 'ready_missing_transport';
   } else if (pendingInbox.length > 0) {
     posture = 'ready_pending_inbox';
@@ -310,14 +520,15 @@ export async function assessSiteReadiness(options: AssessSiteReadinessOptions): 
     posture = 'fully_idle';
   }
 
-  const nextCommand = nextCommandFor(posture, siteRoot, role);
+  const nextCommand = nextCommandFor(posture, siteRoot, authorityRoot, siteId, role, roleIdentity?.identity_id ?? projectedIdentity?.identity_id ?? null, binding);
   const capabilityChoices = clientServiceCapabilityChoices(config);
   const capabilityReadiness = businessCapabilityReadiness(config, posture);
+  const identityAssessable = Boolean(roleIdentity);
   const checks: SiteReadinessCheck[] = [
     {
       name: 'site_root_exists',
       status: siteExists ? 'pass' : 'fail',
-      message: siteExists ? siteRoot : `missing: ${siteRoot}`,
+      message: siteExists ? siteRoot : 'missing: ' + siteRoot,
       next_command: siteExists ? undefined : nextCommand,
     },
     {
@@ -329,20 +540,44 @@ export async function assessSiteReadiness(options: AssessSiteReadinessOptions): 
     {
       name: 'site_ai_surface_exists',
       status: aiExists ? 'pass' : 'fail',
-      message: join(siteRoot, '.ai'),
+      message: join(authorityRoot, '.ai'),
       next_command: aiExists ? undefined : nextCommand,
     },
     {
       name: 'role_identity_exists',
-      status: roleIdentity ? 'pass' : 'fail',
-      message: roleIdentity?.identity_id ?? `missing role identity for ${role}`,
-      next_command: roleIdentity ? undefined : nextCommand,
+      status: roleIdentity || !roleBindingRequired ? 'pass' : 'fail',
+      message: roleIdentity?.identity_id ?? (roleBindingRequired ? 'missing admitted role identity for ' + role : 'no role binding declared; not required'),
+      next_command: roleIdentity || !roleBindingRequired ? undefined : nextCommand,
+    },
+    {
+      name: 'operator_surface_identity_admitted',
+      status: identityAssessable || !roleBindingRequired ? 'pass' : 'warn',
+      message: identityAssessable
+        ? 'durable identity admitted in ' + identityRead.path
+        : roleBindingRequired
+          ? 'not admitted; site materialization is only a projection and does not grant identity authority'
+          : 'no role binding declared; not required',
+      next_command: identityAssessable || !roleBindingRequired ? undefined : nextCommand,
     },
     {
       name: 'operator_surface_transport_declared',
-      status: hasTransport(roleIdentity) ? 'pass' : 'fail',
-      message: roleIdentity ? 'transport metadata present' : 'no role identity',
-      next_command: hasTransport(roleIdentity) ? undefined : nextCommand,
+      status: transportDeclared || !roleBindingRequired ? 'pass' : identityAssessable ? 'fail' : 'warn',
+      message: !identityAssessable
+        ? (roleBindingRequired ? 'not assessable until a durable role identity is admitted' : 'no role binding declared; not required')
+        : transportDeclared
+          ? 'submit transport metadata declared on the durable identity'
+          : 'no submit transport declared on the durable identity',
+      next_command: transportDeclared || !roleBindingRequired ? undefined : nextCommand,
+    },
+    {
+      name: 'operator_surface_runtime_handle_bound',
+      status: binding.status === 'bound' || !roleBindingRequired ? 'pass' : identityAssessable ? 'fail' : 'warn',
+      message: !identityAssessable
+        ? (roleBindingRequired ? 'not assessable until a durable role identity is admitted' : 'no role binding declared; not required')
+        : binding.status === 'bound'
+          ? 'runtime handle binding is active and evidenced'
+          : 'runtime handle binding is ' + binding.status,
+      next_command: binding.status === 'bound' || !roleBindingRequired ? undefined : nextCommand,
     },
     {
       name: 'readiness_phase_declared',
@@ -355,7 +590,7 @@ export async function assessSiteReadiness(options: AssessSiteReadinessOptions): 
       status: capabilityReadiness.status === 'choices_unresolved' ? 'warn' : 'pass',
       message: capabilityReadiness.note,
       next_command: capabilityReadiness.status === 'choices_unresolved'
-        ? `Record or defer capability choices under config capability_choices, then rerun narada sites doctor ${JSON.stringify(siteRoot)} --format json`
+        ? 'Record or defer capability choices under config capability_choices, then rerun narada sites doctor ' + JSON.stringify(siteId) + ' --root ' + JSON.stringify(siteRoot) + ' --format json'
         : undefined,
     },
   ];
@@ -364,11 +599,12 @@ export async function assessSiteReadiness(options: AssessSiteReadinessOptions): 
     posture,
     target_locus: {
       site: options.site,
+      site_id: siteId,
       site_root: siteRoot,
       operation: options.operation?.trim() || null,
     },
     onboarding: readinessPhase(config),
-    coordinates: coordinates(config, roleIdentity, role),
+    coordinates: coordinates(config, roleIdentity, role, roleBindingRequired, transportDeclared, binding, identityRead.path, runtimeRead.path),
     readiness_strata: {
       structural: posture,
       business_capability: capabilityReadiness,

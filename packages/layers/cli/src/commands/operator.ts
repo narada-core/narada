@@ -51,11 +51,13 @@ export async function operatorStartCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
     const siteInput = requireText(options.site, '--site');
-    const role = options.role?.trim() || 'architect';
+    const requestedRole = options.role?.trim();
+    const role = requestedRole || 'architect';
     const readiness = await assessSiteReadiness({
       site: siteInput,
       operation: options.operation,
       role,
+      roleRequired: Boolean(requestedRole),
     });
 
     const result: OperatorStartResult = {

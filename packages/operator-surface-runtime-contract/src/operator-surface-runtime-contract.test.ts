@@ -118,7 +118,7 @@ test('carrier conformance report derives every row from the launch matrix', () =
   );
   assert.equal(report.rows.find((row: any) => row.carrier === 'agent-web-ui')?.operator_surface_kind, 'agent-web-ui');
   assert.equal(report.rows.find((row: any) => row.carrier === 'agent-tui')?.runtime_host_kind, 'narada-agent-runtime-server');
-  assert.equal(report.rows.find((row: any) => row.carrier === 'kimi')?.evidence_level, 'unverified');
+  assert.equal(report.rows.find((row: any) => row.carrier === 'kimi')?.evidence_level, 'config_enforced');
   assert.equal(report.rows.find((row: any) => row.carrier === 'opencode')?.evidence_level, 'documented_advisory');
   for (const row of contract.rows) {
     const reportRow = report.rows.find((candidate: any) => candidate.carrier === row.launch_selection_kind);
@@ -166,7 +166,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
   assert.equal(contract.rows.every((row: any) => row.conformance && Array.isArray(row.conformance.known_gaps)), true);
   assert.deepEqual(
     contract.rows.map((row: any) => row.conformance.evidence_level),
-    ['code_enforced', 'code_enforced', 'code_enforced', 'code_enforced', 'config_enforced', 'unverified', 'config_enforced', 'config_enforced', 'documented_advisory'],
+    ['code_enforced', 'code_enforced', 'code_enforced', 'code_enforced', 'config_enforced', 'config_enforced', 'config_enforced', 'config_enforced', 'documented_advisory'],
   );
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'opencode').conformance.evidence_level, 'documented_advisory');
   assert.deepEqual([...ADMITTED_RUNTIME_IMPLEMENTATION_KINDS].sort(), [
@@ -185,7 +185,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'agent-web-ui').runtime_host_kind, 'narada-agent-runtime-server');
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'agent-tui').tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'codex').tool_fabric_adapter_kind, 'codex-native-mcp');
-  assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'kimi').tool_fabric_adapter_kind, 'ambient-carrier-tools');
+  assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'kimi').tool_fabric_adapter_kind, 'kimi-project-mcp');
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'pi').tool_fabric_adapter_kind, 'pi-extension-mcp-bridge');
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'claude-code').tool_fabric_adapter_kind, 'claude-code-native-mcp');
   assert.equal(contract.rows.find((row: any) => row.launch_selection_kind === 'opencode').tool_fabric_adapter_kind, 'ambient-carrier-tools');

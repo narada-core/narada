@@ -29,9 +29,11 @@ function writeConfig(siteRoot: string, options: { governance?: boolean; siteKind
   }, null, 2));
 }
 
-function writeIdentity(siteRoot: string, options: { capabilities?: string[]; submitStrategy?: string } = {}): void {
-  mkdirSync(join(siteRoot, 'operator-surfaces'), { recursive: true });
-  writeFileSync(join(siteRoot, 'operator-surfaces', 'identities.json'), JSON.stringify({
+function writeIdentity(siteRoot: string, options: { capabilities?: string[]; submitStrategy?: string; runtimeBound?: boolean } = {}): void {
+  const authorityRoot = join(siteRoot, '.narada');
+  const operatorSurfaceRoot = join(authorityRoot, 'operator-surfaces');
+  mkdirSync(operatorSurfaceRoot, { recursive: true });
+  writeFileSync(join(operatorSurfaceRoot, 'identities.json'), JSON.stringify({
     schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
     updated_at: '2026-01-01T00:00:00Z',
     identities: [
@@ -50,6 +52,25 @@ function writeIdentity(siteRoot: string, options: { capabilities?: string[]; sub
       },
     ],
   }, null, 2));
+  const runtimeBound = options.runtimeBound ?? options.capabilities?.length !== 0;
+  if (runtimeBound) {
+    writeFileSync(join(operatorSurfaceRoot, 'runtime-bindings.json'), JSON.stringify({
+      bindings: [
+        {
+          binding_id: 'bind_test_site_architect',
+          identity_id: 'test-site-architect',
+          runtime_locus: 'test-runtime',
+          handle: 'test-handle',
+          transport: 'test-transport',
+          submit_strategy: 'known_surface_submit',
+          input_capabilities: ['type_text', 'submit'],
+          status: 'active',
+          target_evidence: { fixture: true },
+          postcondition_evidence: { fixture: true },
+        },
+      ],
+    }, null, 2));
+  }
 }
 
 function insertInbox(siteRoot: string): void {
@@ -67,7 +88,6 @@ function insertInbox(siteRoot: string): void {
     store.close();
   }
 }
-
 describe('operator start command', () => {
   let tempDir: string;
 
@@ -114,6 +134,28 @@ describe('operator start command', () => {
     });
   });
 
+  it('does not require an architect binding when the Site declares no role', async () => {
+    const site = join(tempDir, 'site');
+    mkdirSync(site);
+    writeConfig(site);
+
+    const result = await operatorStartCommand({ site, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      posture: 'fully_idle',
+      role_binding: { role: 'architect', identity_id: null, bound_transport: false },
+      readiness: {
+        coordinates: { operator_surface_posture: { required: false } },
+        blockers: [],
+        checks: expect.arrayContaining([
+          expect.objectContaining({ name: 'role_identity_exists', status: 'pass', message: 'no role binding declared; not required' }),
+          expect.objectContaining({ name: 'operator_surface_transport_declared', status: 'pass', message: 'no role binding declared; not required' }),
+        ]),
+      },
+    });
+  });
+
   it('reports ready Site with missing role binding', async () => {
     const site = join(tempDir, 'site');
     mkdirSync(site);
@@ -125,12 +167,12 @@ describe('operator start command', () => {
     expect(result.result).toMatchObject({
       posture: 'ready_missing_role_binding',
       role_binding: { role: 'architect', identity_id: null },
-      next_command: `narada operator-surface agent instantiate --cwd ${JSON.stringify(site)} --site ${JSON.stringify(site)} --role architect --agent-kind codex_cli --by <principal>`,
+      next_command: `narada operator-surface agent instantiate --cwd ${JSON.stringify(join(site, '.narada'))} --site "test-site" --role architect --identity "test-site.architect" --agent-kind codex_cli --by <principal>`,
       readiness: {
         posture: 'ready_missing_role_binding',
         blockers: expect.arrayContaining([expect.objectContaining({
           name: 'role_identity_exists',
-          next_command: `narada operator-surface agent instantiate --cwd ${JSON.stringify(site)} --site ${JSON.stringify(site)} --role architect --agent-kind codex_cli --by <principal>`,
+          next_command: `narada operator-surface agent instantiate --cwd ${JSON.stringify(join(site, '.narada'))} --site "test-site" --role architect --identity "test-site.architect" --agent-kind codex_cli --by <principal>`,
         })]),
       },
     });
@@ -147,10 +189,43 @@ describe('operator start command', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       posture: 'ready_missing_transport',
-      next_command: 'narada operator-surface bind-focused --as self',
+      next_command: 'narada operator-surface bind-focused --identity "test-site-architect" --runtime-locus "<runtime-locus>" --handle <captured-hwnd-or-stable-handle>',
       readiness: {
         posture: 'ready_missing_transport',
-        blockers: expect.arrayContaining([expect.objectContaining({ name: 'operator_surface_transport_declared' })]),
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ name: 'operator_surface_transport_declared', status: 'fail' }),
+          expect.objectContaining({ name: 'operator_surface_runtime_handle_bound', status: 'fail' }),
+        ]),
+      },
+    });
+  });
+
+  it('reports declared transport separately from an unbound runtime handle', async () => {
+    const site = join(tempDir, 'site');
+    mkdirSync(site);
+    writeConfig(site);
+    writeIdentity(site, { runtimeBound: false });
+
+    const result = await operatorStartCommand({ site, role: 'architect', format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      posture: 'ready_missing_transport',
+      readiness: {
+        coordinates: {
+          operator_surface_posture: {
+            submit_transport_declared: true,
+            runtime_handle_bound: false,
+            bound_transport: false,
+            binding_status: 'unbound',
+          },
+        },
+        blockers: [
+          expect.objectContaining({ name: 'operator_surface_runtime_handle_bound', status: 'fail' }),
+        ],
+        checks: expect.arrayContaining([
+          expect.objectContaining({ name: 'operator_surface_transport_declared', status: 'pass' }),
+        ]),
       },
     });
   });
@@ -175,7 +250,6 @@ describe('operator start command', () => {
       },
     });
   });
-
   it('reports fully idle ready Site with governance coordinates and onboarding posture', async () => {
     const site = join(tempDir, 'site');
     mkdirSync(site);

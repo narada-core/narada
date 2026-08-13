@@ -78,6 +78,7 @@ const {
   sitesRemoveCommand,
   sitesInitCommand,
   sitesTaskLifecycleInitCommand,
+  taskLifecycleReadiness,
   sitesLifecycleKindsCommand,
   sitesLifecyclePreflightCommand,
   sitesLineageEventsCommand,
@@ -338,6 +339,31 @@ describe('sites commands', () => {
       } finally {
         rmSync(siteRoot, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('taskLifecycleReadiness', () => {
+    it('leaves task lifecycle unspecified for a baseline Site profile', () => {
+      expect(taskLifecycleReadiness({ site_id: 'baseline-site' })).toBe('unspecified');
+    });
+
+    it('requires task lifecycle only when a Site profile declares it', () => {
+      expect(taskLifecycleReadiness({
+        task_lifecycle: { enable: 'descriptor_only' },
+      })).toBe('required');
+      expect(taskLifecycleReadiness({
+        capabilities: { policy: 'declare_required', required: ['task_lifecycle'] },
+      })).toBe('required');
+      expect(taskLifecycleReadiness({
+        mcp: { surfaces: ['site_task_lifecycle'] },
+      })).toBe('required');
+    });
+
+    it('honors an explicit task lifecycle denial', () => {
+      expect(taskLifecycleReadiness({
+        task_lifecycle: { enable: false },
+        capabilities: { denied: ['task_lifecycle'] },
+      })).toBe('disabled');
     });
   });
 

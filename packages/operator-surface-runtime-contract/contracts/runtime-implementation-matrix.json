@@ -192,6 +192,21 @@
       }
     },
     {
+      "component_kind": "epistemic-graph-mcp",
+      "package": "@narada-core/mcp-surfaces-native",
+      "required": false,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "rust",
+        "node-compat": "rust"
+      },
+      "implementations": {
+        "node": { "status": "unavailable", "evidence": [] },
+        "bun": { "status": "unavailable", "evidence": [] },
+        "rust": { "status": "admitted", "evidence": ["native-epistemic-event-ledger", "native-epistemic-projection-tests", "native-rust-only-contract"] }
+      }
+    },
+    {
       "component_kind": "sop-mcp",
       "package": "@narada-core/sop-mcp",
       "required": true,

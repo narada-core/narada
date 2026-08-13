@@ -12,14 +12,20 @@ const PREFLIGHT_SCHEMA: &str = "narada.invokable-intelligence.preflight-request.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PreflightRequest {
     pub schema: String,
+    #[serde(default)]
     pub intent_id: String,
+    #[serde(default)]
+    pub purpose: Option<String>,
+    #[serde(default)]
+    pub principal: Option<String>,
     #[serde(default)]
     pub requested_plan_id: Option<String>,
     pub evaluated_at: String,
     pub clock_authority_ref: String,
     #[serde(default = "default_mode")]
     pub mode: String,
-    pub current_digests: ResolverDigests,
+    #[serde(default)]
+    pub current_digests: Option<ResolverDigests>,
 }
 
 fn default_mode() -> String {
@@ -73,11 +79,15 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         checked_at: request.evaluated_at.clone(),
     };
     if request.schema != PREFLIGHT_SCHEMA
-        || request.intent_id.trim().is_empty()
+        || (request.intent_id.trim().is_empty()
+            && request.purpose.as_deref().is_none_or(str::is_empty))
         || request.clock_authority_ref.trim().is_empty()
         || !valid_mode(&request.mode)
         || parse_instant(&request.evaluated_at).is_none()
-        || !digests_valid(&request.current_digests)
+        || request
+            .current_digests
+            .as_ref()
+            .is_some_and(|value| !digests_valid(value))
     {
         return refuse(
             "preflight_request_invalid",
@@ -91,6 +101,15 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         Ok(connection) => connection,
         Err(error) => return refuse("registry_unavailable", vec![error.to_string()]),
     };
+    if request.intent_id.trim().is_empty() {
+        let intent_id = match resolve_semantic_intent(&connection, request) {
+            Ok(intent_id) => intent_id,
+            Err((code, reasons)) => return refuse(code, reasons),
+        };
+        let mut resolved = request.clone();
+        resolved.intent_id = intent_id;
+        return preflight(registry_path, &resolved);
+    }
     let plan_doc = match load_plan(&connection, request) {
         Ok(Some(doc)) => doc,
         Ok(None) => {
@@ -121,6 +140,7 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         _ => return refuse("plan_invalid", vec!["snapshot-missing".to_string()]),
     };
     let mut reasons = validate_snapshot(snapshot, request, plan_id);
+    reasons.extend(validate_bound_revisions(&connection, snapshot));
     if !reasons.is_empty() {
         reasons.sort();
         reasons.dedup();
@@ -140,6 +160,119 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         evidence_ref: evidence_ref(plan_id, &snapshot_digest, request),
         checked_at: request.evaluated_at.clone(),
     }
+}
+
+fn resolve_semantic_intent(
+    connection: &Connection,
+    request: &PreflightRequest,
+) -> Result<String, (&'static str, Vec<String>)> {
+    let purpose = request.purpose.as_deref().unwrap_or_default();
+    let mut statement = connection
+        .prepare("SELECT id, doc FROM invocation_intents WHERE purpose = ?1 ORDER BY id")
+        .map_err(|error| ("registry_read_failed", vec![error.to_string()]))?;
+    let rows = statement
+        .query_map([purpose], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| ("registry_read_failed", vec![error.to_string()]))?;
+    let mut matches = Vec::new();
+    for row in rows {
+        let (id, doc) = row.map_err(|error| ("registry_read_failed", vec![error.to_string()]))?;
+        let value: Value = serde_json::from_str(&doc)
+            .map_err(|error| ("intent_invalid", vec![error.to_string()]))?;
+        if request.principal.as_deref().is_none_or(|principal| {
+            value.get("principal").and_then(Value::as_str) == Some(principal)
+        }) {
+            matches.push(id);
+        }
+    }
+    match matches.as_slice() {
+        [intent_id] => Ok(intent_id.clone()),
+        [] => Err((
+            "intent_not_found",
+            vec!["no-exact-semantic-intent".to_string()],
+        )),
+        _ => Err((
+            "intent_ambiguous",
+            vec!["multiple-exact-semantic-intents".to_string()],
+        )),
+    }
+}
+
+fn validate_bound_revisions(
+    connection: &Connection,
+    snapshot: &serde_json::Map<String, Value>,
+) -> Vec<String> {
+    let mut reasons = Vec::new();
+    let Some(revisions) = snapshot
+        .get("referenced_revisions")
+        .and_then(Value::as_array)
+    else {
+        return vec!["invalid-snapshot".to_string()];
+    };
+    for revision in revisions
+        .iter()
+        .filter(|revision| revision.get("kind").and_then(Value::as_str) != Some("materialization"))
+    {
+        let Some(record_id) = revision.get("record_id").and_then(Value::as_str) else {
+            reasons.push("invalid-snapshot".to_string());
+            continue;
+        };
+        let immutable_ref = revision.get("immutable_ref").and_then(Value::as_str);
+        let current: Result<Option<(String, String)>, _> = connection.query_row(
+            "SELECT id, doc FROM catalog_records WHERE record_id = ?1 ORDER BY revision DESC, id DESC LIMIT 1",
+            [record_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional();
+        match current {
+            Ok(Some((id, doc))) if Some(id.as_str()) == immutable_ref => {
+                let record = serde_json::from_str::<Value>(&doc).unwrap_or(Value::Null);
+                let document = record.get("document").unwrap_or(&record);
+                let digest = sha256_text(&canonical_json(document));
+                if revision.get("digest").and_then(Value::as_str) != Some(digest.as_str()) {
+                    reasons.push("catalog-changed".to_string());
+                }
+            }
+            Ok(Some(_)) => reasons.push("catalog-changed".to_string()),
+            Ok(None) => reasons.push("catalog-changed".to_string()),
+            Err(_) => reasons.push("invalid-snapshot".to_string()),
+        }
+    }
+    reasons
+}
+
+fn canonical_json(value: &Value) -> String {
+    match value {
+        Value::Array(values) => format!(
+            "[{}]",
+            values
+                .iter()
+                .map(canonical_json)
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Value::Object(values) => {
+            let mut entries = values.iter().collect::<Vec<_>>();
+            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            format!(
+                "{{{}}}",
+                entries
+                    .into_iter()
+                    .map(|(key, value)| format!(
+                        "{}:{}",
+                        serde_json::to_string(key).unwrap(),
+                        canonical_json(value)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        }
+        _ => serde_json::to_string(value).unwrap(),
+    }
+}
+
+fn sha256_text(value: &str) -> String {
+    format!("sha256:{:x}", Sha256::digest(value.as_bytes()))
 }
 
 fn load_plan(
@@ -200,7 +333,10 @@ fn validate_snapshot(
     if parse_instant(&request.evaluated_at).expect("validated request instant") >= valid_until {
         reasons.push("plan-expired".to_string());
     }
-    let expected = match serde_json::to_value(&request.current_digests) {
+    let Some(current_digests) = request.current_digests.as_ref() else {
+        return reasons;
+    };
+    let expected = match serde_json::to_value(current_digests) {
         Ok(Value::Object(value)) => value,
         _ => return vec!["invalid-snapshot".to_string()],
     };

@@ -58,6 +58,13 @@ admits only a current plan whose immutable snapshot matches those inputs; it
 does not select a provider or infer a replacement plan. Native resolution for
 new intents composes behind this same contract.
 
+Callers may omit both intent and plan identities when they provide an exact
+semantic purpose and principal. The native boundary requires that pair to
+identify exactly one recorded canonical intent, then validates the plan's
+temporal boundary and latest immutable catalog revision bindings. Zero or
+multiple matches refuse; insertion order and "latest plan" are never used to
+choose between semantic intents.
+
 ## agent-runtime-server wiring
 
 `server-wrapper.mjs` transports only catalog location, Site loci, and principal

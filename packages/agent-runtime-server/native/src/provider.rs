@@ -314,6 +314,9 @@ Answer the original request using this tool result.",
         let model = env::var("NARADA_NATIVE_CODEX_MODEL")
             .ok()
             .filter(|value| !value.trim().is_empty());
+        let reasoning_effort = env::var("NARADA_NATIVE_CODEX_REASONING_EFFORT")
+            .ok()
+            .filter(|value| matches!(value.as_str(), "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"));
         let cwd = self
             .site_root
             .as_deref()
@@ -371,6 +374,9 @@ Answer the original request using this tool result.",
         }
         if let Some(model) = model {
             args.extend(["-m".to_string(), model]);
+        }
+        if let Some(reasoning_effort) = reasoning_effort {
+            args.extend(["-c".to_string(), format!("model_reasoning_effort=\"{reasoning_effort}\"")]);
         }
         args.extend(["-C".to_string(), cwd.to_string_lossy().to_string()]);
         if let Ok(session_id) = env::var("NARADA_NATIVE_CODEX_RESUME_SESSION_ID") {

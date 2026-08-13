@@ -87,9 +87,15 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@narada-core/mcp-runtime-proxy':
+        specifier: workspace:*
+        version: link:../shared/mcp-runtime-proxy
       '@types/node':
         specifier: ^22.15.3
         version: 22.19.19
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -215,6 +221,9 @@ importers:
 
   ../mcp-surfaces/packages/shared/mcp-e2e-harness:
     devDependencies:
+      '@narada-core/mcp-protocol':
+        specifier: workspace:*
+        version: link:../mcp-protocol
       '@types/node':
         specifier: ^22.15.3
         version: 22.19.19
@@ -235,7 +244,23 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  ../mcp-surfaces/packages/shared/mcp-protocol:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   ../mcp-surfaces/packages/shared/mcp-runtime-client:
+    dependencies:
+      '@narada-core/mcp-protocol':
+        specifier: workspace:*
+        version: link:../mcp-protocol
+      '@narada-core/mcp-runtime-proxy':
+        specifier: workspace:*
+        version: link:../mcp-runtime-proxy
     devDependencies:
       '@types/node':
         specifier: ^22.15.3
@@ -315,6 +340,9 @@ importers:
 
   ../mcp-surfaces/packages/shared/mcp-transport:
     dependencies:
+      '@narada-core/mcp-protocol':
+        specifier: workspace:*
+        version: link:../mcp-protocol
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -571,6 +599,9 @@ importers:
       '@narada-core/operator-surface-runtime-contract':
         specifier: workspace:*
         version: link:../operator-surface-runtime-contract
+      '@narada-core/orientation-manifest':
+        specifier: workspace:*
+        version: link:../orientation-manifest
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -1447,6 +1478,9 @@ importers:
       '@narada-core/carrier-action-admission':
         specifier: workspace:*
         version: link:../carrier-action-admission
+      '@narada-core/mcp-fabric-contracts':
+        specifier: workspace:*
+        version: link:../../../mcp-surfaces/packages/shared/mcp-fabric-contracts
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture

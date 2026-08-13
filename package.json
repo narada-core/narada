@@ -2,6 +2,7 @@
   "name": "narada",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.34.0",
   "type": "module",
   "homepage": "https://narada.systems",
   "scripts": {

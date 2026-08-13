@@ -16,6 +16,7 @@ packages:
   - '../mcp-surfaces/packages/graph-mail-mcp'
   - '../mcp-surfaces/packages/shared/mcp-telemetry'
   - '../mcp-surfaces/packages/shared/mcp-transport'
+  - '../mcp-surfaces/packages/shared/mcp-protocol'
   - '../mcp-surfaces/packages/shared/mcp-e2e-harness'
   - '../mcp-surfaces/packages/shared/mcp-fabric-contracts'
   - '../mcp-surfaces/packages/shared/mcp-runtime-proxy'

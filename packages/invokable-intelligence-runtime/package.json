@@ -23,8 +23,10 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:native": "cargo build --manifest-path native/Cargo.toml --release",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:native": "cargo test --manifest-path native/Cargo.toml"
   },
   "dependencies": {
     "@narada-core/invokable-intelligence-contract": "workspace:*",

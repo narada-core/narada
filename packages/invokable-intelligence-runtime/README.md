@@ -50,6 +50,14 @@ adapter. Environment variables may materialize credential secrets at the final
 adapter boundary, but they never select an inference provider, model provider,
 model, endpoint, thinking level, or route.
 
+The native `narada-intelligence-preflight` entrypoint is the fail-closed Rust
+admission boundary for an already recorded canonical plan. It reads the
+registry in read-only mode and requires an explicit intent, authoritative
+clock, current resolver-state digests, and optional exact plan reference. It
+admits only a current plan whose immutable snapshot matches those inputs; it
+does not select a provider or infer a replacement plan. Native resolution for
+new intents composes behind this same contract.
+
 ## agent-runtime-server wiring
 
 `server-wrapper.mjs` transports only catalog location, Site loci, and principal

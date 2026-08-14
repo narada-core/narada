@@ -446,11 +446,11 @@
       "component_kind": "speech-mcp",
       "package": "@narada-core/speech-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "speech-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "speech-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-speech-contract", "speech-authority-boundary-test", "native-rust-default-contract"] }
+        "node": { "status": "unavailable", "evidence": ["native-speech-authority-complete"] },
+        "bun": { "status": "unavailable", "evidence": ["native-speech-authority-complete"] },
+        "rust": { "status": "admitted", "evidence": ["native-speech-provider-registry", "native-sapi-tts-and-voices", "native-openai-tts-and-transcription", "native-speech-capture-and-listen-lifecycle", "native-speech-stdio-complete"] }
       }
     },
     {

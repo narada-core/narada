@@ -201,9 +201,9 @@
         "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "unavailable", "evidence": [] },
-        "bun": { "status": "unavailable", "evidence": [] },
-        "rust": { "status": "admitted", "evidence": ["native-epistemic-event-ledger", "native-epistemic-projection-tests", "native-rust-only-contract"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-epistemic-event-ledger", "native-epistemic-contract-tests", "native-epistemic-stdio-proof"] }
       }
     },
     {

@@ -369,11 +369,11 @@
       "component_kind": "worker-delegation-mcp",
       "package": "@narada-core/worker-delegation-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "worker-delegation-protocol-tests", "worker-execution-authority"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "worker-delegation-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-worker-delegation-authority", "native-worker-execution-authority", "worker-delegation-native-parity", "native-rust-default-contract"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-worker-delegation-authority", "native-worker-execution-authority", "worker-delegation-closed-schema-tests", "native-worker-delegation-stdio-proof", "native-rust-default-contract"] }
       }
     },
     {

@@ -100,6 +100,7 @@
   --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-focus) 38%, transparent);
   --motion-fast: 120ms;
   --motion-standard: 220ms;
+
 }
 
 :root.dark {

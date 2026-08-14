@@ -344,6 +344,23 @@ impl EventJournal {
         self.read_events()
     }
 
+    pub fn find_request_id(&self, request_id: &str) -> Option<Value> {
+        let file = File::open(&self.path).ok()?;
+        let mut found = None;
+        for line in BufReader::new(file).lines().map_while(Result::ok) {
+            if line.len() > 1_048_576 {
+                continue;
+            }
+            let Ok(event) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
+            if event.get("request_id").and_then(Value::as_str) == Some(request_id) {
+                found = Some(event);
+            }
+        }
+        found
+    }
+
     pub fn read_page(
         &self,
         limit: usize,
@@ -975,11 +992,7 @@ impl SessionCore {
         self.enqueue_position(input, true)
     }
 
-    fn enqueue_position(
-        &mut self,
-        mut input: Value,
-        front: bool,
-    ) -> Result<Vec<Value>, CoreError> {
+    fn enqueue_position(&mut self, mut input: Value, front: bool) -> Result<Vec<Value>, CoreError> {
         if self.lifecycle != "ready" {
             return Err(CoreError(format!(
                 "nars_session_not_accepting_input:{}",
@@ -1602,7 +1615,11 @@ impl SessionCore {
             options.get("content_type").and_then(Value::as_str),
             options.get("render_hint").and_then(Value::as_str),
             options.get("access_scope").and_then(Value::as_str),
+            options.get("idempotency_key").and_then(Value::as_str),
         )?;
+        if result.get("idempotent_replay").and_then(Value::as_bool) == Some(true) {
+            return Ok(result);
+        }
         let record = result.get("record").cloned().unwrap_or(Value::Null);
         let published = self.append_event(json!({ "event": "session_artifact_registered", "artifact_id": record.get("artifact_id"), "kind": record.get("kind"), "artifact": result.get("public_record") }))?;
         if let Some(object) = result.as_object_mut() {
@@ -2050,6 +2067,10 @@ impl SessionCore {
     pub fn events_after(&self, sequence: u64) -> Vec<Value> {
         self.journal
             .read_page(usize::MAX, Some(sequence), "forward")
+    }
+
+    pub fn event_by_request_id(&self, request_id: &str) -> Option<Value> {
+        self.journal.find_request_id(request_id)
     }
 
     pub fn event_hub_cursor(&self) -> Value {
@@ -3569,12 +3590,26 @@ mod tests {
         fs::write(root.join("report.md"), "native artifact\n").unwrap();
         let mut core = SessionCore::new(config(&root)).unwrap();
         core.transition_lifecycle("ready", Value::Null).unwrap();
-        let registered = core.register_artifact(json!({ "source_path": root.join("report.md"), "kind": "markdown", "title": "Report" })).unwrap();
+        let registration = json!({ "source_path": root.join("report.md"), "kind": "markdown", "title": "Report", "idempotency_key":"artifact-proof-1" });
+        let registered = core.register_artifact(registration.clone()).unwrap();
         let artifact_id = registered["record"]["artifact_id"]
             .as_str()
             .unwrap()
             .to_string();
         assert_eq!(registered["record"]["lifecycle"]["state"], "active");
+        let event_count = core.health("enabled")["session_event_count"]
+            .as_u64()
+            .unwrap();
+        let replay = core.register_artifact(registration).unwrap();
+        assert_eq!(replay["idempotent_replay"], true);
+        assert_eq!(replay["record"]["artifact_id"], artifact_id);
+        assert_eq!(core.health("enabled")["session_event_count"], event_count);
+        assert!(core.register_artifact(json!({ "source_path": root.join("report.md"), "kind": "markdown", "title": "Changed", "idempotency_key":"artifact-proof-1" })).is_err());
+        core.append_event(json!({"event":"assistant_message","source":"nars_artifact_presentation","request_id":"present-proof-1","artifact_id":artifact_id})).unwrap();
+        assert_eq!(
+            core.event_by_request_id("present-proof-1").unwrap()["artifact_id"],
+            artifact_id
+        );
         assert!(
             core.read_artifact_content(&artifact_id).unwrap()["content_base64"]
                 .as_str()

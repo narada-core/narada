@@ -77,6 +77,7 @@ pub fn register(
     content_type: Option<&str>,
     render_hint: Option<&str>,
     access_scope: Option<&str>,
+    idempotency_key: Option<&str>,
 ) -> Result<Value, CoreError> {
     let session_path = session_path.ok_or_else(|| CoreError("session_path_required".into()))?;
     let source = canonical_existing_file(source_path)?;
@@ -93,6 +94,66 @@ pub fn register(
         return Err(CoreError("artifact_kind_unsupported".into()));
     }
     let effective_content_type = validate_content_type(&artifact_kind, content_type, &source)?;
+    let idempotency_key = idempotency_key
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if idempotency_key.is_some_and(|value| {
+        value.len() > 128
+            || !value.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.' | ':')
+            })
+    }) {
+        return Err(CoreError("artifact_idempotency_key_invalid".into()));
+    }
+    let effective_title = title.map(str::to_string).unwrap_or_else(|| {
+        source
+            .file_name()
+            .and_then(|v| v.to_str())
+            .unwrap_or("Artifact")
+            .to_string()
+    });
+    let effective_render = if render_hint == Some("link") {
+        "link"
+    } else {
+        "inline"
+    };
+    let effective_access = if access_scope == Some("site") {
+        "site"
+    } else {
+        "session"
+    };
+    let mut index = read_index(Some(session_path))?;
+    if let Some(key) = idempotency_key {
+        if let Some(existing) = index
+            .get("artifacts")
+            .and_then(Value::as_array)
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|item| item.get("idempotency_key").and_then(Value::as_str) == Some(key))
+            })
+            .cloned()
+        {
+            let same = existing.get("source_path").and_then(Value::as_str)
+                == Some(source.to_string_lossy().as_ref())
+                && existing.get("kind").and_then(Value::as_str) == Some(artifact_kind.as_str())
+                && existing.get("title").and_then(Value::as_str) == Some(effective_title.as_str())
+                && existing.get("content_type").and_then(Value::as_str)
+                    == Some(effective_content_type.as_str())
+                && existing
+                    .pointer("/render/preferred")
+                    .and_then(Value::as_str)
+                    == Some(effective_render)
+                && existing.pointer("/access/scope").and_then(Value::as_str)
+                    == Some(effective_access);
+            if !same {
+                return Err(CoreError("artifact_idempotency_conflict".into()));
+            }
+            return Ok(
+                json!({"record":existing,"public_record":public_record(&existing),"index":public_index(&index),"idempotent_replay":true}),
+            );
+        }
+    }
     let now = now_iso();
     let artifact_id = format!(
         "art_{}_{}",
@@ -100,14 +161,7 @@ pub fn register(
         Uuid::new_v4().simple()
     );
     let mut render = Map::new();
-    render.insert(
-        "preferred".into(),
-        json!(if render_hint == Some("link") {
-            "link"
-        } else {
-            "inline"
-        }),
-    );
+    render.insert("preferred".into(), json!(effective_render));
     if artifact_kind == "html" {
         render.insert(
             "sandbox".into(),
@@ -140,15 +194,15 @@ pub fn register(
         "session_id": session_id,
         "agent_id": agent_id,
         "kind": artifact_kind,
-        "title": title.map(str::to_string).unwrap_or_else(|| source.file_name().and_then(|v| v.to_str()).unwrap_or("Artifact").to_string()),
+        "title": effective_title,
         "source_path": source.to_string_lossy(),
         "content_type": effective_content_type,
         "created_at": now,
-        "access": { "scope": if access_scope == Some("site") { "site" } else { "session" }, "token_required": false },
+        "access": { "scope": effective_access, "token_required": false },
         "render": Value::Object(render),
         "lifecycle": lifecycle,
+        "idempotency_key":idempotency_key,
     });
-    let mut index = read_index(Some(session_path))?;
     index["session_id"] = session_id.map_or(Value::Null, |v| json!(v));
     index["agent_id"] = agent_id.map_or(Value::Null, |v| json!(v));
     index["generated_at"] = json!(now);
@@ -162,7 +216,7 @@ pub fn register(
     index["artifacts"] = Value::Array(artifacts);
     write_index(session_path, &index)?;
     Ok(
-        json!({ "record": record, "public_record": public_record(&record), "index": public_index(&index) }),
+        json!({ "record": record, "public_record": public_record(&record), "index": public_index(&index), "idempotent_replay":false }),
     )
 }
 

@@ -37,6 +37,7 @@ const NATIVE_SURFACES = [
 const RUST_ONLY_SURFACES = new Set([
   'runtime-introspection-mcp',
   'site-coherence-mcp',
+  'artifacts-mcp',
 ]);
 
 test('native profile admits the operationally complete requested Rust MCP surface batch', () => {

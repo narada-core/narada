@@ -1090,7 +1090,11 @@ impl NativeRuntime {
         put(&mut event, "runtime", "narada-agent-runtime-server");
         put(&mut event, "runtime_engine_kind", "rust");
         put(&mut event, "session_id", self.config.session_id.clone());
-        put(&mut event, "carrier_session_id", self.config.session_id.clone());
+        put(
+            &mut event,
+            "carrier_session_id",
+            self.config.session_id.clone(),
+        );
         put(&mut event, "agent_id", self.config.identity.clone());
         put(&mut event, "site_id", env::var("NARADA_SITE_ID").ok());
         put(
@@ -2408,6 +2412,7 @@ impl NativeRuntime {
                             json!({
                                 "schema": "narada.nars.artifact_registered.v1",
                                 "artifact": registered.get("public_record"),
+                                "idempotent_replay": registered.get("idempotent_replay"),
                             }),
                         );
                         if let Some(event) = registered.get("event") {
@@ -2481,21 +2486,45 @@ impl NativeRuntime {
                                 .unwrap_or("Artifact")
                         )
                     });
+                let request_id = parsed
+                    .get("request_id")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| {
+                        message_part
+                            .get("artifact_id")
+                            .and_then(Value::as_str)
+                            .unwrap_or("artifact_present")
+                    });
                 let event = json!({
                     "event": "assistant_message",
                     "event_family": "turn",
                     "agent_id": self.config.identity,
                     "agent_identity_ref": Value::Null,
                     "session_id": self.config.session_id,
-                    "request_id": parsed
-                        .get("request_id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_else(|| message_part.get("artifact_id").and_then(Value::as_str).unwrap_or("artifact_present")),
+                    "request_id": request_id,
                     "timestamp": now_iso(),
                     "source": "nars_artifact_presentation",
                     "content": [{ "type": "text", "text": text }, message_part.clone()],
                     "artifact_id": message_part.get("artifact_id"),
                 });
+                if let Some(existing) = self.supervisor.core().event_by_request_id(request_id) {
+                    let same = existing.get("source").and_then(Value::as_str)
+                        == Some("nars_artifact_presentation")
+                        && existing.get("artifact_id") == event.get("artifact_id")
+                        && existing.get("content") == event.get("content");
+                    if !same {
+                        return artifact_error_response(
+                            409,
+                            "artifact_presentation_idempotency_conflict",
+                        );
+                    }
+                    return HttpResponse::json(
+                        200,
+                        json!({"schema":"narada.nars.artifact_message_presented.v1","status":"presented","artifact":artifact,"event":existing,"message_part":message_part,"idempotent_replay":true}),
+                    );
+                }
                 self.supervisor
                     .core_mut()
                     .append_event(event)
@@ -2509,6 +2538,7 @@ impl NativeRuntime {
                                 "artifact": artifact,
                                 "event": published,
                                 "message_part": message_part,
+                                "idempotent_replay":false,
                             }),
                         );
                         response.events.push(event_for_subscribers);

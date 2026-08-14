@@ -380,11 +380,11 @@
       "component_kind": "artifacts-mcp",
       "package": "@narada-core/artifacts-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "artifacts-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "artifacts-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-artifacts-local-contract", "native-artifacts-local-index-read", "native-artifact-message-part-parity", "artifacts-authority-boundary-test", "native-rust-default-contract"] }
+        "node": { "status": "unavailable", "evidence": [] },
+        "bun": { "status": "unavailable", "evidence": [] },
+        "rust": { "status": "admitted", "evidence": ["native-artifacts-complete-protocol", "native-artifacts-session-scope", "native-artifacts-bounded-paging", "native-artifacts-retry-safety", "native-rust-only-contract"] }
       }
     },
     {

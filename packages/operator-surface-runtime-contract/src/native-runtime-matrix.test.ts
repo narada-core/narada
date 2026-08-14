@@ -39,6 +39,7 @@ const RUST_ONLY_SURFACES = new Set([
   'site-coherence-mcp',
   'artifacts-mcp',
   'quota-meter-mcp',
+  'mailbox-mcp',
 ]);
 
 test('native profile admits the operationally complete requested Rust MCP surface batch', () => {

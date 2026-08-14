@@ -413,11 +413,11 @@
       "component_kind": "mailbox-mcp",
       "package": "@narada-core/mailbox-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "mailbox-protocol-tests", "mailbox-sync-admission-and-outbox-authority"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "mailbox-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-mailbox-contract", "native-mailbox-projection-read-parity", "native-mailbox-outbox-authority-parity", "native-mailbox-reconciliation-and-admission-parity", "native-mailbox-graph-sync-authority-parity", "native-mailbox-cross-runtime-replay-parity"] }
+        "node": { "status": "unavailable", "evidence": ["native-mailbox-authority-complete"] },
+        "bun": { "status": "unavailable", "evidence": ["native-mailbox-authority-complete"] },
+        "rust": { "status": "admitted", "evidence": ["native-mailbox-confined-projection-read", "native-mailbox-graph-timeout-recovery", "native-mailbox-generation-and-fact-authority", "native-mailbox-reconciliation-and-admission", "native-mailbox-outbox-replay", "native-mailbox-stdio-complete"] }
       }
     },
     {

@@ -152,13 +152,13 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "calendar-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "calendar-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-calendar-contract", "native-calendar-bounded-policy-output-read", "native-calendar-doctor-parity", "native-calendar-guidance-parity", "native-calendar-output-show-parity", "native-calendar-authority-bridge", "native-calendar-graph-authority-parity", "native-calendar-write-policy-parity", "native-calendar-audit-parity"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-calendar-contract-tests", "native-calendar-stdio-proof", "native-calendar-graph-authority", "native-calendar-write-policy", "native-calendar-audit"] }
       }
     },
     {

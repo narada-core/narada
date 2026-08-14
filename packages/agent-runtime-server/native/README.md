@@ -15,9 +15,9 @@ cargo build --release
 ```
 
 The launcher selects the resulting binary with `--runtime-engine rust`. The
-legacy JavaScript process-boundary adapter remains available only for explicit
-conformance/benchmark fixtures or `NARADA_RUNTIME_DELEGATE=1`. A native launch
-does not require `NARADA_RUNTIME_SERVER_SCRIPT`.
+binary also owns its conformance probes. It does not interpret
+`NARADA_RUNTIME_DELEGATE`, `NARADA_RUNTIME_SERVER_SCRIPT`, or
+`NARADA_RUNTIME_NODE_COMMAND`, and it never launches Node or Bun.
 
 NARADA_NATIVE_PROVIDER_MODE=echo is a deterministic provider fixture used by
 conformance tests. codex/codex-subscription invokes the explicit Codex provider

@@ -34,12 +34,6 @@ async function runEngine(engine: Engine): Promise<Record<string, unknown>[]> {
     env: {
       ...process.env,
       NARADA_RUNTIME_ENGINE: engine,
-      ...(engine === 'rust'
-        ? {
-            NARADA_RUNTIME_SERVER_SCRIPT: target,
-            NARADA_RUNTIME_NODE_COMMAND: process.execPath,
-          }
-        : {}),
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,

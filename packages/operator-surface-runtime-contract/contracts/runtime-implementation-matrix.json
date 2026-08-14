@@ -402,11 +402,11 @@
       "component_kind": "quota-meter-mcp",
       "package": "@narada-core/quota-meter-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "quota-meter-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "quota-meter-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-quota-overlay-read", "native-quota-meter-overlay-status-parity", "quota-meter-authority-boundary-test", "native-rust-default-contract"] }
+        "node": { "status": "unavailable", "evidence": ["native-quota-authority-replaces-javascript-runtime"] },
+        "bun": { "status": "unavailable", "evidence": ["native-quota-authority-replaces-javascript-runtime"] },
+        "rust": { "status": "admitted", "evidence": ["native-codex-app-server-quota-read", "native-kimi-https-quota-read", "native-glide-calculation", "native-overlay-lifecycle", "native-overlay-refresh-command", "quota-meter-native-stdio-proof"] }
       }
     },
     {

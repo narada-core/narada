@@ -17,13 +17,13 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["runtime-engine-contract", "nars-conformance-tests"] },
-        "bun": { "status": "admitted", "evidence": ["runtime-engine-contract", "nars-conformance-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-session-core", "nars-conformance-tests", "runtime-benchmark"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-session-core", "native-conformance-probes", "runtime-benchmark"] }
       }
     },
     {
@@ -32,12 +32,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["proxy-protocol-tests", "runtime-benchmark"] },
-        "bun": { "status": "admitted", "evidence": ["proxy-protocol-tests", "runtime-benchmark"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-proxy-artifact", "native-proxy-tests", "runtime-benchmark"] }
       }
     },

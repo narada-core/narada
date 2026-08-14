@@ -358,11 +358,11 @@
       "component_kind": "delegated-task-mcp",
       "package": "@narada-core/delegated-task-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "delegated-task-protocol-tests", "delegated-task-worker-execution-authority"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "delegated-task-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-delegated-task-authority", "native-delegated-task-worker-execution-authority", "delegated-task-native-parity", "native-rust-default-contract"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-delegated-task-contract-tests", "native-delegated-task-stdio-proof", "native-delegated-task-worker-authority"] }
       }
     },
     {

@@ -182,13 +182,13 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "surface-feedback-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "surface-feedback-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-surface-feedback-read-slice", "native-surface-feedback-proof-template-parity", "surface-feedback-authority-boundary-test", "native-rust-default-contract"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-surface-feedback-contract-tests", "native-surface-feedback-stdio-proof", "native-surface-feedback-idempotency"] }
       }
     },
     {

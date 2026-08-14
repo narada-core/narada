@@ -40,6 +40,7 @@ const RUST_ONLY_SURFACES = new Set([
   'artifacts-mcp',
   'quota-meter-mcp',
   'mailbox-mcp',
+  'graph-mail-mcp',
 ]);
 
 test('native profile admits the operationally complete requested Rust MCP surface batch', () => {

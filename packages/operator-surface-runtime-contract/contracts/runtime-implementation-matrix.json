@@ -424,11 +424,11 @@
       "component_kind": "graph-mail-mcp",
       "package": "@narada-core/graph-mail-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "graph-mail-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "graph-mail-protocol-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-graph-mail-contract", "native-graph-mail-doctor-parity", "native-graph-mail-auth-status-parity", "native-graph-mail-core-authority-parity", "native-graph-mail-draft-attachment-authority-parity", "native-graph-mail-reply-authority-parity", "native-graph-mail-upload-session-parity", "native-graph-mail-download-authority-parity", "native-graph-mail-upload-authority-contract", "native-graph-mail-upload-authority-parity", "native-graph-mail-auth-posture-parity", "native-graph-mail-device-auth-contract", "native-graph-mail-device-auth-parity", "native-graph-mail-ticket-draft-upsert-parity", "native-graph-mail-ticket-disposition-parity", "native-graph-mail-delegated-token-adapter", "native-graph-mail-local-surface-parity", "graph-mail-authority-boundary-test"] }
+        "node": { "status": "unavailable", "evidence": ["native-graph-mail-authority-complete"] },
+        "bun": { "status": "unavailable", "evidence": ["native-graph-mail-authority-complete"] },
+        "rust": { "status": "admitted", "evidence": ["native-graph-mail-exact-tool-contracts", "native-graph-mail-provider-authority", "native-graph-mail-ticket-draft-persistence", "native-graph-mail-timeout-recovery", "native-graph-mail-stdio-complete"] }
       }
     },
     {

@@ -47,13 +47,13 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["filesystem-protocol-tests", "filesystem-benchmark"] },
-        "bun": { "status": "admitted", "evidence": ["filesystem-protocol-tests", "filesystem-benchmark"] },
-        "rust": { "status": "admitted", "evidence": ["native-filesystem-applet", "filesystem-benchmark"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-filesystem-applet", "filesystem-protocol-tests", "filesystem-benchmark"] }
       }
     },
     {

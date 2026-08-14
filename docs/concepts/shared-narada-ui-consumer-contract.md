@@ -13,7 +13,7 @@ UI-neutral MCP surface boundary in <src-root>/mcp-surfaces.
 
 | Consumer need | Consume | Do not consume |
 | --- | --- | --- |
-| Standalone HTML or a server-rendered CLI page | `@narada-core/ui` via the compiled `styles.css` export | `@narada-core/ui-vue`, Vue runtime, Agent Web UI |
+| Standalone HTML or a server-rendered CLI page | `@narada-core/ui` via the compiled `styles.css` or `design-system.css` export | `@narada-core/ui-vue`, Vue runtime, Agent Web UI |
 | Reusable Vue primitive | `@narada-core/ui` and `@narada-core/ui-vue` | Agent Web UI session components |
 | Agent Web UI session experience | `@narada-core/ui`, `@narada-core/ui-vue`, and app-owned session code | Copying shared foundation styles or taking ownership of shared primitives |
 | MCP surface | No renderer package | `@narada-core/ui`, `@narada-core/ui-vue`, Vue/React/Svelte, Tailwind runtime, Agent Web UI |
@@ -26,6 +26,7 @@ UI-neutral MCP surface boundary in <src-root>/mcp-surfaces.
 - typography, reset, control defaults, and base accessibility rules;
 - reusable CSS primitives such as truncation and list reset;
 - the compiled `./styles.css` consumer export;
+- the compiled `./design-system.css`, `./tokens.css`, and `./primitives.css` exports;
 - the build and source-scanning configuration needed to produce the export.
 
 The public runtime contract is the built stylesheet. A consumer must build the
@@ -86,8 +87,11 @@ The extraction is complete only when each foundation rule has one owner.
 
 ### Shared owners
 
-- Tokens, reset, base typography, controls, and generic CSS primitives:
-  `packages/ui/src/styles.css`.
+- Application foundation tokens, reset, base typography, controls, and generic
+  CSS primitives: `packages/ui/src/styles.css`.
+- Narada Saffron, evidence semantics, presentation tokens, and reusable site
+  primitives: `packages/ui/src/tokens.css` and `packages/ui/src/primitives.css`,
+  consumed together through `packages/ui/src/design-system.css`.
 - Shared Vue command and tooltip source:
   `packages/ui-vue/src/components` and
   `packages/ui-vue/src/components.css`.

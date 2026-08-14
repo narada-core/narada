@@ -31,6 +31,9 @@ test('shared UI package exports and consumer direction are explicit', async () =
   const uiVuePackage = await readJson(resolve(uiVueRoot, 'package.json'));
 
   assert.equal(uiPackage.exports['./styles.css'], './dist/styles.css');
+  assert.equal(uiPackage.exports['./design-system.css'], './dist/design-system.css');
+  assert.equal(uiPackage.exports['./tokens.css'], './dist/tokens.css');
+  assert.equal(uiPackage.exports['./primitives.css'], './dist/primitives.css');
   assert.equal(uiPackage.publishConfig?.access, 'public');
   assert.equal(uiPackage.scripts?.prepack, 'pnpm run build');
   assert.equal(uiVuePackage.exports['./components.css'], './src/components.css');

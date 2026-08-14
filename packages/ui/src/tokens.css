@@ -1,0 +1,122 @@
+:root {
+  color-scheme: light;
+
+  /* Narada Saffron inherits the lineage accent from narada.systems. */
+  --narada-saffron-50: #fffbea;
+  --narada-saffron-100: #fff3c4;
+  --narada-saffron-200: #ffe787;
+  --narada-saffron-300: #fbd85a;
+  --narada-saffron-400: #f7cc3c;
+  --narada-saffron-500: #f4c430;
+  --narada-saffron-600: #d9a514;
+  --narada-saffron-700: #ad7b0c;
+  --narada-saffron-800: #795510;
+  --narada-saffron-900: #4f380f;
+
+  --neutral-0: #fffdf8;
+  --neutral-50: #f7f4ee;
+  --neutral-100: #eee9df;
+  --neutral-200: #ded8cc;
+  --neutral-300: #c8c0b3;
+  --neutral-400: #9a9389;
+  --neutral-500: #706b63;
+  --neutral-600: #57534d;
+  --neutral-700: #403d38;
+  --neutral-800: #292724;
+  --neutral-900: #191816;
+  --neutral-950: #111214;
+
+  --evidence-source: #f2b766;
+  --evidence-model: #91a9bd;
+  --evidence-conjecture: #58e5c1;
+  --evidence-synthetic: #ff62cc;
+  --status-positive: #2f8f6b;
+  --status-caution: #b86d13;
+  --status-negative: #b83a4b;
+  --status-info: #6d91ca;
+
+  --scene-canvas: #050811;
+  --scene-panel: #09131d;
+  --scene-border: #31536a;
+  --scene-text: #edf8ff;
+  --scene-text-muted: #9db3c2;
+  --scene-cubature: #9b6cff;
+  --scene-offscreen: #ff9de0;
+
+  --color-canvas: var(--neutral-50);
+  --color-surface: var(--neutral-0);
+  --color-surface-raised: #ffffff;
+  --color-text: var(--neutral-900);
+  --color-text-muted: var(--neutral-500);
+  --color-border: var(--neutral-200);
+  --color-primary: var(--narada-saffron-500);
+  --color-primary-hover: var(--narada-saffron-600);
+  --color-primary-soft: var(--narada-saffron-100);
+  --color-on-primary: #241a02;
+  --color-code: var(--neutral-100);
+  --color-focus: var(--narada-saffron-400);
+
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --font-display: var(--font-sans);
+
+  --text-xs: 0.72rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: clamp(1.8rem, 4vw, 3.2rem);
+  --text-3xl: clamp(2.4rem, 6vw, 4.8rem);
+
+  --leading-tight: 1.05;
+  --leading-heading: 1.15;
+  --leading-body: 1.62;
+  --leading-small: 1.5;
+  --tracking-tight: -0.035em;
+  --tracking-label: 0.08em;
+  --measure-copy: 68ch;
+  --measure-prose: 74ch;
+  --measure-compact: 48ch;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --line-hairline: 1px;
+  --content-width: 1060px;
+  --content-wide: 1400px;
+  --shadow-resting: 0 1px 2px rgba(35, 28, 18, 0.08);
+  --shadow-raised: 0 16px 42px rgba(35, 28, 18, 0.12);
+  --shadow-overlay: 0 24px 64px rgba(35, 28, 18, 0.2);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-focus) 38%, transparent);
+  --motion-fast: 120ms;
+  --motion-standard: 220ms;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --color-canvas: #111214;
+  --color-surface: #1b1d20;
+  --color-surface-raised: #232529;
+  --color-text: #f1eee8;
+  --color-text-muted: #aaa59b;
+  --color-border: #393a3d;
+  --color-primary: var(--narada-saffron-500);
+  --color-primary-hover: var(--narada-saffron-400);
+  --color-primary-soft: #3b2a1d;
+  --color-on-primary: #241a02;
+  --color-code: #24262a;
+  --color-focus: var(--narada-saffron-500);
+  --shadow-resting: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-raised: 0 16px 42px rgba(0, 0, 0, 0.28);
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.44);
+}

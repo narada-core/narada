@@ -8,9 +8,14 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
-      input: fileURLToPath(new URL('./src/styles.css', import.meta.url)),
+      input: {
+        styles: fileURLToPath(new URL('./src/styles.css', import.meta.url)),
+        tokens: fileURLToPath(new URL('./src/tokens.css', import.meta.url)),
+        primitives: fileURLToPath(new URL('./src/primitives.css', import.meta.url)),
+        'design-system': fileURLToPath(new URL('./src/design-system.css', import.meta.url)),
+      },
       output: {
-        assetFileNames: 'styles.css',
+        assetFileNames: '[name][extname]',
       },
     },
   },

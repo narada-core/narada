@@ -16,6 +16,16 @@ test('build publishes the shared stylesheet export', async () => {
   await assert.rejects(access(resolve(packageRoot, 'dist/index.js')));
 });
 
+test('build publishes the shared design-system exports', async () => {
+  const css = await readFile(resolve(packageRoot, 'dist/design-system.css'), 'utf8');
+
+  assert.match(css, /--narada-saffron-500:/);
+  assert.match(css, /\.ui-button/);
+  assert.match(css, /\.ui-badge/);
+  await access(resolve(packageRoot, 'dist/tokens.css'));
+  await access(resolve(packageRoot, 'dist/primitives.css'));
+});
+
 test('plain HTML consumer references the package stylesheet', async () => {
   const html = await readFile(resolve(packageRoot, 'test/fixtures/plain-consumer.html'), 'utf8');
 

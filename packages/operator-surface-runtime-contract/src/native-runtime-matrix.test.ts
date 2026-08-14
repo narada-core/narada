@@ -34,6 +34,10 @@ const NATIVE_SURFACES = [
   'project-state-mcp',
 ] as const;
 
+const RUST_ONLY_SURFACES = new Set([
+  'runtime-introspection-mcp',
+]);
+
 test('native profile admits the operationally complete requested Rust MCP surface batch', () => {
   const entries = runtimeProfileImplementationMatrix('native');
   for (const componentKind of NATIVE_SURFACES) {
@@ -43,11 +47,14 @@ test('native profile admits the operationally complete requested Rust MCP surfac
   }
 });
 
-test('all admitted profiles preserve explicit Bun and Node alternatives for the Rust default batch', () => {
+test('profiles preserve admitted alternatives except where a surface has one native authority', () => {
   for (const profile of ['native', 'bun', 'node-compat'] as const) {
     const plan = resolveRuntimeMaterializationPlan(profile);
     for (const componentKind of NATIVE_SURFACES) {
-      assert.equal(plan.entries.find((entry: any) => entry.component_kind === componentKind)?.runtime_engine_kind, profile === 'native' ? 'rust' : profile === 'bun' ? 'bun' : 'node');
+      const expected = RUST_ONLY_SURFACES.has(componentKind)
+        ? 'rust'
+        : profile === 'native' ? 'rust' : profile === 'bun' ? 'bun' : 'node';
+      assert.equal(plan.entries.find((entry: any) => entry.component_kind === componentKind)?.runtime_engine_kind, expected);
     }
   }
 });

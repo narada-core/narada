@@ -92,13 +92,13 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests"] },
-        "rust": { "status": "admitted", "evidence": ["native-mcp-registrar", "registrar-tool-catalog-parity", "registrar-read-model-parity"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-mcp-registrar", "native-registrar-contract-tests", "native-registrar-stdio-proof"] }
       }
     },
     {

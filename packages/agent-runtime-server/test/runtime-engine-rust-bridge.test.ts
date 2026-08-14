@@ -14,16 +14,12 @@ const nativeBinary = join(
   'release',
   process.platform === 'win32' ? 'narada-agent-runtime-server-rust.exe' : 'narada-agent-runtime-server-rust',
 );
-const target = fileURLToPath(new URL('./fixtures/runtime-engine-rust-target.mjs', import.meta.url));
-
-test('Rust runtime bridge preserves the selected engine in delegated runtime context', { skip: !existsSync(nativeBinary) }, async () => {
+test('Rust runtime conformance mode is owned by the native binary', { skip: !existsSync(nativeBinary) }, async () => {
   const child = spawn(nativeBinary, ['--bridge-conformance'], {
     cwd: packageRoot,
     env: {
       ...process.env,
-      NARADA_RUNTIME_SERVER_SCRIPT: target,
-      NARADA_RUNTIME_NODE_COMMAND: process.execPath,
-      // The bridge must override a stale caller value.
+      // Native authority must ignore stale caller engine selection.
       NARADA_RUNTIME_ENGINE: 'node',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

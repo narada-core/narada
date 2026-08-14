@@ -137,13 +137,13 @@
       "required": false,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "git-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "git-protocol-parity"] },
-        "rust": { "status": "admitted", "evidence": ["native-git-read-canary", "git-work-scope-parity", "git-workflow-record", "git-index-slice", "native-git-protocol-tests", "native-git-applet-default"] }
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "rust": { "status": "admitted", "evidence": ["native-git-contract-tests", "native-git-stdio-proof", "git-work-scope-parity", "git-workflow-record", "git-index-slice"] }
       }
     },
     {

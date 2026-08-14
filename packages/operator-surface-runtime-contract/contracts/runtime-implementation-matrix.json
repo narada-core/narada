@@ -107,12 +107,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "structured-command-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "structured-command-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-structured-command-applet", "structured-command-protocol-parity", "native-structured-command-tests"] }
       }
     },
@@ -122,12 +122,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "catalog-observation-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "catalog-observation-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-shared-surface", "catalog-observation-protocol-parity", "native-catalog-observation-tests"] }
       }
     },
@@ -167,12 +167,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "site-loop-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "site-loop-protocol-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-site-loop-read-slice", "native-site-loop-persistence-read", "native-site-loop-bounded-config-output-read", "native-site-loop-config-validation-parity", "native-site-loop-docs-read-parity", "native-site-loop-tests-read-parity", "native-site-loop-status-read-parity", "site-loop-authority-boundary-test", "native-rust-default-contract"] }
       }
     },
@@ -212,12 +212,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "sop-protocol-tests", "sop-registry-and-execution-authority"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "sop-protocol-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-sop-template-registry-parity", "native-sop-handoff-and-outbox-parity", "native-sop-run-engine-and-completion-parity", "native-sop-sqlite-snapshot-parity", "native-protocol-suite"] }
       }
     },
@@ -227,12 +227,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "operator-routing-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "operator-routing-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-shared-surface", "operator-routing-protocol-parity", "native-operator-routing-tests"] }
       }
     },
@@ -242,12 +242,12 @@
       "required": true,
       "profile_runtime_engine_kinds": {
         "native": "rust",
-        "bun": "bun",
-        "node-compat": "node"
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "inbox-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "inbox-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-site-inbox", "native-site-inbox-bounded-file-read", "inbox-protocol-parity", "native-site-inbox-roundtrip"] }
       }
     },
@@ -256,13 +256,13 @@
       "package": "@narada-core/mcp-surfaces",
       "required": true,
       "profile_runtime_engine_kinds": {
-        "native": "bun",
-        "bun": "bun",
-        "node-compat": "node"
+        "native": "rust",
+        "bun": "rust",
+        "node-compat": "rust"
       },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["surface-protocol-tests", "carrier-materialization-tests"] },
-        "bun": { "status": "admitted", "evidence": ["surface-protocol-tests", "carrier-materialization-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "unavailable", "evidence": [] }
       }
     },
@@ -270,10 +270,10 @@
       "component_kind": "task-lifecycle-mcp",
       "package": "@narada-core/task-lifecycle-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "lifecycle-parity-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "lifecycle-parity-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-lifecycle-authority", "native-lifecycle-protocol-parity", "native-lifecycle-cross-runtime-parity", "native-lifecycle-smoke", "native-lifecycle-refusal", "native-lifecycle-migration", "native-lifecycle-benchmark"] }
       }
     },
@@ -281,10 +281,10 @@
       "component_kind": "site-lifecycle-mcp",
       "package": "@narada-core/site-lifecycle-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "lifecycle-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "lifecycle-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-site-lifecycle", "lifecycle-protocol-parity"] }
       }
     },
@@ -292,10 +292,10 @@
       "component_kind": "site-registry-mcp",
       "package": "@narada-core/site-registry-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "registry-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "registry-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-site-registry", "registry-protocol-parity"] }
       }
     },
@@ -303,10 +303,10 @@
       "component_kind": "project-state-mcp",
       "package": "@narada-core/project-state-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "project-state-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "project-state-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-project-state", "project-state-protocol-parity"] }
       }
     },
@@ -314,10 +314,10 @@
       "component_kind": "work-lifecycle-mcp",
       "package": "@narada-core/work-lifecycle-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "lifecycle-parity-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "lifecycle-parity-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-lifecycle-authority", "native-lifecycle-protocol-parity", "native-lifecycle-cross-runtime-parity", "native-lifecycle-smoke", "native-lifecycle-refusal", "native-lifecycle-migration", "native-lifecycle-benchmark"] }
       }
     },
@@ -347,10 +347,10 @@
       "component_kind": "launcher-mcp",
       "package": "@narada-core/launcher-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "launcher-protocol-parity"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "launcher-protocol-parity"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-launcher", "launcher-registry-parity", "launcher-protocol-parity"] }
       }
     },
@@ -435,10 +435,10 @@
       "component_kind": "scheduler-mcp",
       "package": "@narada-core/scheduler-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "scheduler-protocol-tests", "scheduler-operational-authority"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "scheduler-protocol-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-scheduler-task-authority", "native-scheduler-activation-authority", "native-scheduler-tool-contract-parity", "native-scheduler-task-list-parity", "native-scheduler-dry-run-mutation-parity", "native-scheduler-activation-transition-parity", "native-rust-default-contract"] }
       }
     },
@@ -457,10 +457,10 @@
       "component_kind": "browser-control-mcp",
       "package": "@narada-core/browser-control-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "browser-control-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "browser-control-protocol-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-browser-control-contract", "native-browser-control-session-inventory-parity", "browser-control-authority-boundary-test", "native-rust-default-contract"] }
       }
     },
@@ -468,10 +468,10 @@
       "component_kind": "operator-console-overlay-mcp",
       "package": "@narada-core/operator-console-overlay-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "operator-overlay-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "operator-overlay-protocol-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-operator-overlay-status", "native-operator-overlay-status-parity", "operator-overlay-authority-boundary-test", "native-rust-default-contract"] }
       }
     },
@@ -479,10 +479,10 @@
       "component_kind": "cloudflare-carrier-mcp",
       "package": "@narada-core/cloudflare-carrier-mcp",
       "required": true,
-      "profile_runtime_engine_kinds": { "native": "rust", "bun": "bun", "node-compat": "node" },
+      "profile_runtime_engine_kinds": { "native": "rust", "bun": "rust", "node-compat": "rust" },
       "implementations": {
-        "node": { "status": "admitted", "evidence": ["package-node-tests", "cloudflare-carrier-protocol-tests"] },
-        "bun": { "status": "admitted", "evidence": ["package-bun-tests", "cloudflare-carrier-protocol-tests"] },
+        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
+        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
         "rust": { "status": "admitted", "evidence": ["native-cloudflare-metadata-doctor", "native-cloudflare-local-evidence-read", "native-cloudflare-health-projection-parity", "native-cloudflare-session-status-parity", "native-cloudflare-doctor-parity", "cloudflare-carrier-authority-boundary-test", "native-rust-default-contract"] }
       }
     }

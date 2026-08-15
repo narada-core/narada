@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -244,4 +245,3 @@ async function checkMcpFabricMaterialization(
     };
   }
 }
-

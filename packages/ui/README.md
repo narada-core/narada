@@ -10,3 +10,5 @@ import '@narada-core/ui/design-system.css';
 ```
 
 `tokens.css` and `primitives.css` are also exported for static-scene asset generation. This package does not own Vue components, session transport, operator panels, or site-specific layout. Vue primitives belong in `@narada-core/ui-vue`; a consumer owns its application shell and domain behavior.
+
+The cross-repository consumer and release contract is documented in docs/deployment/site-ui-and-wrangler.md.

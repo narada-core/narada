@@ -74,6 +74,7 @@ These terms describe different crossings and are not interchangeable:
 Site materialization and deployment target docs.
 
 - [`cloudflare-site-materialization.md`](deployment/cloudflare-site-materialization.md) — Cloudflare Site materialization design
+- [`site-ui-and-wrangler.md`](deployment/site-ui-and-wrangler.md) — shared UI ownership, math rendering, and Wrangler release contract for public sites
 - [`systemd/`](deployment/systemd/) — systemd unit files and service configuration
 
 ## `testing/`

@@ -23,6 +23,12 @@ import { createSiteAgentAdmissionGateway, type SiteAgentAdmissionGateway } from 
 import { createSiteAgentLifecycleGateway, type SiteAgentLifecycleGateway } from './site-agent-lifecycle-gateway.js';
 import { createSiteAgentPendingTracker, type SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import {
+  resolveEpistemicGraphPrincipalFromEnvironment,
+  type EpistemicGraphGateway,
+  type EpistemicGraphPrincipal,
+} from './epistemic-graph-gateway.js';
+import { createEpistemicGraphGatewayRuntime } from './epistemic-graph-gateway-runtime.js';
+import {
   createDefaultHostFleetProjectionReader,
   type HostFleetProjectionReader,
 } from '@narada-core/host-fleet-runtime/client';
@@ -127,8 +133,11 @@ function projectLocalRouteAvailability(routes: ReturnType<typeof createConsoleSe
   return Object.fromEntries(operatorSurfaceDescriptors.map((surface) => [
     surface.id,
     Object.fromEntries(surface.routes.map((route) => {
-      const available = concreteWorkspaceRoutePath(route.path)
-        && routes.some((candidate) => candidate.method === 'GET' && candidate.pattern.test(route.path));
+      const available = (concreteWorkspaceRoutePath(route.path)
+        && routes.some((candidate) => candidate.method === 'GET' && candidate.pattern.test(route.path)))
+        || (surface.id === 'epistemic-graph'
+          && route.id === 'epistemic-graph'
+          && routes.some((candidate) => candidate.route_id === 'operator-console.epistemic-graph-page'));
       const fallback: OperatorSurfaceAvailability = surface.defaultAvailability === 'available' ? 'unavailable' : 'planned';
       return [route.id, available ? 'available' : fallback];
     })),
@@ -273,6 +282,8 @@ export interface ConsoleServerConfig {
   hostFleet?: HostFleetProjectionReader;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
+  epistemicGraph?: EpistemicGraphGateway;
+  epistemicGraphPrincipal?: () => EpistemicGraphPrincipal | null;
 }
 
 export interface ConsoleServer {
@@ -360,6 +371,12 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
   const siteAgentLaunch = config.siteAgentLaunch ?? createSiteAgentLaunchGateway({ overview: siteAgentOverview });
   const siteAgentAdmission = config.siteAgentAdmission ?? createSiteAgentAdmissionGateway();
   const siteAgentLifecycle = config.siteAgentLifecycle ?? createSiteAgentLifecycleGateway({ overview: siteAgentOverview });
+  const epistemicGraphRuntime = config.epistemicGraph ? null : createEpistemicGraphGatewayRuntime({
+    async resolve(siteId) {
+      const site = registry.getSite(siteId);
+      return site ? { site_id: site.siteId, site_root: site.siteRoot } : null;
+    },
+  });
 
   const routeContext = {
     registry,
@@ -374,6 +391,8 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     siteAgentLifecycle,
     siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
     hostFleet: config.hostFleet ?? createDefaultHostFleetProjectionReader(),
+    epistemicGraph: config.epistemicGraph ?? epistemicGraphRuntime?.gateway,
+    epistemicGraphPrincipal: config.epistemicGraphPrincipal ?? resolveEpistemicGraphPrincipalFromEnvironment,
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
     onboardingPlatform: config.onboardingPlatform ?? (process.platform === 'win32' ? 'windows' : 'linux'),
@@ -582,6 +601,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       try {
         await siteAgentLaunch.close?.();
       } finally {
+        await epistemicGraphRuntime?.close();
         registry.close();
         if (server) {
           await new Promise<void>((resolve) => {

@@ -31,6 +31,10 @@ import type { SiteAgentOverviewReadModel } from './site-agent-overview-read-mode
 import type { SiteAgentLaunchGateway } from './site-agent-launch-gateway.js';
 import type { SiteAgentAdmissionGateway } from './site-agent-admission-gateway.js';
 import type { SiteAgentLifecycleGateway } from './site-agent-lifecycle-gateway.js';
+import type {
+  EpistemicGraphGateway,
+  EpistemicGraphPrincipal,
+} from './epistemic-graph-gateway.js';
 import {
   OPERATOR_CONSOLE_AGENTS_API_PATH,
   OPERATOR_CONSOLE_AGENTS_ADMISSION_API_PATH,
@@ -50,6 +54,7 @@ import {
   OPERATOR_CONSOLE_ONBOARDING_PATH,
   OPERATOR_CONSOLE_ONBOARDING_API_PATH,
   OPERATOR_CONSOLE_ONBOARDING_SCHEMA,
+  OPERATOR_CONSOLE_EPISTEMIC_GRAPH_WIRE_SCHEMA,
   OPERATOR_CONSOLE_SESSIONS_PATH,
   formatOperatorSiteAgentInvariantViolation,
   validateOperatorSiteAgentOverviewInvariants,
@@ -61,6 +66,7 @@ import {
   type OperatorConsoleOnboardingProjection,
   type OperatorConsoleOnboardingSetupAction,
   type OperatorConsoleOnboardingUiState,
+  type OperatorEpistemicGraphRequest,
 } from '@narada-core/operator-console-contract';
 import type { SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import {
@@ -112,6 +118,8 @@ export interface ConsoleServerRouteContext {
   siteAgentLifecycle?: SiteAgentLifecycleGateway;
   siteAgentPending?: SiteAgentPendingTracker;
   hostFleet: HostFleetProjectionReader;
+  epistemicGraph?: EpistemicGraphGateway;
+  epistemicGraphPrincipal?: () => EpistemicGraphPrincipal | null;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
   onboardingPlatform?: 'windows' | 'linux';
@@ -1264,6 +1272,69 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         commandResponse(res, await ctx.registryReadModel.discoverPlan(query));
+      },
+    },
+    // ── Site Epistemic Graph ──
+    {
+      route_id: 'operator-console.epistemic-graph-page',
+      method: 'GET',
+      pattern: /^\/console\/sites\/([^/]+)\/epistemic-graph\/?$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
+      handler: async (req, res) => {
+        if (!setCorsHeaders(res, req.headers.origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
+      },
+    },
+    {
+      route_id: 'operator-console.epistemic-graph-api',
+      method: 'POST',
+      pattern: /^\/console\/sites\/([^/]+)\/epistemic-graph\/api$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'epistemic-graph-control',
+      handler: async (req, res, params) => {
+        if (!setCorsHeaders(res, req.headers.origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        if (!ctx.epistemicGraph || !ctx.epistemicGraphPrincipal) {
+          jsonResponse(res, 503, { error: 'Epistemic graph authority unavailable' });
+          return;
+        }
+        const payload = await requestJson(req);
+        if (!payload || payload.schema !== OPERATOR_CONSOLE_EPISTEMIC_GRAPH_WIRE_SCHEMA) {
+          jsonResponse(res, 400, { error: 'Invalid epistemic graph request' });
+          return;
+        }
+        let siteId: string;
+        try {
+          siteId = decodeURIComponent(params[1]!);
+        } catch {
+          jsonResponse(res, 400, { error: 'Invalid Site identity encoding' });
+          return;
+        }
+        if (siteId.includes('/') || siteId.includes('\\')) {
+          jsonResponse(res, 400, { error: 'Invalid Site identity' });
+          return;
+        }
+        const result = await ctx.epistemicGraph.execute(
+          siteId,
+          payload as unknown as OperatorEpistemicGraphRequest,
+          ctx.epistemicGraphPrincipal(),
+        );
+        const status = result.status === 'success'
+          ? 200
+          : result.error?.code === 'epistemic_graph_site_not_found'
+            ? 404
+            : result.status === 'failed'
+              ? 502
+              : 403;
+        jsonResponse(res, status, result);
       },
     },
     // ── Sites ──

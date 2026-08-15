@@ -18,6 +18,7 @@ export type OperatorConsoleRouteKind =
   | 'onboarding'
   | 'agent-sessions'
   | 'artifacts'
+  | 'epistemic-graph'
   | 'not-found';
 
 export interface OperatorConsoleRoute {
@@ -122,6 +123,17 @@ export function resolveOperatorConsoleRoute(
   const path = normalizedPathname(pathname);
   const query = new URLSearchParams(search);
   const siteId = query.get('site') || undefined;
+  const epistemicGraphMatch = /^\/console\/sites\/([^/]+)\/epistemic-graph$/.exec(path);
+  if (epistemicGraphMatch) {
+    try {
+      const decodedSiteId = decodeURIComponent(epistemicGraphMatch[1] ?? '');
+      if (decodedSiteId && !decodedSiteId.includes('/') && !decodedSiteId.includes('\\')) {
+        return { kind: 'epistemic-graph', path, siteId: decodedSiteId };
+      }
+    } catch {
+      return { kind: 'not-found', path };
+    }
+  }
 
   const matched = directory
     ? findDirectoryRoute(directory, path)

@@ -58,6 +58,7 @@ function isProjectionKind(value: unknown): value is OperatorSurfaceProjectionKin
     || value === 'session-inventory'
     || value === 'agent-session'
     || value === 'artifact'
+    || value === 'epistemic-graph'
     || value === 'diagnostic';
 }
 
@@ -69,7 +70,8 @@ function isIntentKind(value: unknown): value is OperatorSurfaceIntentKind {
     || value === 'onboarding-control'
     || value === 'site-control'
     || value === 'session-input'
-    || value === 'artifact-open';
+    || value === 'artifact-open'
+    || value === 'epistemic-graph-control';
 }
 
 function isIntentProtocol(value: unknown): value is OperatorSurfaceIntentProtocol {
@@ -155,6 +157,7 @@ function isSurfaceId(value: unknown): value is OperatorSurfaceId {
     || value === 'site-operations'
     || value === 'agent-sessions'
     || value === 'artifacts'
+    || value === 'epistemic-graph'
     || value === 'onboarding';
 }
 
@@ -178,6 +181,7 @@ function isNavigationKey(value: unknown): value is OperatorSurfaceNavigationKey 
     || value === 'manage'
     || value === 'launcher'
     || value === 'sessions'
+    || value === 'epistemic-graph'
     || value === 'onboarding';
 }
 

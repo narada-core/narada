@@ -22,6 +22,8 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const sessionsPage = read('pages/AgentSessionsPage.vue');
   const hostFleetPage = read('pages/HostFleetPage.vue');
   const hostFleetAdapter = read('host-fleet/adapter.ts');
+  const epistemicGraphPage = read('pages/EpistemicGraphPage.vue');
+  const epistemicGraphTransport = read('epistemic-graph/transport.ts');
   const routes = read('console/routes.ts');
 
   assert.match(app, /resolveOperatorConsoleRoute/);
@@ -34,6 +36,11 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.doesNotMatch(hostFleetPage, /enroll|revoke|retire|launch|stop|delete/i);
   assert.match(hostFleetPage, /operator_console\.status === 'available' && host\.operator_console\.url/);
   assert.match(hostFleetAdapter, /validateHostFleetReadResponse/);
+  assert.doesNotMatch(epistemicGraphPage, /fetch\s*\(/);
+  assert.match(epistemicGraphPage, /createEpistemicGraphTransport/);
+  assert.match(epistemicGraphTransport, /credentials:\s*'same-origin'/);
+  assert.doesNotMatch(epistemicGraphTransport, /actor|authority_basis|principal/i);
+
   assert.doesNotMatch(registryComposable, /fetch\s*\(/);
   assert.doesNotMatch(registryComposable, /parseSiteRegistry/);
   assert.match(registryTransport, /createSiteRegistryTransport/);

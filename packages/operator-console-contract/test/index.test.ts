@@ -18,13 +18,17 @@ import {
 } from '../src/index.ts';
 
 test('operator surface catalog describes canonical host, registry, and launcher routes', () => {
-  assert.equal(operatorSurfaceDescriptors.length, 8);
+  assert.equal(operatorSurfaceDescriptors.length, 9);
   assert.equal(findOperatorSurfaceRoute('/console/agents')?.surface.id, 'site-agents');
   assert.equal(findOperatorSurfaceRoute('/console/registry/')?.surface.id, 'site-registry');
   assert.equal(findOperatorSurfaceRoute('/console/registry/add')?.route.kind, 'workflow');
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
   assert.equal(findOperatorSurfaceRoute('/console/onboarding')?.surface.id, 'onboarding');
   assert.equal(findOperatorSurfaceRoute('/console/fleet')?.surface.id, 'host-fleet');
+  const epistemicGraph = operatorSurfaceDescriptors.find((surface) => surface.id === 'epistemic-graph');
+  assert.deepEqual(epistemicGraph?.authority, { kind: 'site', id: null });
+  assert.equal(epistemicGraph?.intent.kind, 'epistemic-graph-control');
+  assert.equal(epistemicGraph?.routes[0]?.path, '/console/sites/<site-id>/epistemic-graph');
   assert.equal(
     operatorSurfaceDescriptors.find((surface) => surface.id === 'host-fleet')?.authority.id,
     '@narada-core/host-fleet-runtime',

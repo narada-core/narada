@@ -24,6 +24,9 @@ export const OPERATOR_CONSOLE_ONBOARDING_API_PATH = `${OPERATOR_CONSOLE_ONBOARDI
 export const OPERATOR_CONSOLE_ONBOARDING_SCHEMA = 'narada.operator_console.onboarding.v1' as const;
 export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
 export const OPERATOR_CONSOLE_SESSIONS_API_PATH = `${OPERATOR_CONSOLE_SESSIONS_PATH}/api` as const;
+export const OPERATOR_CONSOLE_EPISTEMIC_GRAPH_PATH = `${OPERATOR_CONSOLE_PATH}/sites/<site-id>/epistemic-graph` as const;
+export const OPERATOR_CONSOLE_EPISTEMIC_GRAPH_API_PATH = `${OPERATOR_CONSOLE_PATH}/sites/<site-id>/epistemic-graph/api` as const;
+export const OPERATOR_CONSOLE_EPISTEMIC_GRAPH_WIRE_SCHEMA = 'narada.operator_console.epistemic_graph.v1' as const;
 export const OPERATOR_CONSOLE_ASSET_PATH = '/console/assets' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS = 10_000;
 export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
@@ -108,6 +111,7 @@ export type OperatorSurfaceId =
   | 'site-operations'
   | 'agent-sessions'
   | 'artifacts'
+  | 'epistemic-graph'
   | 'onboarding';
 
 export type OperatorSurfaceScope =
@@ -160,6 +164,7 @@ export type OperatorSurfaceProjectionKind =
   | 'session-inventory'
   | 'agent-session'
   | 'artifact'
+  | 'epistemic-graph'
   | 'diagnostic';
 
 export interface OperatorSurfaceProjectionBinding {
@@ -175,7 +180,8 @@ export type OperatorSurfaceIntentKind =
   | 'onboarding-control'
   | 'site-control'
   | 'session-input'
-  | 'artifact-open';
+  | 'artifact-open'
+  | 'epistemic-graph-control';
 
 export type OperatorSurfaceIntentProtocol = 'http' | 'websocket' | 'mcp';
 
@@ -192,7 +198,44 @@ export type OperatorSurfaceAvailability = 'available' | 'unavailable' | 'planned
 
 export type OperatorSurfaceRouteKind = 'page' | 'workflow';
 
-export type OperatorSurfaceNavigationKey = 'fleet' | 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
+export type OperatorSurfaceNavigationKey = 'fleet' | 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'epistemic-graph' | 'onboarding';
+
+export type OperatorEpistemicGraphCommand =
+  | 'status'
+  | 'query'
+  | 'query-batch'
+  | 'graph-snapshot'
+  | 'neighborhood'
+  | 'source-inspect'
+  | 'capture-sources'
+  | 'proposal-submit'
+  | 'proposal-read'
+  | 'proposal-resubmit'
+  | 'proposal-review'
+  | 'proposal-admit'
+  | 'proposal-reject'
+  | 'submit-review-admit'
+  | 'export';
+
+export interface OperatorEpistemicGraphRequest {
+  schema: typeof OPERATOR_CONSOLE_EPISTEMIC_GRAPH_WIRE_SCHEMA;
+  site_id: string;
+  command: OperatorEpistemicGraphCommand;
+  arguments: Record<string, unknown>;
+  expected_ledger_head?: string | null;
+}
+
+export interface OperatorEpistemicGraphResponse {
+  schema: typeof OPERATOR_CONSOLE_EPISTEMIC_GRAPH_WIRE_SCHEMA;
+  status: 'success' | 'refused' | 'failed';
+  site_id: string;
+  command: OperatorEpistemicGraphCommand;
+  authority: { kind: 'site'; site_id: string };
+  principal: { kind: 'operator'; id: string } | null;
+  ledger_head: string | null;
+  result: unknown;
+  error: { code: string; message: string } | null;
+}
 
 export interface OperatorSurfaceNavigationItem {
   key: OperatorSurfaceNavigationKey;
@@ -1051,6 +1094,27 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
       available: 'Check the installed User Site and start its resident General assistant.',
       unavailable: 'The first-use onboarding projection is not available from this host.',
       planned: 'The first-use onboarding route is not yet available from this host.',
+    },
+  },
+  {
+    schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
+    id: 'epistemic-graph',
+    name: 'Epistemic Graph',
+    scope: 'local-site',
+    owner: 'Site Epistemic Graph Authority',
+    authority: { kind: 'site', id: null },
+    authorityHost: { kind: 'local', id: 'operator-console', origin: null },
+    projection: { kind: 'epistemic-graph', owner: '@narada-core/operator-console-ui' },
+    intent: { kind: 'epistemic-graph-control', endpoint: OPERATOR_CONSOLE_EPISTEMIC_GRAPH_API_PATH, endpointBase: 'workspace', protocols: ['http'] },
+    diagnosticOnly: false,
+    routes: [
+      { id: 'epistemic-graph', path: OPERATOR_CONSOLE_EPISTEMIC_GRAPH_PATH, kind: 'workflow', label: 'Epistemic Graph', navigationKey: 'epistemic-graph' },
+    ],
+    defaultAvailability: 'planned',
+    detail: {
+      available: 'Inspect and govern the selected Site problem-situation graph through its sole-writer authority.',
+      unavailable: 'The selected Site epistemic graph authority is not reachable from this host.',
+      planned: 'The selected Site has not published an epistemic graph operator route.',
     },
   },
   {

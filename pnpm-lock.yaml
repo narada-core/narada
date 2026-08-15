@@ -1243,6 +1243,10 @@ importers:
       '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../../../../mcp-surfaces/packages/shared/mcp-transport
+      '@narada-core/mcp-runtime-client':
+        specifier: workspace:*
+        version: link:../../../../mcp-surfaces/packages/shared/mcp-runtime-client
+
       '@narada-core/nars-capability-gateway':
         specifier: workspace:*
         version: link:../../nars-capability-gateway

@@ -9,6 +9,7 @@ import HostFleetPage from './pages/HostFleetPage.vue';
 import SiteAgentsPage from './pages/SiteAgentsPage.vue';
 import SiteRegistryMutationPage from './pages/SiteRegistryMutationPage.vue';
 import SiteRegistryPage from './pages/SiteRegistryPage.vue';
+import EpistemicGraphPage from './pages/EpistemicGraphPage.vue';
 import { resolveOperatorConsoleRoute } from './console/routes';
 import {
   createOperatorWorkspaceRouteDirectoryState,
@@ -84,5 +85,6 @@ onUnmounted(() => {
   <OperatorConsoleLaunchPage v-else-if="route.kind === 'launcher'" />
   <OperatorConsoleOnboardingPage v-else-if="route.kind === 'onboarding'" />
   <AgentSessionsPage v-else-if="route.kind === 'agent-sessions'" />
+  <EpistemicGraphPage v-else-if="route.kind === 'epistemic-graph' && route.siteId" :site-id="route.siteId" />
   <OperatorConsoleNotFound v-else :path="route.path" />
 </template>

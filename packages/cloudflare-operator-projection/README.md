@@ -30,6 +30,18 @@ shell, local MCP, and local artifact authority are not available in this lane.
 Production sessions require `principal_id` and verify `site_id`,
 `user_site_id`, and `host_site_id` against D1 before provider dispatch.
 
+## Operator Console epistemic graph
+
+The Site graph page and API are ordinary admitted Operator Console routes:
+`/console/sites/<site-id>/epistemic-graph` and its `/api` child. The Worker
+does not host a second graph ledger or trust identity fields from the browser.
+After Cloudflare Access verification it checks the gateway route directory,
+then proxies the request through the configured origin-pinned bridge or VPC
+service. The local Console resolves the registered Site and invokes that
+Site's admitted `epistemic-graph` MCP surface under its server-owned operator
+principal. Thus local and Cloudflare projections share one Site authority and
+one optimistic-concurrency ledger contract.
+
 ## Verification
 
 If an older deployment is public because it predates the fail-closed Access

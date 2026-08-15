@@ -50,6 +50,15 @@ test('operator console route resolver admits canonical host, agent, registry, la
     kind: 'agent-sessions',
     path: '/console/sessions',
   });
+  assert.deepEqual(resolveOperatorConsoleRoute('/console/sites/cintamani/epistemic-graph'), {
+    kind: 'epistemic-graph',
+    path: '/console/sites/cintamani/epistemic-graph',
+    siteId: 'cintamani',
+  });
+  assert.deepEqual(resolveOperatorConsoleRoute('/console/sites/%2F/epistemic-graph'), {
+    kind: 'not-found',
+    path: '/console/sites/%2F/epistemic-graph',
+  });
   assert.deepEqual(resolveOperatorConsoleRoute('/console/workbench'), {
     kind: 'not-found',
     path: '/console/workbench',

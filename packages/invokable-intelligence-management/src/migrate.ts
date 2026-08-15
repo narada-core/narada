@@ -125,6 +125,7 @@ function digest(value: unknown): string {
 function legacyAdapterProtocol(adapterKind: string): InferenceProtocol | null {
   switch (adapterKind) {
     case "openai-compatible-chat-completions":
+    case "native-openai-compatible-chat-completions":
       return { family: "openai", operation: "chat-completions", version: "1" };
     case "anthropic-messages":
       return { family: "anthropic", operation: "messages", version: "1" };
@@ -145,7 +146,7 @@ function legacyEndpointAddress(entry: LegacyProviderEntry, adapterKind: string):
     if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) return null;
     const operationUrl = adapterKind === "anthropic-messages"
       ? new URL("/v1/messages", parsed)
-      : adapterKind === "openai-compatible-chat-completions"
+      : ["openai-compatible-chat-completions", "native-openai-compatible-chat-completions"].includes(adapterKind)
         ? new URL(entry.chat_completions_path?.trim() || "v1/chat/completions", parsed)
         : null;
     return operationUrl ? { kind: "url", url: operationUrl.toString() } : null;
@@ -469,18 +470,20 @@ export function buildMigrationPlan(
 
     pushResource({ schema: "narada.invokable-intelligence.inference-provider.v1", id: `inference-provider:${legacyId}`, ...(entry.meaning ? { metadata: { meaning: entry.meaning } } : {}) });
     const adapterId = `adapter:${entry.adapter_kind}`;
-    pushResource({ schema: "narada.invokable-intelligence.adapter.v1", id: adapterId, runtime_family: "node", protocol });
+    const runtimeFamily = entry.adapter_kind === "native-openai-compatible-chat-completions" ? "native" : "node";
+    pushResource({ schema: "narada.invokable-intelligence.adapter.v1", id: adapterId, runtime_family: runtimeFamily, protocol });
 
     const credentialId = `credential-locator:${legacyId}`;
     const requirement = entry.credential_requirement;
     let credentialRef: ResourceRef | undefined;
     if (requirement && requirement.kind !== "none") {
       const secretRef = requirement.secret_ref ?? entry.credential_secret_ref;
+      const nativeCredentialEnv = entry.native_credential_env?.trim();
       pushResource({
         schema: "narada.invokable-intelligence.credential-locator.v1",
         id: credentialId,
-        store: secretRef ? "site-secret" : requirement.kind === "api_key_secret" ? "env" : "none",
-        reference: secretRef ?? requirement.env_names?.[0] ?? entry.credential_env_names?.[0] ?? "codex-local-subscription",
+        store: nativeCredentialEnv ? "env" : secretRef ? "site-secret" : requirement.kind === "api_key_secret" ? "env" : "none",
+        reference: nativeCredentialEnv ?? secretRef ?? requirement.env_names?.[0] ?? entry.credential_env_names?.[0] ?? "codex-local-subscription",
         holder: { kind: "site", id: loci.hostSite.id },
       });
       credentialRef = { kind: "credential-locator", id: credentialId };
@@ -491,7 +494,10 @@ export function buildMigrationPlan(
       const modelProvider = providerByModel.get(modelName)!;
       pushResource({ schema: "narada.invokable-intelligence.model-provider.v1", id: `model-provider:${modelProvider}` });
       const modelId = legacyModelResourceId(legacyId, modelName);
-      pushResource({ schema: "narada.invokable-intelligence.model.v1", id: modelId, display_name: modelName, provider: { kind: "model-provider", id: `model-provider:${modelProvider}` } });
+      const modelDisplayName = legacyId === "openrouter-api" && modelName.includes("/")
+        ? modelName.slice(modelName.indexOf("/") + 1)
+        : modelName;
+      pushResource({ schema: "narada.invokable-intelligence.model.v1", id: modelId, display_name: modelDisplayName, provider: { kind: "model-provider", id: `model-provider:${modelProvider}` } });
       modelRefs.push({ kind: "model", id: modelId });
     }
 

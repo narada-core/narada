@@ -175,8 +175,8 @@ export function validateResource(record: unknown): ContractError[] {
       break;
     }
     case ADAPTER_SCHEMA:
-      if (!["node", "workers", "test"].includes(String(record.runtime_family))) {
-        err(errors, "$.runtime_family", "invalid-resource", "runtime_family must be node | workers | test");
+      if (!["node", "native", "workers", "test"].includes(String(record.runtime_family))) {
+        err(errors, "$.runtime_family", "invalid-resource", "runtime_family must be node | native | workers | test");
       }
       if (!isPlainObject(record.protocol) || !isNonEmptyString(record.protocol.version)) {
         err(errors, "$.protocol", "invalid-resource", "adapter requires a typed, versioned invocation protocol");

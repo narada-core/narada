@@ -54,6 +54,21 @@ The package temporarily retains the dry-run-by-default provider-registry migrati
 
 User Site catalog bootstrap is first-use only: an empty registry is seeded once, and a registry that already contains catalog records is treated as ready without rewriting immutable records. Deliberate catalog changes belong to an explicit versioned migration, not to the launcher preflight path.
 
+## Native HTTP provider profiles
+
+DeepSeek and OpenRouter may be admitted through the native Rust
+native-openai-compatible-chat-completions adapter. Their canonical protocol is
+openai/chat-completions/1, and native profiles declare an explicit
+native_credential_env locator (DEEPSEEK_API_KEY or OPENROUTER_API_KEY).
+The resulting per-run binding contains only provider, endpoint, model,
+reasoning effort, and that environment-variable name; it never contains a
+secret.
+
+OpenRouter inventories deepseek/deepseek-v4-flash; direct DeepSeek remains a
+separate explicit route. The adapter does not silently fail over between
+providers. Codex remains the effective default until native-provider parity is
+verified. Responses API support is intentionally deferred.
+
 ## Local readiness and explicit principal binding
 
 Local launch readiness is a read-only doctor over the complete authority chain. It does not migrate a legacy provider registry, create a principal, infer identity from a name, or fabricate grants, consent, entitlements, quotas, budgets, governance, credentials, or route evidence. A service account or a present credential is not principal admission.

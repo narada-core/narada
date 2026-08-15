@@ -29,7 +29,7 @@ export interface ResolverContext {
   targetSite: ResourceRef;
   userSite: ResourceRef;
   hostSite: ResourceRef;
-  runtime: "node" | "workers" | "test";
+  runtime: "node" | "native" | "workers" | "test";
   /** Explicit named decision clock; ambient wall time is never resolver authority. */
   clock: AuthoritativeDecisionClock;
   /** Explicit request facts used by access, quota, budget, and governance gates. */

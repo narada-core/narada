@@ -58,6 +58,7 @@ pub enum PreflightOutcome {
         snapshot_digest: String,
         selected: Value,
         options: Value,
+        provider_binding: Option<Value>,
         evidence_ref: String,
         checked_at: String,
     },
@@ -167,15 +168,11 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let (plan_ref, selected, options, binding_digest) = match resolve_cognition_binding(
-        &connection,
-        &plan,
-        plan_id,
-        request,
-    ) {
-        Ok(binding) => binding,
-        Err(reason) => return refuse("cognition_resolution_refused", vec![reason]),
-    };
+    let (plan_ref, selected, options, binding_digest) =
+        match resolve_cognition_binding(&connection, &plan, plan_id, request) {
+            Ok(binding) => binding,
+            Err(reason) => return refuse("cognition_resolution_refused", vec![reason]),
+        };
     if plan_ref != plan_id {
         let mut derived = plan.clone();
         derived["id"] = Value::String(plan_ref.clone());
@@ -183,7 +180,8 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         derived["options"] = options.clone();
         derived["snapshot"]["plan_id"] = Value::String(plan_ref.clone());
         derived["snapshot"]["snapshot_digest"] = Value::String(binding_digest.clone());
-        derived["snapshot"]["lineage"] = serde_json::json!({"relation":"cognition-resolution-of","predecessor_plan_id":plan_id});
+        derived["snapshot"]["lineage"] =
+            serde_json::json!({"relation":"cognition-resolution-of","predecessor_plan_id":plan_id});
         if let Err(error) = connection.execute(
             "INSERT OR IGNORE INTO invocation_plans (id, intent_id, resolver_version, created_at, doc) VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![plan_ref, request.intent_id, "invokable-intelligence-native-cognition/1", request.evaluated_at, derived.to_string()],
@@ -191,6 +189,7 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
             return refuse("cognition_resolution_persist_failed", vec![error.to_string()]);
         }
     }
+    let provider_binding = native_provider_binding(&connection, &selected, &options);
     PreflightOutcome::Admitted {
         schema: "narada.invokable-intelligence.preflight-admission.v1",
         intent_id: request.intent_id.clone(),
@@ -198,9 +197,65 @@ pub fn preflight(registry_path: &Path, request: &PreflightRequest) -> PreflightO
         snapshot_digest: snapshot_digest.clone(),
         selected,
         options,
+        provider_binding,
         evidence_ref: evidence_ref(&plan_ref, &binding_digest, request),
         checked_at: request.evaluated_at.clone(),
     }
+}
+
+fn native_provider_binding(
+    connection: &Connection,
+    selected: &Value,
+    options: &Value,
+) -> Option<Value> {
+    let provider = selected
+        .pointer("/inference_provider/id")
+        .and_then(Value::as_str)?
+        .strip_prefix("inference-provider:")?
+        .to_string();
+    if !matches!(provider.as_str(), "deepseek-api" | "openrouter-api") {
+        return None;
+    }
+    let adapter_id = selected.pointer("/adapter/id").and_then(Value::as_str)?;
+    let adapter = latest_catalog_document(connection, adapter_id)
+        .ok()
+        .flatten()?;
+    if adapter.get("runtime_family").and_then(Value::as_str) != Some("native")
+        || adapter.pointer("/protocol/family").and_then(Value::as_str) != Some("openai")
+        || adapter
+            .pointer("/protocol/operation")
+            .and_then(Value::as_str)
+            != Some("chat-completions")
+    {
+        return None;
+    }
+    let endpoint_id = selected.pointer("/endpoint/id").and_then(Value::as_str)?;
+    let endpoint = latest_catalog_document(connection, endpoint_id)
+        .ok()
+        .flatten()?;
+    let endpoint_url = endpoint.pointer("/address/url").and_then(Value::as_str)?;
+    let model = selected
+        .pointer("/model/id")
+        .and_then(Value::as_str)?
+        .strip_prefix("model:")?
+        .to_string();
+    let credential_id = selected.pointer("/credential/id").and_then(Value::as_str)?;
+    let credential = latest_catalog_document(connection, credential_id)
+        .ok()
+        .flatten()?;
+    if credential.get("store").and_then(Value::as_str) != Some("env") {
+        return None;
+    }
+    let credential_env = credential.get("reference").and_then(Value::as_str)?;
+    Some(serde_json::json!({
+        "schema": "narada.native.provider_binding.v1",
+        "provider": provider,
+        "protocol": "openai/chat-completions/1",
+        "endpoint": endpoint_url,
+        "model": model,
+        "credential_env": credential_env,
+        "reasoning_effort": options.get("reasoning_effort").and_then(Value::as_str)
+    }))
 }
 
 fn resolve_cognition_binding(
@@ -210,39 +265,109 @@ fn resolve_cognition_binding(
     request: &PreflightRequest,
 ) -> Result<(String, Value, Value, String), String> {
     let Some(cognition) = request.cognition.as_deref() else {
-        let digest = plan.pointer("/snapshot/snapshot_digest").and_then(Value::as_str).unwrap_or_default().to_string();
-        return Ok((plan_id.to_string(), plan["selected"].clone(), plan["options"].clone(), digest));
+        let digest = plan
+            .pointer("/snapshot/snapshot_digest")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        return Ok((
+            plan_id.to_string(),
+            plan["selected"].clone(),
+            plan["options"].clone(),
+            digest,
+        ));
     };
     if !matches!(cognition, "low" | "medium" | "high") {
         return Err("cognition-invalid".to_string());
     }
-    let defaults_path = request.cognition_defaults_path.as_ref().ok_or_else(|| "cognition-defaults-path-missing".to_string())?;
-    let defaults_bytes = std::fs::read(defaults_path).map_err(|_| "cognition-defaults-unavailable".to_string())?;
-    let defaults: Value = serde_json::from_slice(&defaults_bytes).map_err(|_| "cognition-defaults-invalid".to_string())?;
-    let tuple = defaults.pointer(&format!("/effective_cognition_defaults/{cognition}")).or_else(|| defaults.pointer(&format!("/defaults/{cognition}"))).ok_or_else(|| "cognition-default-missing".to_string())?;
-    let provider = tuple.get("provider").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()).ok_or_else(|| "cognition-provider-missing".to_string())?;
-    let model = tuple.get("model").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()).ok_or_else(|| "cognition-model-missing".to_string())?;
-    let reasoning_effort = tuple.get("reasoning_effort").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()).ok_or_else(|| "cognition-reasoning-effort-missing".to_string())?;
-    let provider_id = format!("inference-provider:{}", provider.strip_prefix("inference-provider:").unwrap_or(provider));
+    let defaults_path = request
+        .cognition_defaults_path
+        .as_ref()
+        .ok_or_else(|| "cognition-defaults-path-missing".to_string())?;
+    let defaults_bytes =
+        std::fs::read(defaults_path).map_err(|_| "cognition-defaults-unavailable".to_string())?;
+    let defaults: Value = serde_json::from_slice(&defaults_bytes)
+        .map_err(|_| "cognition-defaults-invalid".to_string())?;
+    let tuple = defaults
+        .pointer(&format!("/effective_cognition_defaults/{cognition}"))
+        .or_else(|| defaults.pointer(&format!("/defaults/{cognition}")))
+        .ok_or_else(|| "cognition-default-missing".to_string())?;
+    let provider = tuple
+        .get("provider")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "cognition-provider-missing".to_string())?;
+    let model = tuple
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "cognition-model-missing".to_string())?;
+    let reasoning_effort = tuple
+        .get("reasoning_effort")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "cognition-reasoning-effort-missing".to_string())?;
+    let provider_id = format!(
+        "inference-provider:{}",
+        provider
+            .strip_prefix("inference-provider:")
+            .unwrap_or(provider)
+    );
     let model_id = format!("model:{}", model.strip_prefix("model:").unwrap_or(model));
     if plan.pointer("/options/cognition").and_then(Value::as_str) == Some(cognition)
         && plan.pointer("/selected/model/id").and_then(Value::as_str) == Some(model_id.as_str())
-        && plan.pointer("/options/reasoning_effort").and_then(Value::as_str) == Some(reasoning_effort)
+        && plan
+            .pointer("/options/reasoning_effort")
+            .and_then(Value::as_str)
+            == Some(reasoning_effort)
     {
-        let digest = plan.pointer("/snapshot/snapshot_digest").and_then(Value::as_str).unwrap_or_default().to_string();
-        return Ok((plan_id.to_string(), plan["selected"].clone(), plan["options"].clone(), digest));
+        let digest = plan
+            .pointer("/snapshot/snapshot_digest")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        return Ok((
+            plan_id.to_string(),
+            plan["selected"].clone(),
+            plan["options"].clone(),
+            digest,
+        ));
     }
-    let base_provider = plan.pointer("/selected/inference_provider/id").and_then(Value::as_str).ok_or_else(|| "selected-provider-missing".to_string())?;
-    if base_provider != provider_id { return Err("cognition-provider-plan-mismatch".to_string()); }
-    let model_record = latest_catalog_document(connection, &model_id)?.ok_or_else(|| "cognition-model-not-admitted".to_string())?;
-    if model_record.get("schema").and_then(Value::as_str) != Some("narada.invokable-intelligence.model.v1") { return Err("cognition-model-not-admitted".to_string()); }
+    let base_provider = plan
+        .pointer("/selected/inference_provider/id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "selected-provider-missing".to_string())?;
+    if base_provider != provider_id {
+        return Err("cognition-provider-plan-mismatch".to_string());
+    }
+    let model_record = latest_catalog_document(connection, &model_id)?
+        .ok_or_else(|| "cognition-model-not-admitted".to_string())?;
+    if model_record.get("schema").and_then(Value::as_str)
+        != Some("narada.invokable-intelligence.model.v1")
+    {
+        return Err("cognition-model-not-admitted".to_string());
+    }
     let offering = find_catalog_document(connection, "resource", |document| {
-        document.get("schema").and_then(Value::as_str) == Some("narada.invokable-intelligence.model-offering.v1")
+        document.get("schema").and_then(Value::as_str)
+            == Some("narada.invokable-intelligence.model-offering.v1")
             && document.pointer("/model/id").and_then(Value::as_str) == Some(model_id.as_str())
-            && document.pointer("/inference_provider/id").and_then(Value::as_str) == Some(provider_id.as_str())
-    })?.ok_or_else(|| "cognition-offering-not-admitted".to_string())?;
-    let offering_id = offering.get("id").and_then(Value::as_str).ok_or_else(|| "cognition-offering-invalid".to_string())?;
-    let route = find_catalog_document(connection, "route", |document| document.pointer("/offering/id").and_then(Value::as_str) == Some(offering_id))?.ok_or_else(|| "cognition-route-not-admitted".to_string())?;
+            && document
+                .pointer("/inference_provider/id")
+                .and_then(Value::as_str)
+                == Some(provider_id.as_str())
+    })?
+    .ok_or_else(|| "cognition-offering-not-admitted".to_string())?;
+    let offering_id = offering
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "cognition-offering-invalid".to_string())?;
+    let route = find_catalog_document(connection, "route", |document| {
+        document.pointer("/offering/id").and_then(Value::as_str) == Some(offering_id)
+    })?
+    .ok_or_else(|| "cognition-route-not-admitted".to_string())?;
     let selected = serde_json::json!({
         "model":{"kind":"model","id":model_id},
         "model_provider":offering["model_provider"],
@@ -254,22 +379,46 @@ fn resolve_cognition_binding(
     let options = serde_json::json!({"cognition":cognition,"thinking":reasoning_effort,"reasoning_effort":reasoning_effort});
     let binding = serde_json::json!({"base_plan_ref":plan_id,"cognition":cognition,"selected":selected,"options":options,"defaults_digest":sha256_text(&String::from_utf8_lossy(&defaults_bytes))});
     let binding_digest = sha256_text(&canonical_json(&binding));
-    Ok((format!("plan:cognition:{}", &binding_digest[7..]), selected, options, binding_digest))
+    Ok((
+        format!("plan:cognition:{}", &binding_digest[7..]),
+        selected,
+        options,
+        binding_digest,
+    ))
 }
 
-fn latest_catalog_document(connection: &Connection, record_id: &str) -> Result<Option<Value>, String> {
+fn latest_catalog_document(
+    connection: &Connection,
+    record_id: &str,
+) -> Result<Option<Value>, String> {
     let doc: Option<String> = connection.query_row("SELECT doc FROM catalog_records WHERE record_id = ?1 ORDER BY revision DESC, id DESC LIMIT 1", [record_id], |row| row.get(0)).optional().map_err(|error| error.to_string())?;
-    doc.map(|raw| serde_json::from_str::<Value>(&raw).map(|record| record.get("document").cloned().unwrap_or(record)).map_err(|error| error.to_string())).transpose()
+    doc.map(|raw| {
+        serde_json::from_str::<Value>(&raw)
+            .map(|record| record.get("document").cloned().unwrap_or(record))
+            .map_err(|error| error.to_string())
+    })
+    .transpose()
 }
 
-fn find_catalog_document<F>(connection: &Connection, kind: &str, predicate: F) -> Result<Option<Value>, String> where F: Fn(&Value) -> bool {
+fn find_catalog_document<F>(
+    connection: &Connection,
+    kind: &str,
+    predicate: F,
+) -> Result<Option<Value>, String>
+where
+    F: Fn(&Value) -> bool,
+{
     let mut statement = connection.prepare("SELECT doc FROM catalog_records WHERE record_kind = ?1 ORDER BY record_id, revision DESC, id DESC").map_err(|error| error.to_string())?;
-    let rows = statement.query_map([kind], |row| row.get::<_, String>(0)).map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([kind], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
     for row in rows {
         let raw = row.map_err(|error| error.to_string())?;
         let record: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
         let document = record.get("document").cloned().unwrap_or(record);
-        if predicate(&document) { return Ok(Some(document)); }
+        if predicate(&document) {
+            return Ok(Some(document));
+        }
     }
     Ok(None)
 }

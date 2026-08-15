@@ -9,12 +9,57 @@ use crate::mcp::NativeMcpGateway;
 use narada_nars_session_core::{
     CoreError, NarsProviderAdapter, ProviderOutcome, ProviderTurnContext,
 };
+use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use std::env;
+use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Instant;
+
+const MAX_PROVIDER_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+const DEFAULT_PROVIDER_TIMEOUT_MS: u64 = 120_000;
+
+#[derive(Debug, Clone)]
+struct NativeProviderBinding {
+    provider: String,
+    protocol: String,
+    endpoint: String,
+    model: String,
+    credential_env: String,
+    reasoning_effort: Option<String>,
+}
+
+impl NativeProviderBinding {
+    fn from_environment() -> Option<Self> {
+        let path = env::var_os("NARADA_NATIVE_PROVIDER_BINDING_PATH")?;
+        let payload = fs::read_to_string(path).ok()?;
+        let value: Value = serde_json::from_str(&payload).ok()?;
+        Self::from_value(&value)
+    }
+
+    fn from_value(value: &Value) -> Option<Self> {
+        if value.get("schema").and_then(Value::as_str) != Some("narada.native.provider_binding.v1")
+        {
+            return None;
+        }
+        Some(Self {
+            provider: value.get("provider").and_then(Value::as_str)?.to_string(),
+            protocol: value.get("protocol").and_then(Value::as_str)?.to_string(),
+            endpoint: value.get("endpoint").and_then(Value::as_str)?.to_string(),
+            model: value.get("model").and_then(Value::as_str)?.to_string(),
+            credential_env: value
+                .get("credential_env")
+                .and_then(Value::as_str)?
+                .to_string(),
+            reasoning_effort: value
+                .get("reasoning_effort")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        })
+    }
+}
 
 pub struct NativeProviderAdapter<'a> {
     pub mode: String,
@@ -22,6 +67,7 @@ pub struct NativeProviderAdapter<'a> {
     pub gateway: &'a mut NativeMcpGateway,
     pub max_tool_rounds: usize,
     pub session_id: Option<String>,
+    binding: Option<NativeProviderBinding>,
 }
 
 impl<'a> NativeProviderAdapter<'a> {
@@ -39,6 +85,7 @@ impl<'a> NativeProviderAdapter<'a> {
             gateway,
             max_tool_rounds,
             session_id: env::var("NARADA_NARS_SESSION_ID").ok(),
+            binding: NativeProviderBinding::from_environment(),
         }
     }
 
@@ -84,6 +131,10 @@ impl<'a> NativeProviderAdapter<'a> {
                 let max_rounds = max_tool_rounds(input, self.max_tool_rounds);
                 self.codex_turn(provider_prompt(input, &content), input, sink, max_rounds)
             }
+            "openrouter-api" | "openrouter" | "deepseek-api" | "deepseek" => {
+                let max_rounds = max_tool_rounds(input, self.max_tool_rounds);
+                self.http_turn(input, sink, max_rounds)
+            }
             _ => Ok(ProviderOutcome::Blocked(
                 "native_provider_adapter_unavailable".to_string(),
             )),
@@ -106,6 +157,15 @@ impl<'a> NativeProviderAdapter<'a> {
         state: &str,
         extra: Value,
     ) -> Result<(), CoreError> {
+        let (provider, adapter_kind, transport) = self
+            .binding
+            .as_ref()
+            .map(|binding| (binding.provider.as_str(), binding.provider.as_str(), "http"))
+            .unwrap_or((
+                "codex-subscription",
+                "codex-subscription",
+                "codex_subprocess",
+            ));
         let mut event = json!({
             "event": "provider_invocation_state_transition",
             "kind": "provider_invocation_state_transition",
@@ -113,9 +173,9 @@ impl<'a> NativeProviderAdapter<'a> {
             "invocation_id": invocation_id,
             "turn_id": turn_id,
             "input_event_id": turn_id,
-            "provider": "codex-subscription",
-            "adapter_kind": "codex-subscription",
-            "transport": "codex_subprocess",
+            "provider": provider,
+            "adapter_kind": adapter_kind,
+            "transport": transport,
             "invocation_scope": self.invocation_scope(),
             "previous_state": previous,
             "next_state": state,
@@ -305,6 +365,207 @@ Answer the original request using this tool result.",
             "native_provider_tool_loop_limit:{max_rounds}"
         )))
     }
+
+    fn http_turn(
+        &mut self,
+        input: &Value,
+        sink: &mut dyn FnMut(Value) -> Result<(), CoreError>,
+        max_rounds: usize,
+    ) -> Result<ProviderOutcome, CoreError> {
+        let Some(binding) = self.binding.clone() else {
+            return Ok(ProviderOutcome::Blocked(
+                "native_provider_binding_unavailable".to_string(),
+            ));
+        };
+        if binding.protocol != "openai/chat-completions/1" {
+            return Ok(ProviderOutcome::Blocked(
+                "native_provider_protocol_unsupported".to_string(),
+            ));
+        }
+        let credential = match env::var(&binding.credential_env) {
+            Ok(value) if !value.trim().is_empty() => value,
+            _ => {
+                return Ok(ProviderOutcome::Blocked(
+                    "native_provider_credential_unavailable".to_string(),
+                ))
+            }
+        };
+        let fallback = input
+            .get("content")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let mut messages = provider_messages(input, fallback);
+        let tools = openai_tools(&self.gateway.tool_catalog());
+
+        for round in 0..max_rounds {
+            let turn_id = input.get("event_id").and_then(Value::as_str);
+            let invocation_id = format!(
+                "provider-invocation:{}:{}",
+                turn_id.unwrap_or("turn"),
+                round + 1
+            );
+            let started = Instant::now();
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                None,
+                "requested",
+                json!({}),
+            )?;
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("requested"),
+                "validated",
+                json!({}),
+            )?;
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("validated"),
+                "shaped",
+                json!({"model": binding.model}),
+            )?;
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("shaped"),
+                "dispatched",
+                json!({}),
+            )?;
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("dispatched"),
+                "admitting",
+                json!({}),
+            )?;
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("admitting"),
+                "admitted",
+                json!({"admission":{"admitted":true,"reason":"native_provider_http_admitted"}}),
+            )?;
+            let response = match invoke_http_provider(&binding, &credential, &messages, &tools) {
+                Ok(response) => response,
+                Err(error) => {
+                    self.emit_invocation_state(
+                        sink,
+                        &invocation_id,
+                        turn_id,
+                        Some("admitted"),
+                        "failed",
+                        json!({"error":{"code":"provider-http-failed","message":error}}),
+                    )?;
+                    return Ok(ProviderOutcome::Failed(error));
+                }
+            };
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("admitted"),
+                "receiving",
+                json!({
+                    "latency_ms": started.elapsed().as_millis(),
+                    "provider_session_id": response.get("id"),
+                }),
+            )?;
+            let tool_calls = parse_tool_calls_value(&response);
+            if !tool_calls.is_empty() {
+                self.emit_invocation_state(
+                    sink,
+                    &invocation_id,
+                    turn_id,
+                    Some("receiving"),
+                    "completed",
+                    json!({"result_kind":"tool_call","tool_call_count":tool_calls.len()}),
+                )?;
+                let assistant = response_message(&response)
+                    .unwrap_or_else(|| json!({"role":"assistant","content":Value::Null}));
+                messages.push(assistant);
+                for (call_index, call) in tool_calls.iter().enumerate() {
+                    let tool_name = call.get("name").and_then(Value::as_str).unwrap_or_default();
+                    let arguments = call.get("arguments").cloned().unwrap_or_else(|| json!({}));
+                    let tool_call_id = call
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| {
+                            format!(
+                                "narada_tool_{}_{}",
+                                turn_id.unwrap_or("turn"),
+                                round + call_index + 1
+                            )
+                        });
+                    Self::emit(
+                        sink,
+                        json!({
+                            "event":"carrier_tool_requested",
+                            "kind":"carrier_tool_requested",
+                            "turn_id":turn_id,
+                            "input_event_id":turn_id,
+                            "tool_name":tool_name,
+                            "tool_call_id":tool_call_id,
+                            "arguments":arguments,
+                        }),
+                    )?;
+                    let mut gateway_sink = |event: Value| sink(event).map_err(|error| error.0);
+                    let result = self
+                        .gateway
+                        .invoke(tool_name, arguments, turn_id, turn_id, &mut gateway_sink)
+                        .map_err(CoreError)?;
+                    let status = result
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("failed");
+                    Self::emit(
+                        sink,
+                        json!({
+                            "event":"carrier_tool_completed",
+                            "kind":"carrier_tool_completed",
+                            "turn_id":turn_id,
+                            "input_event_id":turn_id,
+                            "tool_name":tool_name,
+                            "tool_call_id":tool_call_id,
+                            "status":status,
+                            "result":result,
+                        }),
+                    )?;
+                    messages.push(json!({
+                        "role":"tool",
+                        "tool_call_id":tool_call_id,
+                        "content":compact(&result),
+                    }));
+                }
+                continue;
+            }
+            self.emit_invocation_state(
+                sink,
+                &invocation_id,
+                turn_id,
+                Some("receiving"),
+                "completed",
+                json!({
+                    "latency_ms": started.elapsed().as_millis(),
+                    "result_kind":"assistant_message",
+                }),
+            )?;
+            let serialized = serde_json::to_string(&response).unwrap_or_default();
+            return Ok(ProviderOutcome::Completed(assistant_content(&serialized)));
+        }
+        Ok(ProviderOutcome::Blocked(format!(
+            "native_provider_tool_loop_limit:{max_rounds}"
+        )))
+    }
+
     fn invoke_codex(&self, prompt: &str) -> Result<(String, Option<String>), String> {
         let command = env::var("NARADA_NATIVE_CODEX_COMMAND")
             .or_else(|_| env::var("NARADA_CODEX_EXEC_COMMAND"))
@@ -316,7 +577,12 @@ Answer the original request using this tool result.",
             .filter(|value| !value.trim().is_empty());
         let reasoning_effort = env::var("NARADA_NATIVE_CODEX_REASONING_EFFORT")
             .ok()
-            .filter(|value| matches!(value.as_str(), "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"));
+            .filter(|value| {
+                matches!(
+                    value.as_str(),
+                    "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"
+                )
+            });
         let cwd = self
             .site_root
             .as_deref()
@@ -376,7 +642,10 @@ Answer the original request using this tool result.",
             args.extend(["-m".to_string(), model]);
         }
         if let Some(reasoning_effort) = reasoning_effort {
-            args.extend(["-c".to_string(), format!("model_reasoning_effort=\"{reasoning_effort}\"")]);
+            args.extend([
+                "-c".to_string(),
+                format!("model_reasoning_effort=\"{reasoning_effort}\""),
+            ]);
         }
         args.extend(["-C".to_string(), cwd.to_string_lossy().to_string()]);
         if let Ok(session_id) = env::var("NARADA_NATIVE_CODEX_RESUME_SESSION_ID") {
@@ -577,6 +846,157 @@ fn prompt_content(value: Option<&Value>) -> String {
     }
 }
 
+fn provider_messages(input: &Value, fallback: &str) -> Vec<Value> {
+    input
+        .get("provider_messages")
+        .and_then(Value::as_array)
+        .filter(|messages| !messages.is_empty())
+        .cloned()
+        .unwrap_or_else(|| vec![json!({"role":"user","content":fallback})])
+}
+
+fn openai_tools(catalog: &[Value]) -> Vec<Value> {
+    catalog
+        .iter()
+        .filter_map(|entry| {
+            let name = entry
+                .get("provider_tool_name")
+                .or_else(|| entry.get("tool_name"))
+                .and_then(Value::as_str)
+                .filter(|name| !name.trim().is_empty())?;
+            let parameters = entry
+                .get("input_schema")
+                .cloned()
+                .unwrap_or_else(|| json!({"type":"object","properties":{}}));
+            Some(json!({
+                "type":"function",
+                "function":{
+                    "name":name,
+                    "parameters":parameters,
+                }
+            }))
+        })
+        .collect()
+}
+
+fn response_message(response: &Value) -> Option<Value> {
+    response
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .cloned()
+}
+
+fn invoke_http_provider(
+    binding: &NativeProviderBinding,
+    credential: &str,
+    messages: &[Value],
+    tools: &[Value],
+) -> Result<Value, String> {
+    if !matches!(
+        binding.provider.as_str(),
+        "openrouter-api" | "openrouter" | "deepseek-api" | "deepseek"
+    ) {
+        return Err("native_provider_http_authority_unsupported".to_string());
+    }
+    if binding.protocol != "openai/chat-completions/1" {
+        return Err("native_provider_http_protocol_unsupported".to_string());
+    }
+    let expected_credential = match binding.provider.as_str() {
+        "openrouter-api" | "openrouter" => "OPENROUTER_API_KEY",
+        "deepseek-api" | "deepseek" => "DEEPSEEK_API_KEY",
+        _ => return Err("native_provider_http_provider_unsupported".to_string()),
+    };
+    if binding.credential_env != expected_credential || binding.model.trim().is_empty() {
+        return Err("native_provider_http_credential_ref_unsupported".to_string());
+    }
+    let url = reqwest::Url::parse(&binding.endpoint)
+        .map_err(|_| "native_provider_http_endpoint_invalid".to_string())?;
+    if url.scheme() != "https" {
+        return Err("native_provider_http_https_required".to_string());
+    }
+    let host = url.host_str().unwrap_or_default();
+    let valid_host = match binding.provider.as_str() {
+        "openrouter-api" | "openrouter" => host == "openrouter.ai",
+        "deepseek-api" | "deepseek" => host == "api.deepseek.com",
+        _ => false,
+    };
+    if !valid_host {
+        return Err("native_provider_http_endpoint_authority_mismatch".to_string());
+    }
+    let mut body = serde_json::Map::new();
+    body.insert("model".to_string(), json!(binding.model));
+    body.insert("messages".to_string(), Value::Array(messages.to_vec()));
+    if !tools.is_empty() {
+        body.insert("tools".to_string(), Value::Array(tools.to_vec()));
+        body.insert("tool_choice".to_string(), json!("auto"));
+    }
+    apply_reasoning_mapping(&mut body, binding);
+    let timeout_ms = env::var("NARADA_NATIVE_PROVIDER_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_PROVIDER_TIMEOUT_MS)
+        .clamp(1_000, 600_000);
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|_| "native_provider_http_client_unavailable".to_string())?;
+    let response = client
+        .post(url)
+        .bearer_auth(credential)
+        .header("accept", "application/json")
+        .json(&Value::Object(body))
+        .send()
+        .map_err(|_| "native_provider_http_transport_failed".to_string())?;
+    let status = response.status();
+    let bytes = response
+        .bytes()
+        .map_err(|_| "native_provider_http_body_read_failed".to_string())?;
+    if bytes.len() > MAX_PROVIDER_RESPONSE_BYTES {
+        return Err("native_provider_http_response_too_large".to_string());
+    }
+    if !status.is_success() {
+        return Err(format!("native_provider_http_status:{}", status.as_u16()));
+    }
+    serde_json::from_slice(&bytes).map_err(|_| "native_provider_http_response_invalid".to_string())
+}
+
+fn apply_reasoning_mapping(
+    body: &mut serde_json::Map<String, Value>,
+    binding: &NativeProviderBinding,
+) {
+    let effort = binding.reasoning_effort.as_deref().unwrap_or_default();
+    match binding.provider.as_str() {
+        "deepseek-api" | "deepseek" => {
+            if effort == "none" || effort == "disabled" {
+                body.insert("thinking".to_string(), json!({"type":"disabled"}));
+            } else if !effort.is_empty() {
+                body.insert("thinking".to_string(), json!({"type":"enabled"}));
+                body.insert(
+                    "reasoning_effort".to_string(),
+                    json!(if matches!(effort, "max" | "xhigh") {
+                        "max"
+                    } else {
+                        "high"
+                    }),
+                );
+            }
+        }
+        "openrouter-api" | "openrouter" => {
+            let mapped = match effort {
+                "low" | "medium" | "high" | "xhigh" => Some(effort),
+                "max" => Some("xhigh"),
+                _ => None,
+            };
+            if let Some(mapped) = mapped {
+                body.insert("reasoning".to_string(), json!({"effort": mapped}));
+            }
+        }
+        _ => {}
+    }
+}
+
 fn parse_tool_calls(content: &str) -> Vec<Value> {
     serde_json::from_str::<Value>(content.trim())
         .map(|value| parse_tool_calls_value(&value))
@@ -701,6 +1121,119 @@ mod provider_tests {
         assert_eq!(
             assistant_content(r#"{"choices":[{"message":{"role":"assistant","content":"done"}}]}"#),
             "done"
+        );
+    }
+
+    #[test]
+    fn accepts_secret_free_http_binding_coordinates() {
+        let binding = NativeProviderBinding::from_value(&json!({
+            "schema": "narada.native.provider_binding.v1",
+            "provider": "deepseek-api",
+            "protocol": "openai/chat-completions/1",
+            "endpoint": "https://api.deepseek.com/v1/chat/completions",
+            "model": "deepseek-v4-flash",
+            "credential_env": "DEEPSEEK_API_KEY",
+            "reasoning_effort": "high"
+        }))
+        .expect("binding");
+        assert_eq!(binding.provider, "deepseek-api");
+        assert_eq!(binding.protocol, "openai/chat-completions/1");
+        assert_eq!(
+            binding.endpoint,
+            "https://api.deepseek.com/v1/chat/completions"
+        );
+        assert_eq!(binding.model, "deepseek-v4-flash");
+        assert_eq!(binding.credential_env, "DEEPSEEK_API_KEY");
+        assert_eq!(binding.reasoning_effort.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn maps_provider_reasoning_without_leaking_credentials() {
+        let mut deepseek = serde_json::Map::new();
+        apply_reasoning_mapping(
+            &mut deepseek,
+            &NativeProviderBinding {
+                provider: "deepseek-api".to_string(),
+                protocol: "openai/chat-completions/1".to_string(),
+                endpoint: "https://api.deepseek.com/v1/chat/completions".to_string(),
+                model: "deepseek-v4-flash".to_string(),
+                credential_env: "DEEPSEEK_API_KEY".to_string(),
+                reasoning_effort: Some("max".to_string()),
+            },
+        );
+        assert_eq!(deepseek.get("thinking"), Some(&json!({"type":"enabled"})));
+        assert_eq!(deepseek.get("reasoning_effort"), Some(&json!("max")));
+        assert!(!deepseek
+            .values()
+            .any(|value| value.as_str() == Some("DEEPSEEK_API_KEY")));
+
+        let mut openrouter = serde_json::Map::new();
+        apply_reasoning_mapping(
+            &mut openrouter,
+            &NativeProviderBinding {
+                provider: "openrouter-api".to_string(),
+                protocol: "openai/chat-completions/1".to_string(),
+                endpoint: "https://openrouter.ai/api/v1/chat/completions".to_string(),
+                model: "deepseek/deepseek-v4-flash".to_string(),
+                credential_env: "OPENROUTER_API_KEY".to_string(),
+                reasoning_effort: Some("xhigh".to_string()),
+            },
+        );
+        assert_eq!(
+            openrouter.get("reasoning"),
+            Some(&json!({"effort":"xhigh"}))
+        );
+
+        let mut openrouter_low = serde_json::Map::new();
+        apply_reasoning_mapping(
+            &mut openrouter_low,
+            &NativeProviderBinding {
+                provider: "openrouter-api".to_string(),
+                protocol: "openai/chat-completions/1".to_string(),
+                endpoint: "https://openrouter.ai/api/v1/chat/completions".to_string(),
+                model: "deepseek/deepseek-v4-flash".to_string(),
+                credential_env: "OPENROUTER_API_KEY".to_string(),
+                reasoning_effort: Some("low".to_string()),
+            },
+        );
+        assert_eq!(
+            openrouter_low.get("reasoning"),
+            Some(&json!({"effort":"low"}))
+        );
+    }
+
+    #[test]
+    fn projects_gateway_tools_to_openai_shape() {
+        let tools = openai_tools(&[json!({
+            "server_name":"local-filesystem",
+            "tool_name":"fs_read_file",
+            "provider_tool_name":"local-filesystem__fs_read_file",
+            "input_schema":{"type":"object","properties":{"path":{"type":"string"}}}
+        })]);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["type"], "function");
+        assert_eq!(
+            tools[0]["function"]["name"],
+            "local-filesystem__fs_read_file"
+        );
+        assert_eq!(tools[0]["function"]["parameters"]["type"], "object");
+    }
+
+    #[test]
+    fn rejects_unsafe_http_coordinates_before_network() {
+        let credential = "secret";
+        let messages = vec![json!({"role":"user","content":"hello"})];
+        let binding = NativeProviderBinding {
+            provider: "deepseek-api".to_string(),
+            protocol: "openai/chat-completions/1".to_string(),
+            endpoint: "http://api.deepseek.com/v1/chat/completions".to_string(),
+            model: "deepseek-v4-flash".to_string(),
+            credential_env: "DEEPSEEK_API_KEY".to_string(),
+            reasoning_effort: None,
+        };
+        assert_eq!(
+            invoke_http_provider(&binding, credential, &messages, &[]).unwrap_err(),
+            "native_provider_http_https_required"
         );
     }
 }

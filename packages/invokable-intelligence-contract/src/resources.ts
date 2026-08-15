@@ -95,7 +95,7 @@ export interface InferenceEndpoint extends ResourceBase {
 /** Runtime-specific invocation driver. */
 export interface InferenceAdapter extends ResourceBase {
   schema: typeof ADAPTER_SCHEMA;
-  runtime_family: "node" | "workers" | "test";
+  runtime_family: "node" | "native" | "workers" | "test";
   protocol: InferenceProtocol;
 }
 

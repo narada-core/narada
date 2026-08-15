@@ -114,11 +114,12 @@
         "medium": { "model": "deepseek-v4-flash", "reasoning_effort": "medium" },
         "high": { "model": "deepseek-v4-pro", "reasoning_effort": "high" }
       },
-      "adapter_kind": "openai-compatible-chat-completions",
+      "adapter_kind": "native-openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL"],
       "model_env_names": ["DEEPSEEK_MODEL"],
       "credential_env_names": ["DEEPSEEK_API_KEY"],
+      "native_credential_env": "DEEPSEEK_API_KEY",
       "credential_secret_ref": "narada/provider/deepseek-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
@@ -153,17 +154,18 @@
       "meaning": "OpenRouter API via OpenAI-compatible chat completions; preserves configured router model identity.",
       "base_url": "https://openrouter.ai/api/",
       "default_model": "z-ai/glm-5.2",
-      "available_models": ["z-ai/glm-5.2", "z-ai/glm-5-turbo"],
+      "available_models": ["z-ai/glm-5.2", "z-ai/glm-5-turbo", "deepseek/deepseek-v4-flash"],
       "cognition_defaults": {
         "low": { "model": "z-ai/glm-5-turbo", "reasoning_effort": "low" },
         "medium": { "model": "z-ai/glm-5.2", "reasoning_effort": "medium" },
         "high": { "model": "z-ai/glm-5.2", "reasoning_effort": "high" }
       },
-      "adapter_kind": "openai-compatible-chat-completions",
+      "adapter_kind": "native-openai-compatible-chat-completions",
       "support_state": "verified_supported",
       "base_url_env_names": ["OPENROUTER_BASE_URL", "OPENROUTER_API_BASE_URL"],
       "model_env_names": ["OPENROUTER_MODEL"],
       "credential_env_names": ["OPENROUTER_API_KEY"],
+      "native_credential_env": "OPENROUTER_API_KEY",
       "credential_secret_ref": "narada/provider/openrouter-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",

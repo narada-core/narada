@@ -182,6 +182,31 @@ test("representative legacy config maps without conflating provider kinds", asyn
     assert.fail("credential locator missing");
   }
 
+  const deepseekEndpoint = byId.get("inference-endpoint:deepseek-api");
+  if (deepseekEndpoint?.schema === "narada.invokable-intelligence.inference-endpoint.v1") {
+    assert.equal(deepseekEndpoint.adapter.id, "adapter:native-openai-compatible-chat-completions");
+    assert.equal(deepseekEndpoint.credential?.id, "credential-locator:deepseek-api");
+    assert.deepEqual(deepseekEndpoint.address, { kind: "url", url: "https://api.deepseek.com/v1/chat/completions" });
+  } else {
+    assert.fail("DeepSeek endpoint missing");
+  }
+  const deepseekCredential = byId.get("credential-locator:deepseek-api");
+  if (deepseekCredential?.schema === "narada.invokable-intelligence.credential-locator.v1") {
+    assert.equal(deepseekCredential.store, "env");
+    assert.equal(deepseekCredential.reference, "DEEPSEEK_API_KEY");
+  } else {
+    assert.fail("DeepSeek credential locator missing");
+  }
+  const openrouterEndpoint = byId.get("inference-endpoint:openrouter-api");
+  if (openrouterEndpoint?.schema === "narada.invokable-intelligence.inference-endpoint.v1") {
+    assert.equal(openrouterEndpoint.adapter.id, "adapter:native-openai-compatible-chat-completions");
+    assert.deepEqual(openrouterEndpoint.address, { kind: "url", url: "https://openrouter.ai/api/v1/chat/completions" });
+  } else {
+    assert.fail("OpenRouter endpoint missing");
+  }
+  assert.ok(plan.resources.some(({ id }) => id === "model-offering:openrouter-api-deepseek-deepseek-v4-flash"));
+  assert.ok(plan.routes.some(({ id }) => id === "route:openrouter-api-deepseek-deepseek-v4-flash-local"));
+
   // codex-subscription: local subscription credential without env var material.
   const codexCredential = byId.get("credential-locator:codex-subscription");
   if (codexCredential?.schema === "narada.invokable-intelligence.credential-locator.v1") {

@@ -243,17 +243,17 @@ fn native_provider_binding(
     let credential = latest_catalog_document(connection, credential_id)
         .ok()
         .flatten()?;
-    if credential.get("store").and_then(Value::as_str) != Some("env") {
+    if credential.get("store").and_then(Value::as_str) != Some("site-secret") {
         return None;
     }
-    let credential_env = credential.get("reference").and_then(Value::as_str)?;
+    let credential_secret_ref = credential.get("reference").and_then(Value::as_str)?;
     Some(serde_json::json!({
         "schema": "narada.native.provider_binding.v1",
         "provider": provider,
         "protocol": "openai/chat-completions/1",
         "endpoint": endpoint_url,
         "model": model,
-        "credential_env": credential_env,
+        "credential_secret_ref": credential_secret_ref,
         "reasoning_effort": options.get("reasoning_effort").and_then(Value::as_str)
     }))
 }

@@ -478,12 +478,11 @@ export function buildMigrationPlan(
     let credentialRef: ResourceRef | undefined;
     if (requirement && requirement.kind !== "none") {
       const secretRef = requirement.secret_ref ?? entry.credential_secret_ref;
-      const nativeCredentialEnv = entry.native_credential_env?.trim();
       pushResource({
         schema: "narada.invokable-intelligence.credential-locator.v1",
         id: credentialId,
-        store: nativeCredentialEnv ? "env" : secretRef ? "site-secret" : requirement.kind === "api_key_secret" ? "env" : "none",
-        reference: nativeCredentialEnv ?? secretRef ?? requirement.env_names?.[0] ?? entry.credential_env_names?.[0] ?? "codex-local-subscription",
+        store: secretRef ? "site-secret" : requirement.kind === "api_key_secret" ? "env" : "none",
+        reference: secretRef ?? requirement.env_names?.[0] ?? entry.credential_env_names?.[0] ?? "codex-local-subscription",
         holder: { kind: "site", id: loci.hostSite.id },
       });
       credentialRef = { kind: "credential-locator", id: credentialId };

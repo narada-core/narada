@@ -119,7 +119,6 @@
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL"],
       "model_env_names": ["DEEPSEEK_MODEL"],
       "credential_env_names": ["DEEPSEEK_API_KEY"],
-      "native_credential_env": "DEEPSEEK_API_KEY",
       "credential_secret_ref": "narada/provider/deepseek-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
@@ -165,7 +164,6 @@
       "base_url_env_names": ["OPENROUTER_BASE_URL", "OPENROUTER_API_BASE_URL"],
       "model_env_names": ["OPENROUTER_MODEL"],
       "credential_env_names": ["OPENROUTER_API_KEY"],
-      "native_credential_env": "OPENROUTER_API_KEY",
       "credential_secret_ref": "narada/provider/openrouter-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",

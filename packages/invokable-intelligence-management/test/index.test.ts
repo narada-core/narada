@@ -192,8 +192,8 @@ test("representative legacy config maps without conflating provider kinds", asyn
   }
   const deepseekCredential = byId.get("credential-locator:deepseek-api");
   if (deepseekCredential?.schema === "narada.invokable-intelligence.credential-locator.v1") {
-    assert.equal(deepseekCredential.store, "env");
-    assert.equal(deepseekCredential.reference, "DEEPSEEK_API_KEY");
+    assert.equal(deepseekCredential.store, "site-secret");
+    assert.equal(deepseekCredential.reference, "narada/provider/deepseek-api/api-key");
   } else {
     assert.fail("DeepSeek credential locator missing");
   }
@@ -203,6 +203,13 @@ test("representative legacy config maps without conflating provider kinds", asyn
     assert.deepEqual(openrouterEndpoint.address, { kind: "url", url: "https://openrouter.ai/api/v1/chat/completions" });
   } else {
     assert.fail("OpenRouter endpoint missing");
+  }
+  const openrouterCredential = byId.get("credential-locator:openrouter-api");
+  if (openrouterCredential?.schema === "narada.invokable-intelligence.credential-locator.v1") {
+    assert.equal(openrouterCredential.store, "site-secret");
+    assert.equal(openrouterCredential.reference, "narada/provider/openrouter-api/api-key");
+  } else {
+    assert.fail("OpenRouter credential locator missing");
   }
   assert.ok(plan.resources.some(({ id }) => id === "model-offering:openrouter-api-deepseek-deepseek-v4-flash"));
   assert.ok(plan.routes.some(({ id }) => id === "route:openrouter-api-deepseek-deepseek-v4-flash-local"));

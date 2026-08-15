@@ -58,11 +58,12 @@ User Site catalog bootstrap is first-use only: an empty registry is seeded once,
 
 DeepSeek and OpenRouter may be admitted through the native Rust
 native-openai-compatible-chat-completions adapter. Their canonical protocol is
-openai/chat-completions/1, and native profiles declare an explicit
-native_credential_env locator (DEEPSEEK_API_KEY or OPENROUTER_API_KEY).
+openai/chat-completions/1, and native profiles declare an explicit canonical
+SecretStore reference (for example,
+narada/provider/openrouter-api/api-key).
 The resulting per-run binding contains only provider, endpoint, model,
-reasoning effort, and that environment-variable name; it never contains a
-secret.
+reasoning effort, and that secret reference; it never contains a secret or an
+environment-file path.
 
 OpenRouter inventories deepseek/deepseek-v4-flash; direct DeepSeek remains a
 separate explicit route. The adapter does not silently fail over between

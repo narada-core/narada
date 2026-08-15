@@ -25,7 +25,6 @@ export interface LegacyProviderEntry {
   model_env_names?: string[];
   credential_env_names?: string[];
   /** Explicit environment locator used by the native adapter boundary. */
-  native_credential_env?: string;
   credential_secret_ref?: string;
   credential_requirement?: LegacyCredentialRequirement;
 }

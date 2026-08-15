@@ -37,12 +37,13 @@ secret-free binding at the path in NARADA_NATIVE_PROVIDER_BINDING_PATH:
       "protocol": "openai/chat-completions/1",
       "endpoint": "https://openrouter.ai/api/v1",
       "model": "deepseek/deepseek-v4-flash",
-      "credential_env": "OPENROUTER_API_KEY",
+  "credential_secret_ref": "narada/provider/openrouter-api/api-key",
       "reasoning_effort": "medium"
     }
 
-The runtime validates the provider, HTTPS host, protocol, model, and credential
-environment name before sending a Chat Completions request. It reads the key
-from that environment variable, never from the binding or caller arguments,
-and does not perform automatic provider failover. The Responses API is not
-implemented by this adapter.
+The runtime validates the provider, HTTPS host, protocol, model, and canonical
+secret reference before sending a Chat Completions request. It resolves that
+reference through PowerShell SecretManagement in a bounded child process; the
+secret is never placed in the binding, an environment file, or caller
+arguments. It does not perform automatic provider failover. The Responses API
+is not implemented by this adapter.

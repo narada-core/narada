@@ -13,13 +13,25 @@ use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
 const MAX_PROVIDER_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const DEFAULT_PROVIDER_TIMEOUT_MS: u64 = 120_000;
+const SECRET_STORE_LOOKUP_TIMEOUT_MS: u64 = 5_000;
+const MAX_SECRET_STORE_RESPONSE_BYTES: usize = 8 * 1024;
+const SECRET_STORE_LOOKUP_SCRIPT: &str = r#"
+$ErrorActionPreference = 'SilentlyContinue'
+$name = [Environment]::GetEnvironmentVariable('NARADA_SECRET_LOOKUP_NAME', 'Process')
+if ([string]::IsNullOrWhiteSpace($name)) { exit 3 }
+if (-not (Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretManagement)) { exit 10 }
+Import-Module Microsoft.PowerShell.SecretManagement -ErrorAction Stop
+$secret = Get-Secret -Name $name -AsPlainText -ErrorAction SilentlyContinue
+if ($null -eq $secret -or [string]::IsNullOrWhiteSpace([string]$secret)) { exit 2 }
+[Console]::Out.Write([string]$secret)
+"#;
 
 #[derive(Debug, Clone)]
 struct NativeProviderBinding {
@@ -27,7 +39,7 @@ struct NativeProviderBinding {
     protocol: String,
     endpoint: String,
     model: String,
-    credential_env: String,
+    credential_secret_ref: String,
     reasoning_effort: Option<String>,
 }
 
@@ -49,8 +61,8 @@ impl NativeProviderBinding {
             protocol: value.get("protocol").and_then(Value::as_str)?.to_string(),
             endpoint: value.get("endpoint").and_then(Value::as_str)?.to_string(),
             model: value.get("model").and_then(Value::as_str)?.to_string(),
-            credential_env: value
-                .get("credential_env")
+            credential_secret_ref: value
+                .get("credential_secret_ref")
                 .and_then(Value::as_str)?
                 .to_string(),
             reasoning_effort: value
@@ -382,9 +394,9 @@ Answer the original request using this tool result.",
                 "native_provider_protocol_unsupported".to_string(),
             ));
         }
-        let credential = match env::var(&binding.credential_env) {
-            Ok(value) if !value.trim().is_empty() => value,
-            _ => {
+        let credential = match resolve_secret_store(&binding.credential_secret_ref) {
+            Ok(value) => value,
+            Err(_) => {
                 return Ok(ProviderOutcome::Blocked(
                     "native_provider_credential_unavailable".to_string(),
                 ))
@@ -903,12 +915,12 @@ fn invoke_http_provider(
     if binding.protocol != "openai/chat-completions/1" {
         return Err("native_provider_http_protocol_unsupported".to_string());
     }
-    let expected_credential = match binding.provider.as_str() {
-        "openrouter-api" | "openrouter" => "OPENROUTER_API_KEY",
-        "deepseek-api" | "deepseek" => "DEEPSEEK_API_KEY",
+    let expected_secret_ref = match binding.provider.as_str() {
+        "openrouter-api" | "openrouter" => "narada/provider/openrouter-api/api-key",
+        "deepseek-api" | "deepseek" => "narada/provider/deepseek-api/api-key",
         _ => return Err("native_provider_http_provider_unsupported".to_string()),
     };
-    if binding.credential_env != expected_credential || binding.model.trim().is_empty() {
+    if binding.credential_secret_ref != expected_secret_ref || binding.model.trim().is_empty() {
         return Err("native_provider_http_credential_ref_unsupported".to_string());
     }
     let url = reqwest::Url::parse(&binding.endpoint)
@@ -960,6 +972,61 @@ fn invoke_http_provider(
         return Err(format!("native_provider_http_status:{}", status.as_u16()));
     }
     serde_json::from_slice(&bytes).map_err(|_| "native_provider_http_response_invalid".to_string())
+}
+
+fn resolve_secret_store(reference: &str) -> Result<String, String> {
+    let mut child = Command::new("pwsh")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            SECRET_STORE_LOOKUP_SCRIPT,
+        ])
+        .env("NARADA_SECRET_LOOKUP_NAME", reference)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| "native_provider_secret_store_unavailable".to_string())?;
+    let deadline =
+        Instant::now() + std::time::Duration::from_millis(SECRET_STORE_LOOKUP_TIMEOUT_MS);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("native_provider_secret_store_timeout".to_string());
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("native_provider_secret_store_wait_failed".to_string());
+            }
+        }
+    };
+    let mut bytes = Vec::new();
+    if let Some(mut stdout) = child.stdout.take() {
+        stdout
+            .take((MAX_SECRET_STORE_RESPONSE_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map_err(|_| "native_provider_secret_store_read_failed".to_string())?;
+    }
+    if !status.success() {
+        return Err("native_provider_secret_store_lookup_failed".to_string());
+    }
+    if bytes.len() > MAX_SECRET_STORE_RESPONSE_BYTES {
+        return Err("native_provider_secret_store_response_too_large".to_string());
+    }
+    let value = String::from_utf8(bytes)
+        .map_err(|_| "native_provider_secret_store_response_invalid".to_string())?
+        .trim()
+        .to_string();
+    if value.is_empty() {
+        return Err("native_provider_secret_store_secret_missing".to_string());
+    }
+    Ok(value)
 }
 
 fn apply_reasoning_mapping(
@@ -1132,7 +1199,7 @@ mod provider_tests {
             "protocol": "openai/chat-completions/1",
             "endpoint": "https://api.deepseek.com/v1/chat/completions",
             "model": "deepseek-v4-flash",
-            "credential_env": "DEEPSEEK_API_KEY",
+            "credential_secret_ref": "narada/provider/deepseek-api/api-key",
             "reasoning_effort": "high"
         }))
         .expect("binding");
@@ -1143,7 +1210,10 @@ mod provider_tests {
             "https://api.deepseek.com/v1/chat/completions"
         );
         assert_eq!(binding.model, "deepseek-v4-flash");
-        assert_eq!(binding.credential_env, "DEEPSEEK_API_KEY");
+        assert_eq!(
+            binding.credential_secret_ref,
+            "narada/provider/deepseek-api/api-key"
+        );
         assert_eq!(binding.reasoning_effort.as_deref(), Some("high"));
     }
 
@@ -1157,7 +1227,7 @@ mod provider_tests {
                 protocol: "openai/chat-completions/1".to_string(),
                 endpoint: "https://api.deepseek.com/v1/chat/completions".to_string(),
                 model: "deepseek-v4-flash".to_string(),
-                credential_env: "DEEPSEEK_API_KEY".to_string(),
+                credential_secret_ref: "narada/provider/deepseek-api/api-key".to_string(),
                 reasoning_effort: Some("max".to_string()),
             },
         );
@@ -1165,7 +1235,7 @@ mod provider_tests {
         assert_eq!(deepseek.get("reasoning_effort"), Some(&json!("max")));
         assert!(!deepseek
             .values()
-            .any(|value| value.as_str() == Some("DEEPSEEK_API_KEY")));
+            .any(|value| value.as_str() == Some("narada/provider/deepseek-api/api-key")));
 
         let mut openrouter = serde_json::Map::new();
         apply_reasoning_mapping(
@@ -1175,7 +1245,7 @@ mod provider_tests {
                 protocol: "openai/chat-completions/1".to_string(),
                 endpoint: "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 model: "deepseek/deepseek-v4-flash".to_string(),
-                credential_env: "OPENROUTER_API_KEY".to_string(),
+                credential_secret_ref: "narada/provider/openrouter-api/api-key".to_string(),
                 reasoning_effort: Some("xhigh".to_string()),
             },
         );
@@ -1192,7 +1262,7 @@ mod provider_tests {
                 protocol: "openai/chat-completions/1".to_string(),
                 endpoint: "https://openrouter.ai/api/v1/chat/completions".to_string(),
                 model: "deepseek/deepseek-v4-flash".to_string(),
-                credential_env: "OPENROUTER_API_KEY".to_string(),
+                credential_secret_ref: "narada/provider/openrouter-api/api-key".to_string(),
                 reasoning_effort: Some("low".to_string()),
             },
         );
@@ -1228,7 +1298,7 @@ mod provider_tests {
             protocol: "openai/chat-completions/1".to_string(),
             endpoint: "http://api.deepseek.com/v1/chat/completions".to_string(),
             model: "deepseek-v4-flash".to_string(),
-            credential_env: "DEEPSEEK_API_KEY".to_string(),
+            credential_secret_ref: "narada/provider/deepseek-api/api-key".to_string(),
             reasoning_effort: None,
         };
         assert_eq!(

@@ -77,7 +77,7 @@ export async function sitesLaunchCommand(
           summary: `Site not found in the User Site registry: ${options.siteId}`,
           next_command: 'narada sites list',
         });
-    return finalize(options, checks, actions, details, null, null, mutationObserved);
+    return finalize(options, checks, actions, details, null, mutationObserved);
   }
   const record = resolution.record;
   const siteRoot = record.siteRoot;
@@ -93,7 +93,7 @@ export async function sitesLaunchCommand(
       summary: `Site root does not exist: ${siteRoot}`,
       next_command: `narada sites registry show ${record.siteId}`,
     });
-    return finalize(options, checks, actions, details, record, null, mutationObserved);
+    return finalize(options, checks, actions, details, record, mutationObserved);
   }
 
   // 2. MCP surface materialization drift (read-only).

@@ -45,7 +45,7 @@ Use this SOP when a Site reports `identity_not_in_roster`, carrier admission mis
 3. Inspect the live roster authority before editing projections. If the Site uses SQL task lifecycle roster, verify `.ai/task-lifecycle.db::agent_roster` contains the active identity and role. If the Site uses JSON roster as authority, verify that JSON directly.
    Common SQL and JSON roster loci include `.ai/task-lifecycle.db`, `.narada/.ai/task-lifecycle.db`, `.narada/agents/roster.json`, and `.narada/.ai/agents/roster.json`.
    For SQL-backed Sites with JSON roster projections, compare every registered Site agent across `agent_id`, `role`, `status`, and normalized capability set; resident-only checks miss architect/builder drift.
-4. Normalize Site-local projection/config files to the active identity shape. Check `.narada/agents/roster.json`, `.narada/capabilities/site-loop-config.json`, Site loop config, scheduler/supervisor commands, launch probes, and executable docs.
+4. Normalize Site-local projection/config files to the active identity shape. Check `.narada/agents/roster.json`, scheduler configuration, launch probes, and executable docs.
    When correcting a live SQL roster, add an `agent_roster_events` audit row when that table exists.
 5. Replace active runtime selectors with `narada-agent-runtime-server`. Do not leave `-Runtime nars`, `"runtime": "nars"`, or `"preferred_runtime": "nars"` in active config or executable examples.
 6. Leave schema/type identifiers alone unless they are being used as launch inputs. Strings such as `narada.sonar.resident_mailbox_proof.v1` are namespaces, not agent ids.

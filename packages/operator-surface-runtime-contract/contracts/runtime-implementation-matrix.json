@@ -162,21 +162,6 @@
       }
     },
     {
-      "component_kind": "site-loop-mcp",
-      "package": "@narada-core/site-loop-mcp",
-      "required": true,
-      "profile_runtime_engine_kinds": {
-        "native": "rust",
-        "bun": "rust",
-        "node-compat": "rust"
-      },
-      "implementations": {
-        "node": { "status": "unavailable", "evidence": ["native-authority-only"] },
-        "bun": { "status": "unavailable", "evidence": ["native-authority-only"] },
-        "rust": { "status": "admitted", "evidence": ["native-site-loop-read-slice", "native-site-loop-persistence-read", "native-site-loop-bounded-config-output-read", "native-site-loop-config-validation-parity", "native-site-loop-docs-read-parity", "native-site-loop-tests-read-parity", "native-site-loop-status-read-parity", "site-loop-authority-boundary-test", "native-rust-default-contract"] }
-      }
-    },
-    {
       "component_kind": "surface-feedback-mcp",
       "package": "@narada-core/surface-feedback-mcp",
       "required": true,

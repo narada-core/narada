@@ -10,7 +10,7 @@ A **Task Executability Assessment** is a structured, read-only, low-cognition ev
 | Outcome orchestration | Delegated Task MCP | The evaluator is a read-only delegated workflow; Delegation owns how it is admitted, retried, and bounded. |
 | Provider / model execution | Worker Delegation MCP | Provider registry and runtime selection are Delegation's domain; Task Lifecycle policy only names an evaluator profile. |
 | Immediate dispatch | NARS | NARS lifecycle hooks see the structured follow-up from task create and start the shared orchestrator asynchronously. |
-| Recovery / cadence | Site Operating Loop | When no NARS session exists, Site Loop reclaims pending or expired requests and drives the same orchestrator. |
+| Recovery / cadence | Scheduler | When no NARS session exists, Scheduler reclaims pending or expired requests and drives the same orchestrator. |
 | Enforcement | Delegated Task (canonical task-linked path only) | Strict mode refuses a dispatch that lacks a current executable assessment or a one-shot override. |
 
 ## Verdicts

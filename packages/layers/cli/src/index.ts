@@ -38,14 +38,6 @@ export {
   schedulerSiteDaemonStatusCommand,
   type SchedulerSiteDaemonOptions,
 } from './commands/scheduler.js';
-export {
-  siteLoopPauseCommand,
-  siteLoopRecoverCommand,
-  siteLoopResumeCommand,
-  siteLoopStatusCommand,
-  type SiteLoopOptions,
-} from './commands/site-loop.js';
-
 // Lib exports
 export { ExitCode, ExitCodeDescriptions } from './lib/exit-codes.js';
 export { createLogger, type Logger } from './lib/logger.js';

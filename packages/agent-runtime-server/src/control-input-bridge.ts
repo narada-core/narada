@@ -56,7 +56,7 @@ function requestFromSystemDirectiveDelivery(record: any) {
     event_id: eventId,
     method: 'session.submit',
     source_kind: 'system',
-    source_id: typeof source.id === 'string' && source.id.trim() ? source.id.trim() : 'narada.site_loop',
+    source_id: typeof source.id === 'string' && source.id.trim() ? source.id.trim() : 'narada.scheduler',
     transport: 'control_jsonl',
     delivery_mode: 'admit_after_active_turn',
     content: message,

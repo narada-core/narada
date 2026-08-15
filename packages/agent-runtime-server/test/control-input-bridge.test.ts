@@ -128,7 +128,7 @@ test('control input bridge translates delivered system directives into admitted 
       params: {
         directive_id: 'dir_control_bridge_test',
         directive: {
-          source: { kind: 'system', id: 'site-loop.test' },
+          source: { kind: 'system', id: 'scheduler.test' },
           content: { kind: 'work_ref', text: 'inspect the resident backlog' },
           directive_id: 'dir_control_bridge_test',
         },
@@ -144,7 +144,7 @@ test('control input bridge translates delivered system directives into admitted 
     assert.equal(request.event_id, 'input_dir_control_bridge_test');
     assert.equal(request.method, 'session.submit');
     assert.equal(request.source_kind, 'system');
-    assert.equal(request.source_id, 'site-loop.test');
+    assert.equal(request.source_id, 'scheduler.test');
     assert.equal(request.transport, 'control_jsonl');
     assert.equal(request.delivery_mode, 'admit_after_active_turn');
     assert.equal(request.directive_id, 'dir_control_bridge_test');

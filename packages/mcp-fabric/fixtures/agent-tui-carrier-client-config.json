@@ -3,16 +3,16 @@
   "site_id": "narada-sonar",
   "carrier": "agent-tui",
   "mcpServers": {
-    "sonar-site-loop": {
+    "sonar-scheduler": {
       "transport": "stdio",
       "command": "node",
-      "args": ["site-loop.mjs"],
+      "args": ["scheduler.mjs"],
       "env": {
         "NARADA_SITE_ROOT": "C:/workspace/narada.sonar"
       },
       "env_vars": ["NARADA_AGENT_ID"],
-      "tools": ["site_loop_run_once", "site_loop_status"],
-      "surface_id": "sonar.site-loop",
+      "tools": ["scheduler_runtime_status"],
+      "surface_id": "sonar.scheduler",
       "target_site_root": "C:/workspace/narada.sonar"
     }
   }

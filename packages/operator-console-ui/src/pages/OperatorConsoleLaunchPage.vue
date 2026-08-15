@@ -53,9 +53,8 @@ function openSiteLaunchActions(siteId: string): void {
         <dl class="guidance-grid">
           <dt>Site runtime</dt>
           <dd>
-            Open a Site above and use <strong>Check posture</strong> / <strong>Ensure now</strong>, or run
-            <code>narada sites launch &lt;site-id&gt;</code>. Ensure runs one bounded site-loop pass with
-            <code>--ensure-resident</code> from the Site manifest.
+            Open a Site above and use <strong>Check posture</strong>, or run
+            <code>narada sites launch &lt;site-id&gt;</code>. Activation is owned by the scheduler and procedure execution by SOP.
           </dd>
           <dt>Single agent</dt>
           <dd>

@@ -12,7 +12,7 @@
     "turn_id": "turn_fixture_1",
     "provider_output_kind": "tool_call_request",
     "sequence": 2,
-    "tool_name": "site_loop_run_once",
+    "tool_name": "scheduler_runtime_status",
     "arguments_summary": "{}",
     "arguments_ref": null
   }

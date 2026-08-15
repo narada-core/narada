@@ -16,7 +16,7 @@
       "expected_kind": "ToolResultReceived",
       "expected_actor": "agent-tui",
       "expected_turn_id": "",
-      "expected_text": "ok site_loop_run_once in 12ms · ok"
+      "expected_text": "ok scheduler_runtime_status in 12ms · ok"
     },
     {
       "name": "turn_terminal_projects_terminal_status",

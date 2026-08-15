@@ -59,7 +59,7 @@ test('binding identity defaults make omitted and explicit empty fields equivalen
 
 const carrierClientFixture = JSON.parse(readFileSync(new URL('../fixtures/agent-tui-carrier-client-config.json', import.meta.url), 'utf8'));
 assert.equal(carrierClientFixture.schema, 'narada.mcp.carrier_client_config.v0');
-assert.deepEqual(carrierClientFixture.mcpServers['sonar-site-loop'].tools, ['site_loop_run_once', 'site_loop_status']);
+assert.deepEqual(carrierClientFixture.mcpServers['sonar-scheduler'].tools, ['scheduler_runtime_status']);
 assert.deepEqual(codexMcpEnvVarNames().filter((name) => name.endsWith('SESSION_ID')), [
   'NARADA_NARS_SESSION_ID',
   'NARADA_RUNTIME_SESSION_ID',
@@ -648,22 +648,22 @@ const staleServerNameSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-stale-
 mkdirSync(join(staleServerNameSite, '.ai', 'mcp'), { recursive: true });
 mkdirSync(join(staleServerNameSite, '.narada', 'capabilities'), { recursive: true });
 try {
-  writeFileSync(join(staleServerNameSite, '.ai', 'mcp', 'narada-sonar-site-loop-mcp.json'), `${JSON.stringify({
+  writeFileSync(join(staleServerNameSite, '.ai', 'mcp', 'narada-sonar-scheduler-mcp.json'), `${JSON.stringify({
     mcpServers: {
       'narada-sonar-site-ops': {
         command: 'node',
-        args: ['site-loop.js'],
-        surface_id: 'sonar.site-loop',
+        args: ['scheduler.js'],
+        surface_id: 'sonar.scheduler',
       },
     },
   }, null, 2)}\n`, 'utf8');
   writeFileSync(join(staleServerNameSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
     schema: 'narada.site.capabilities.mcp_surfaces.v1',
     surfaces: [{
-      surface_id: 'sonar.site-loop',
-      server_name: 'narada-sonar-site-loop',
-      client_config: { generated_path: '.ai/mcp/narada-sonar-site-loop-mcp.json' },
-      tool_contract: { read_only_tools: ['site_loop_status'] },
+      surface_id: 'sonar.scheduler',
+      server_name: 'narada-sonar-scheduler',
+      client_config: { generated_path: '.ai/mcp/narada-sonar-scheduler-mcp.json' },
+      tool_contract: { read_only_tools: ['scheduler_runtime_status'] },
     }],
   }, null, 2)}\n`, 'utf8');
 
@@ -672,11 +672,11 @@ try {
   assert.deepEqual(staleServerNameFabric.registry_validation.missing, []);
   assert.deepEqual(staleServerNameFabric.registry_validation.unexpected, []);
   assert.deepEqual(staleServerNameFabric.registry_validation.server_name_mismatches, [{
-    generated_file: 'narada-sonar-site-loop-mcp.json',
-    surface_id: 'sonar.site-loop',
+    generated_file: 'narada-sonar-scheduler-mcp.json',
+    surface_id: 'sonar.scheduler',
     actual_server_name: 'narada-sonar-site-ops',
-    expected_server_name: 'narada-sonar-site-loop',
-    expected_server_names: ['narada-sonar-site-loop'],
+    expected_server_name: 'narada-sonar-scheduler',
+    expected_server_names: ['narada-sonar-scheduler'],
   }]);
   assert.throws(
     () => loadSiteMcpFabric(staleServerNameSite, { required: true, validateRegistry: true }),
@@ -684,7 +684,7 @@ try {
       assert.equal(error instanceof McpFabricError, true);
       assert.equal(error.code, 'mcp_fabric_registry_mismatch');
       assert.equal(error.details.server_name_mismatches[0].actual_server_name, 'narada-sonar-site-ops');
-      assert.equal(error.details.repair_plan.server_name_mismatches[0].expected_server_name, 'narada-sonar-site-loop');
+      assert.equal(error.details.repair_plan.server_name_mismatches[0].expected_server_name, 'narada-sonar-scheduler');
       assert.match(error.details.repair_plan.recommended_actions.join('\\n'), /do not hand-edit generated MCP client or carrier files/);
       return true;
     },
@@ -877,4 +877,3 @@ assert.equal(failingReport.rows[0].lifecycle_state, 'closed');
 assert.deepEqual(failingReport.rows[0].lifecycle_history, ['discovered', 'loaded', 'starting', 'start_failed', 'closing', 'closed']);
 assert.match(failingReport.rows[0].first_diagnostic, /initialize_timeout/);
 rmSync(failingDoctorSite, { recursive: true, force: true });
-

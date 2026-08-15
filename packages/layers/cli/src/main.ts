@@ -38,7 +38,6 @@ import { registerCarrierActionsCommands } from './commands/carrier-actions-regis
 import { registerCarrierRestartCommands } from './commands/carrier-restart-register.js';
 import { registerLauncherCommands } from './commands/launcher-register.js';
 import { registerSchedulerCommands } from './commands/scheduler-register.js';
-import { registerSiteLoopCommands } from './commands/site-loop-register.js';
 import { registerOutboxCommands } from './commands/outbox-register.js';
 import { registerCoherenceCommands } from './commands/coherence-register.js';
 import { registerCapabilityCommands } from './commands/capability-register.js';
@@ -134,7 +133,6 @@ registerCarrierActionsCommands(program);
 registerCarrierRestartCommands(program);
 registerLauncherCommands(program);
 registerSchedulerCommands(program);
-registerSiteLoopCommands(program);
 registerOutboxCommands(program);
 registerMutationEvidenceCommands(program);
 registerCapabilityCommands(program);

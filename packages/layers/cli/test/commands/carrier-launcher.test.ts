@@ -18,10 +18,6 @@ import {
   carrierStatusCommand,
 } from '../../src/commands/carrier.js';
 import {
-  siteLoopDrainCommand,
-  siteLoopStatusCommand,
-} from '../../src/commands/site-loop.js';
-import {
   schedulerSiteDaemonInstallCommand,
   schedulerSiteDaemonStatusCommand,
 } from '../../src/commands/scheduler.js';
@@ -290,14 +286,6 @@ describe('carrier launcher CLI commands', () => {
     expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('--operator-surface');
     expect((start.result as { agent_start: { command: string[] } }).agent_start.command).not.toContain('--carrier');
 
-    const siteLoop = await siteLoopStatusCommand({
-      siteRoot,
-      format: 'json',
-    }, createMockContext());
-
-    expect(siteLoop.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((siteLoop.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
-    expect((siteLoop.result as { site_command: { status: string } }).site_command.status).toBe('not_available');
   });
 
   it('starts a fresh operator-surface session by default even when an old matching session is live', async () => {
@@ -564,17 +552,10 @@ describe('carrier launcher CLI commands', () => {
       carrier: 'agent-cli',
       format: 'json',
     }, createMockContext());
-    const loopDrain = await siteLoopDrainCommand({
-      siteRoot,
-      format: 'json',
-    }, createMockContext());
-
     expect(carrierDrain.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect((carrierDrain.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
     expect((carrierDrain.result as { status: string }).status).toBe('carrier_operation_unavailable');
     expect((carrierDrain.result as { site_command?: unknown }).site_command).toBeUndefined();
-    expect(loopDrain.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((loopDrain.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
   });
 
   it('reports scheduler status without mutating platform state', async () => {

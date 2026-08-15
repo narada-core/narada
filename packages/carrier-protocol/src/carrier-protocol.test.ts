@@ -589,15 +589,15 @@ assert.deepEqual(validateSessionEvent(providerToolCallFixture), []);
 assert.deepEqual(providerToolCallFixture.payload, createProviderToolCallPayload({
   turn_id: 'turn_fixture_1',
   sequence: 2,
-  tool_name: 'site_loop_run_once',
+  tool_name: 'scheduler_runtime_status',
   arguments_summary: '{}',
 }));
 const toolCallFixture = readFixture('tool-call-session-event.json');
 assert.deepEqual(validateSessionEvent(toolCallFixture), []);
 assert.equal(toolCallFixture.event_kind, 'tool_call_requested');
-assert.equal(toolCallFixture.payload.tool_name, 'site_loop_run_once');
+assert.equal(toolCallFixture.payload.tool_name, 'scheduler_runtime_status');
 assert.deepEqual(toolCallFixture.payload, createToolCallPayload({
-  tool_name: 'site_loop_run_once',
+  tool_name: 'scheduler_runtime_status',
   arguments_summary: '{}',
   requesting_agent_id: 'sonar.resident',
 }));
@@ -606,7 +606,7 @@ assert.deepEqual(validateSessionEvent(toolResultFixture), []);
 assert.equal(toolResultFixture.event_kind, 'tool_result_received');
 assert.equal(toolResultFixture.payload.status, 'ok');
 assert.deepEqual(toolResultFixture.payload, createToolResultPayload({
-  tool_name: 'site_loop_run_once',
+  tool_name: 'scheduler_runtime_status',
   status: 'ok',
   duration_ms: 12,
   result_summary: 'ok',
@@ -1241,7 +1241,7 @@ assert.match(thrownMessage(() => createSessionEvent({
 const providerToolCallPayload = createProviderToolCallPayload({
   turn_id: 'turn_test',
   sequence: 2,
-  tool_name: 'site_loop_run_once',
+  tool_name: 'scheduler_runtime_status',
   arguments_summary: '{}',
 });
 assert.equal(providerToolCallPayload.schema, PROVIDER_OUTPUT_PAYLOAD_SCHEMA);
@@ -1363,7 +1363,7 @@ const toolCall = createSessionEvent({
   ...sessionBase,
   event_kind: 'tool_call_requested',
   payload: {
-    tool_name: 'site_loop_run_once',
+    tool_name: 'scheduler_runtime_status',
     arguments_summary: '{}',
     arguments_ref: payloadRef,
     requesting_agent_id: 'sonar.resident',
@@ -1374,7 +1374,7 @@ const toolResult = createSessionEvent({
   ...sessionBase,
   event_kind: 'tool_result_received',
   payload: {
-    tool_name: 'site_loop_run_once',
+    tool_name: 'scheduler_runtime_status',
     status: 'ok',
     duration_ms: 12,
     result_summary: 'ok',

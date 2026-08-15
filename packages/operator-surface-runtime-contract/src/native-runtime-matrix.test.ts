@@ -11,7 +11,6 @@ const NATIVE_SURFACES = [
   'mailbox-mcp',
   'graph-mail-mcp',
   'calendar-mcp',
-  'site-loop-mcp',
   'site-lifecycle-mcp',
   'site-registry-mcp',
   'worker-delegation-mcp',

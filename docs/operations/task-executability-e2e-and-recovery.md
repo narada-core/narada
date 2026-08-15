@@ -1,6 +1,6 @@
 # Task Executability E2E and Recovery
 
-This is the operator and developer runbook for the complete Task Executability Assessment path. The deterministic proof is the authority for the executable path and lifecycle/recovery contract; it is not a proof that the task, its implementation, or its business result is correct. The live provider proof is an explicitly opt-in integration check and is never required for ordinary package or Site Loop verification.
+This is the operator and developer runbook for the complete Task Executability Assessment path. The deterministic proof is the authority for the executable path and lifecycle/recovery contract; it is not a proof that the task, its implementation, or its business result is correct. The live provider proof is an explicitly opt-in integration check and is never required for ordinary package or scheduler/SOP verification.
 
 ## Authority Map
 
@@ -8,8 +8,8 @@ This is the operator and developer runbook for the complete Task Executability A
 - Delegated Task owns the bounded assessment workflow and strict task-linked dispatch gate.
 - Worker Delegation owns provider, model, cognition, credential, and runtime binding.
 - NARS may start the shared orchestrator immediately after task creation.
-- Site Loop reconciles pending or expired requests when no NARS session exists.
-- Neither NARS nor Site Loop invents or overwrites an assessment verdict.
+- Scheduler reconciles pending or expired requests when no NARS session exists.
+- Neither NARS nor Scheduler invents or overwrites an assessment verdict.
 
 ## Proof Boundary
 
@@ -26,7 +26,7 @@ The deterministic command is therefore the closure gate for executable-path and 
 Run from `<src-root>\\mcp-surfaces`:
 
 ```powershell
-pnpm --filter @narada-core/site-loop-mcp test:e2e:task-executability
+pnpm --filter @narada-core/task-lifecycle-mcp test
 ```
 
 The test creates a temporary Site, starts the real Task Lifecycle MCP child, and drives a deterministic delegated assessment port. It proves:
@@ -36,7 +36,7 @@ The test creates a temporary Site, starts the real Task Lifecycle MCP child, and
 - a corrected task replaces the stale assessment;
 - concurrent leasing admits one executor;
 - an expired dispatched attempt is recovered after restart without losing delegated/worker identity;
-- a Site Loop pass recovers work when NARS was never created;
+- task recovery remains explicit when NARS was never created;
 - strict task-linked dispatch is based on the current admitted assessment and refuses an unassessed task;
 - SQLite handles are owned and closed by the process that opens them, so Windows cleanup is deterministic.
 
@@ -66,7 +66,7 @@ The optional timeout is controlled by `NARADA_E2E_WORKER_EXTERNAL_PROVIDER_TIMEO
 
 ## Restart and Recovery
 
-When NARS is absent, run one bounded Site Loop pass. When a request is leased but the process dies, let the lease expire and let Site Loop reconcile it. The persisted attempt retains the delegated task and worker identity needed to distinguish recovery from a fresh attempt. Do not delete the Task Lifecycle database or manually rewrite request state.
+When NARS is absent, keep recovery in the task lifecycle and SOP records; scheduler activation is a separate concern. When a request is leased but the process dies, let the lease expire and let the task lifecycle reconcile it. The persisted attempt retains the delegated task and worker identity needed to distinguish recovery from a fresh attempt. Do not delete the Task Lifecycle database or manually rewrite request state.
 
 When a test or child process reports SQLite `EBUSY`/cleanup failure:
 
@@ -80,10 +80,9 @@ When a test or child process reports SQLite `EBUSY`/cleanup failure:
 
 - Concept: `docs/concepts/task-executability-assessment.md`
 - NARS: `docs/concepts/nars-runtime-contract.md`
-- Site Loop: `docs/concepts/site-operating-loop.md`
+- SOP and scheduler authority: `../mcp-surfaces/packages/sop-mcp/README.md` and `../mcp-surfaces/packages/scheduler-mcp/README.md`
 - Task Lifecycle policy: `docs/concepts/task-lifecycle-role-enforcement-policy.md`
 - Operator recovery: `docs/product/operator-console-runbook.md`
-- Site Loop implementation: `packages/site-loop-mcp/README.md`
 - Task Lifecycle implementation: `packages/task-lifecycle-mcp/README.md`
 - Delegated Task implementation: `packages/delegated-task-mcp/README.md`
 - Worker provider/live proof: `packages/worker-delegation-mcp/README.md`

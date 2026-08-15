@@ -8,7 +8,7 @@
   "site_id": "narada-sonar",
   "site_root": "C:/workspace/narada.sonar",
   "payload": {
-    "tool_name": "site_loop_run_once",
+    "tool_name": "scheduler_runtime_status",
     "arguments_summary": "{}",
     "arguments_ref": null,
     "requesting_agent_id": "sonar.resident"

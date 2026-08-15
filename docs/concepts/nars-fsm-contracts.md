@@ -252,16 +252,6 @@ Schemas: `narada.workspace_launch.plan.v1`, `narada.workspace_launch.smoke.v1`, 
 
 The workspace launcher requires an explicit agent, site, role, `--all`, or config-path selection. It resolves registry defaults only for fields within the selected records and produces a noninteractive plan. The executor advances the in-memory launch transaction through `planned -> preflighted -> spawned -> handed_off|attached -> completed`; pre-completion failures are `failed` with bounded rollback and best-effort redacted artifact evidence. Workspace launch does not persist interactive selector sessions or execution attempts, expose a browser grouping UI, recover detached attempts, or own a `workspace-recover` command. NARS session authority remains in the runtime host, and attachment history remains scoped to the attach operation.
 
-## Site Operating Loop Run, Trigger, and Health
-
-Owner: `@narada-core/site-operating-loop`.
-
-Schemas: `narada.site_operating_loop.run.lifecycle_state.v1`, `narada.site_operating_loop.trigger.lifecycle_state.v1`, and `narada.site_operating_loop.health.lifecycle_state.v1`.
-
-A bounded run follows `requested -> locking -> running -> completed`, with `locking -> locked` for contention and `running -> failed` or `running -> aborted` for non-success outcomes. A trigger follows `pending -> claimed -> completed|failed|skipped`; completion is refused until the trigger has been claimed and terminal triggers cannot be reopened. Health starts at `unknown`, moves through `healthy`, `degraded`, and `critical`, and may recover after a later successful run.
-
-Lifecycle evidence is stored in `lifecycle_json` columns beside run, trigger, and health rows. `ensureSiteLoopTables()` adds those columns to existing Site databases, so old rows remain readable through status-derived lifecycle projections.
-
 ## NARS Authority Handoff
 
 Owner: `@narada-core/nars-session-core`, orchestration boundary for authority transfer.
@@ -285,14 +275,6 @@ Owner: `@narada-core/operator-router`, route-set client lease handle.
 Schema: `narada.operator_router.projection_lease.lifecycle_state.v1`.
 
 A projection lease follows `requested -> registering -> active -> renewing -> active`. Renewal failure moves it through `degraded -> recovering`; owner cleanup ends at `detached`, and an observed deadline may end at `expired`. This is deliberately separate from a route’s `healthy|degraded` transport state. The route-set handle exposes the lease snapshot while the server continues to own route registration, health probing, and expiry enforcement.
-
-## Site Loop Execution
-
-Owner: `@narada-core/site-operating-loop`, execution orchestration above the persisted run/trigger/health machines.
-
-Schema: `narada.site_operating_loop.execution.lifecycle_state.v1`.
-
-Execution follows `scheduled -> admitted -> running`, may pass through `waiting` or `retry`, and ends at `completed`, `failed`, or `cancelled`. The existing run lifecycle remains the durable database projection; `siteOperatingLoopExecutionLifecycleFromRunState()` maps legacy run statuses without pretending that lock acquisition or health are execution admission.
 
 ## Delegated Work-Order / DAG
 
@@ -332,4 +314,3 @@ Creation follows `requested -> validating -> planned -> created`. Sending and re
 - A lower-level FSM may expose state to its caller, but it does not acquire authority owned by a higher-level FSM.
 - State transitions that govern durable recovery or leases are journaled or artifacted. Ephemeral attachment history is exposed by the subscription handle and is not treated as session authority.
 - Existing turn, input-admission, provider-invocation, capability-gateway, runtime-host, and tool-execution FSMs remain separate contracts with their existing owners. In particular, capability maturity evidence never replaces runtime capability admission.
-

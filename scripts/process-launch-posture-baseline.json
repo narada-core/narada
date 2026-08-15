@@ -925,14 +925,6 @@
       "text": "Start-Process -FilePath $hostExe -ArgumentList @("
     },
     {
-      "id": "packages/site-operating-loop/scripts/build.ts:child_process.spawnSync:7522f3acbbbe16a0",
-      "file": "packages/site-operating-loop/scripts/build.ts",
-      "line": 10,
-      "api": "child_process.spawnSync",
-      "posture": "governed_command_execution",
-      "text": "const result = spawnSync("
-    },
-    {
       "id": "packages/sites/windows/scripts/run-cycle.ps1:PowerShell.Start-Process:434fb613731eb5be",
       "file": "packages/sites/windows/scripts/run-cycle.ps1",
       "line": 99,

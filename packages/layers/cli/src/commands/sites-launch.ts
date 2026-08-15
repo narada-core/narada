@@ -1,10 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { runSiteCliCommandAsync } from '../lib/launcher-runtime-site-command.js';
 import { getSchedulerSiteDaemonStatus } from '../lib/launcher-runtime-scheduler.js';
 
 export interface SitesLaunchOptions {
@@ -24,18 +21,6 @@ interface SiteLaunchCheck {
   next_command?: string;
 }
 
-interface SiteLoopDeclaration {
-  loop_id?: string;
-  resident?: { agent_id?: string; role?: string } | null;
-  resident_launch?: { materialization_command?: string; runtime?: string } | null;
-  scheduler?: { default_task_name?: string } | null;
-}
-
-type SiteLoopDeclarationRead =
-  | { kind: 'none' }
-  | { kind: 'invalid'; detail: string }
-  | { kind: 'ok'; declaration: SiteLoopDeclaration };
-
 interface McpFabricValidation {
   status?: string;
   expected_count?: number;
@@ -54,17 +39,11 @@ interface McpFabricModule {
   };
 }
 
-const SITE_LOOP_CONFIG_RELATIVE_PATH = join('.narada', 'capabilities', 'site-loop-config.json');
-
 /**
- * Ensure a Site's declared runtime posture: resolve the Site, report MCP
- * surface materialization drift, ensure the resident carrier when a loop
- * declares one, check scheduler posture, and report the console URL.
- * Plan-first: --dry-run performs no mutation.
- *
- * The resident ensure intentionally reuses the `site-loop recover` idiom:
- * one bounded site-loop pass (`loop run <id> --once --ensure-resident`), not a
- * narrow carrier-only ensure. Labels below say so explicitly.
+ * Report a Site's runtime posture: resolve the Site, report MCP surface
+ * materialization drift, inspect scheduler posture, and report the console URL.
+ * Scheduler activation and SOP execution are separate authorities; this
+ * command is read-only even when --dry-run is omitted.
  *
  * All Site CLI calls use the async exec path so HTTP handlers (console launch
  * route) never block the event loop.
@@ -123,108 +102,33 @@ export async function sitesLaunchCommand(
     details.mcp_fabric_validation = fabricCheck.validation;
   }
 
-  // 3. Site loop / resident declaration.
-  const declarationRead = readSiteLoopDeclaration(siteRoot);
-  const declaration = declarationRead.kind === 'ok' ? declarationRead.declaration : null;
-  if (declarationRead.kind === 'none') {
+  // 3. Scheduler posture (read-only; activation remains scheduler-owned).
+  const scheduler = getSchedulerSiteDaemonStatus({ siteRoot });
+  if (options.verbose) details.scheduler = scheduler;
+  const resolvedTaskName = scheduler.task_name ?? 'site daemon task';
+  if (scheduler.status === 'ok') {
     checks.push({
-      id: 'site_loop_declaration',
-      status: 'skipped',
-      summary: 'No site loop declared (no .narada/capabilities/site-loop-config.json)',
+      id: 'scheduler_posture',
+      status: 'pass',
+      summary: `Scheduled task present: ${resolvedTaskName}`,
     });
-  } else if (declarationRead.kind === 'invalid') {
+  } else if (scheduler.status === 'not_found') {
     checks.push({
-      id: 'site_loop_declaration',
+      id: 'scheduler_posture',
       status: 'warn',
-      summary: 'site-loop-config.json is not valid JSON; loop/resident/scheduler posture cannot be evaluated',
-      detail: declarationRead.detail,
+      summary: `Scheduled task not installed: ${resolvedTaskName}`,
+      next_command: `narada scheduler site-daemon install --site-root "${siteRoot}" --task-name "${resolvedTaskName}" --execute`,
     });
   } else {
     checks.push({
-      id: 'site_loop_declaration',
-      status: 'pass',
-      summary: `Site loop declared: ${declaration!.loop_id ?? 'unknown loop'}`,
-      detail: declaration!.resident
-        ? `resident: ${declaration!.resident.agent_id ?? 'declared'}`
-        : 'no resident carrier declared',
+      id: 'scheduler_posture',
+      status: 'warn',
+      summary: `Scheduler posture could not be verified (${scheduler.status})`,
+      detail: scheduler.error,
     });
   }
 
-  // 4. Resident carrier ensure: one bounded site-loop pass (mutating; planned under --dry-run).
-  const residentDeclared = Boolean(declaration?.resident ?? declaration?.resident_launch);
-  if (declaration && residentDeclared) {
-    const loopId = declaration.loop_id ?? 'default';
-    if (dryRun) {
-      checks.push({
-        id: 'resident_ensure',
-        status: 'planned',
-        summary: `Would ensure resident carrier by running one bounded site-loop pass: loop run ${loopId} --once --ensure-resident`,
-      });
-      actions.push(`planned: loop run ${loopId} --once --ensure-resident`);
-    } else {
-      const ensure = await runSiteCliCommandAsync(siteRoot, ['loop', 'run', loopId, '--once', '--ensure-resident']);
-      if (options.verbose) details.resident_ensure = ensure;
-      if (ensure.mutation_performed) mutationObserved = true;
-      if (ensure.status === 'not_available') {
-        checks.push({
-          id: 'resident_ensure',
-          status: 'warn',
-          summary: 'Site CLI not available; resident ensure skipped',
-          detail: ensure.error,
-        });
-      } else if (ensure.status === 'success') {
-        actions.push(`ensured resident carrier via one bounded site-loop pass: loop run ${loopId} --once --ensure-resident`);
-        const health = await runSiteCliCommandAsync(siteRoot, ['loop', 'health']);
-        if (options.verbose) details.loop_health = health;
-        checks.push({
-          id: 'resident_ensure',
-          status: health.status === 'success' ? 'pass' : 'warn',
-          summary: health.status === 'success'
-            ? 'Resident carrier ensured; loop health ok'
-            : 'Resident ensure ran but loop health did not report success',
-          detail: health.status === 'success' ? undefined : (health.error ?? health.status),
-        });
-      } else {
-        checks.push({
-          id: 'resident_ensure',
-          status: 'fail',
-          summary: `Resident ensure failed: loop run ${loopId} --once --ensure-resident`,
-          detail: ensure.error ?? ensure.status,
-        });
-      }
-    }
-  }
-
-  // 5. Scheduler posture (read-only).
-  if (declaration?.scheduler) {
-    const taskName = declaration.scheduler.default_task_name;
-    const scheduler = getSchedulerSiteDaemonStatus({ siteRoot, ...(taskName ? { taskName } : {}) });
-    if (options.verbose) details.scheduler = scheduler;
-    const resolvedTaskName = scheduler.task_name ?? taskName ?? 'site daemon task';
-    if (scheduler.status === 'ok') {
-      checks.push({
-        id: 'scheduler_posture',
-        status: 'pass',
-        summary: `Scheduled task present: ${resolvedTaskName}`,
-      });
-    } else if (scheduler.status === 'not_found') {
-      checks.push({
-        id: 'scheduler_posture',
-        status: 'warn',
-        summary: `Declared scheduled task not installed: ${resolvedTaskName}`,
-        next_command: `narada scheduler site-daemon install --site-root "${siteRoot}" --task-name "${resolvedTaskName}" --execute`,
-      });
-    } else {
-      checks.push({
-        id: 'scheduler_posture',
-        status: 'warn',
-        summary: `Scheduler posture could not be verified (${scheduler.status})`,
-        detail: scheduler.error,
-      });
-    }
-  }
-
-  return finalize(options, checks, actions, details, record, declaration, mutationObserved);
+  return finalize(options, checks, actions, details, record, mutationObserved);
 }
 
 function finalize(
@@ -233,7 +137,6 @@ function finalize(
   actions: string[],
   details: Record<string, unknown>,
   record: { siteId: string; siteRoot: string } | null,
-  declaration: SiteLoopDeclaration | null,
   mutationObserved: boolean,
 ): { exitCode: ExitCode; result: unknown } {
   const dryRun = options.dryRun === true;
@@ -250,13 +153,6 @@ function finalize(
     mutation_performed: !dryRun && (mutationObserved || (!failed && actions.length > 0)),
     site_id: record?.siteId ?? options.siteId,
     site_root: record?.siteRoot ?? null,
-    declaration: declaration
-      ? {
-          loop_id: declaration.loop_id ?? null,
-          resident_declared: Boolean(declaration.resident ?? declaration.resident_launch),
-          scheduler_task_name: declaration.scheduler?.default_task_name ?? null,
-        }
-      : null,
     checks,
     actions,
     console_url: consoleUrl,
@@ -349,13 +245,3 @@ async function checkMcpFabricMaterialization(
   }
 }
 
-function readSiteLoopDeclaration(siteRoot: string): SiteLoopDeclarationRead {
-  const configPath = join(siteRoot, SITE_LOOP_CONFIG_RELATIVE_PATH);
-  if (!existsSync(configPath)) return { kind: 'none' };
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as SiteLoopDeclaration;
-    return parsed && typeof parsed === 'object' ? { kind: 'ok', declaration: parsed } : { kind: 'none' };
-  } catch (error) {
-    return { kind: 'invalid', detail: error instanceof Error ? error.message : String(error) };
-  }
-}

@@ -26,7 +26,7 @@ function createRecord(conceptId: string, canonicalName: string) {
     canonical_name: canonicalName,
     kind: 'policy',
     status: 'draft',
-    owner_surface: '@narada-core/site-operating-loop package',
+    owner_surface: '@narada-core/scheduler-mcp package',
     aliases: [],
     deprecated_aliases: [],
     confidence: { cl: 0.98, basis: 'fixture' },
@@ -38,8 +38,7 @@ describe('concepts commands', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     conceptModule.listConceptRecords.mockReturnValue([
-      createRecord('loop_definition', 'LoopDefinition'),
-      createRecord('watch_definition', 'WatchDefinition'),
+      createRecord('scheduler_definition', 'SchedulerDefinition'),
     ]);
     conceptModule.listConceptLifecycleRecords.mockReturnValue([
       { ...createRecord('concept_promotion', 'ConceptPromotion'), lifecycle_stage: 'active' },
@@ -97,8 +96,7 @@ describe('concepts commands', () => {
       records_dir: '/mock/concepts',
       records_count: 2,
       records: [
-        createRecord('loop_definition', 'LoopDefinition'),
-        createRecord('watch_definition', 'WatchDefinition'),
+        createRecord('scheduler_definition', 'SchedulerDefinition'),
       ],
     });
     expect(conceptModule.validateConceptRegistry).toHaveBeenCalledWith({ recordsDir: '/mock/concepts' });

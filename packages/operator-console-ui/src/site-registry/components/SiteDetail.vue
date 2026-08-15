@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { Archive, Pencil, Play, RotateCcw, SearchCheck, Trash2 } from 'lucide-vue-next';
+import { Archive, Pencil, RotateCcw, SearchCheck, Trash2 } from 'lucide-vue-next';
 import { OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH } from '@narada-core/operator-console-contract';
 import type { SiteDetailProjection } from '../projections';
 import { operatorConsoleNavigationHref } from '../../console/routes';
@@ -27,10 +27,6 @@ async function checkPosture(siteId: string): Promise<void> {
   await siteLaunch.launch(siteId, true);
 }
 
-async function ensureNow(siteId: string): Promise<void> {
-  if (!window.confirm(`Ensure runtime posture for ${siteId}? This runs one bounded site-loop pass with --ensure-resident via the Site's own CLI.`)) return;
-  await siteLaunch.launch(siteId, false);
-}
 </script>
 
 <template>
@@ -76,10 +72,6 @@ async function ensureNow(siteId: string): Promise<void> {
           <button type="button" class="detail-action launch-action" :disabled="siteLaunch.loading.value" @click="checkPosture(site.siteId)">
             <SearchCheck :size="14" aria-hidden="true" />
             Check posture
-          </button>
-          <button type="button" class="detail-action launch-action" :disabled="siteLaunch.loading.value" @click="ensureNow(site.siteId)">
-            <Play :size="14" aria-hidden="true" />
-            Ensure now
           </button>
         </div>
         <p v-if="siteLaunch.error.value" class="detail-muted launch-error" role="alert">{{ siteLaunch.error.value }}</p>

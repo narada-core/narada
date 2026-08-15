@@ -61,7 +61,7 @@ function buildAcceptanceDirective({ resultRelativePath, providerAdmissionOnly = 
     'Respond with only this JSON object and no prose, no markdown fence:',
     JSON.stringify({
       narada_tool_call: {
-        name: 'site_loop_status',
+        name: 'scheduler_runtime_status',
         arguments: {},
       },
     }),
@@ -181,7 +181,7 @@ function validateLiveTurnEvidence({ resultPath, sessionPath, providerAdmissionOn
   const toolResultPayload = toolResultEvent ? eventPayload(toolResultEvent) : null;
   if (!providerAdmissionOnly && toolResultPayload) {
     if (toolResultPayload.status !== 'ok') failures.push('tool_result_status_not_ok');
-    if (toolResultPayload.tool_name !== 'site_loop_status') failures.push('tool_result_tool_name_not_site_loop_status');
+    if (toolResultPayload.tool_name !== 'scheduler_runtime_status') failures.push('tool_result_tool_name_not_scheduler_runtime_status');
     if (toolResultPayload.mcp_runtime_execution !== 'supervised_stdio') failures.push('tool_result_not_supervised_stdio');
   }
 

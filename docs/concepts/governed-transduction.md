@@ -117,19 +117,10 @@ The Sonar email flow is a governed transduction chain:
 | Agent work | directive/task | carrier and tool admission | report, task transition, draft, or new candidate |
 | Receipt reconciliation | expected delivery | evidence boundary | receipt or recovery action |
 
-## Relation To Site Operating Loop
+## Recurrence And Activation
 
-A Site Operating Loop runs one or more Governed Transduction Chains.
-
-```text
-Site Operating Loop
--> Loop Run
--> Governed Transduction Chain
--> Governed Transduction Step
--> Emissions and receipts
-```
-
-The loop is the recurring control routine. The transduction chain is the semantic transformation grammar inside the loop.
+SOP owns procedure execution. Scheduler owns recurring activation and recovery. A scheduler may trigger one or more Governed
+Transduction Chains, but activation is not part of the chain's semantic transformation grammar.
 
 ## Authority Rules
 

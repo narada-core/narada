@@ -32,7 +32,7 @@ function writeSession(pathname: any, eventKinds: any= REQUIRED_EVENT_KINDS) {
     payload: kind === 'tool_result_received'
       ? {
         status: 'ok',
-        tool_name: 'site_loop_status',
+        tool_name: 'scheduler_runtime_status',
         server_name: 'narada-sonar-site-ops',
         mcp_runtime_execution: 'supervised_stdio',
       }
@@ -41,10 +41,10 @@ function writeSession(pathname: any, eventKinds: any= REQUIRED_EVENT_KINDS) {
   fs.writeFileSync(pathname, `${lines.join('\n')}\n`, 'utf8');
 }
 
-test('buildAcceptanceDirective asks provider for one visible MCP site_loop_status tool call', () => {
+test('buildAcceptanceDirective asks provider for one visible scheduler runtime tool call', () => {
   const directive = buildAcceptanceDirective({ resultRelativePath: '.narada/crew/live/result.json' });
   assert.match(directive, /Respond with only this JSON object/);
-  assert.match(directive, /"name":"site_loop_status"/);
+  assert.match(directive, /"name":"scheduler_runtime_status"/);
   assert.doesNotMatch(directive, /```/);
 });
 
@@ -85,7 +85,7 @@ test('validateLiveTurnEvidence passes complete result artifact and session chain
   const validation: any = validateLiveTurnEvidence({ resultPath, sessionPath });
   assert.equal(validation.status, 'passed');
   assert.deepEqual(validation.missing_event_kinds, []);
-  assert.equal(validation.tool_result_summary.tool_name, 'site_loop_status');
+  assert.equal(validation.tool_result_summary.tool_name, 'scheduler_runtime_status');
   assert.equal(validation.tool_result_summary.mcp_runtime_execution, 'supervised_stdio');
 });
 

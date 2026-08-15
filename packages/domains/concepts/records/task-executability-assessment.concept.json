@@ -11,7 +11,7 @@
   "boundaries": [
     "Task Lifecycle owns assessment truth and policy, not Delegation or NARS.",
     "Delegation owns outcome orchestration; Worker Delegation owns provider/runtime execution.",
-    "NARS and Site Loop dispatch and reconcile, but never own the request authority.",
+    "NARS and scheduler/SOP dispatch and reconcile, but never own the request authority.",
     "Provider/model selection is resolved by Delegation registry, not Task Lifecycle policy.",
     "A missing or failed evaluator is not a verdict about the task; execution state is separate from assessment verdict."
   ],
@@ -25,7 +25,7 @@
   "authority": {
     "kind": "package",
     "ref": "narada-core/packages/task-governance-core",
-    "notes": "Contracts, deterministic digests, policy resolution, and mechanical verdict derivation live in the neutral task-governance-core package. Storage, MCP tools, NARS hooks, Site Loop steps, and Delegated Task templates are owned by their respective surfaces."
+    "notes": "Contracts, deterministic digests, policy resolution, and mechanical verdict derivation live in the neutral task-governance-core package. Storage, MCP tools, NARS hooks, scheduler/SOP steps, and Delegated Task templates are owned by their respective surfaces."
   },
   "schemas": [
     "narada-core/packages/task-governance-core/src/task-executability-contract.ts"
@@ -39,12 +39,12 @@
     "narada-core/packages/task-governance-core/src/task-executability-contract.ts",
     "narada-core/packages/task-governance-core/src/task-lifecycle-store.ts",
     "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts",
-    "mcp-surfaces/packages/site-loop-mcp/test/task-executability-cross-surface-e2e.test.ts",
+    "mcp-surfaces/packages/task-lifecycle-mcp/test/inbox-bridge.test.ts",
     "mcp-surfaces/packages/worker-delegation-mcp/test/external-provider-e2e.test.ts"
   ],
   "tests": [
     "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts",
-    "mcp-surfaces/packages/site-loop-mcp/test/task-executability-cross-surface-e2e.test.ts (deterministic cross-surface proof)",
+    "mcp-surfaces/packages/task-lifecycle-mcp/test/inbox-bridge.test.ts (deterministic lifecycle proof)",
     "mcp-surfaces/packages/worker-delegation-mcp/test/external-provider-e2e.test.ts (opt-in bounded live provider proof)"
   ],
   "examples": [
@@ -58,6 +58,6 @@
     "embedding provider/model names in Task Lifecycle policy"
   ],
   "open_questions": [],
-  "confidence": { "cl": 0.99, "basis": "Contracts, durable Task Lifecycle storage, Site Loop/NARS orchestration, delegated enforcement, restart recovery, deterministic cross-surface E2E, and an explicit bounded live-provider E2E path are implemented and documented; live provider execution remains opt-in." },
+  "confidence": { "cl": 0.99, "basis": "Contracts, durable Task Lifecycle storage, scheduler/SOP/NARS orchestration, delegated enforcement, restart recovery, deterministic lifecycle proof, and an explicit bounded live-provider E2E path are implemented and documented; live provider execution remains opt-in." },
   "reviewed_at": "2026-07-20T16:30:00.000Z"
 }

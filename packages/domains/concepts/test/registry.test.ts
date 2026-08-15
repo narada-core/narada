@@ -67,11 +67,9 @@ describe('ConceptRegistry loader', () => {
         'authority_grant',
         'task_lifecycle',
         'canonical_outbox',
-        'loop_definition',
-        'watch_definition',
       ]),
     );
-    expect(registry.records.length).toBeGreaterThanOrEqual(21);
+    expect(registry.records.length).toBeGreaterThanOrEqual(19);
   });
 
   it('supports lookup by id, canonical name, alias, and deprecated alias', () => {
@@ -91,10 +89,6 @@ describe('ConceptRegistry loader', () => {
     expect(showConceptRecord('ProjectionTopology', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
     expect(showConceptRecord('projection_topology', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
     expect(showConceptRecord('NaradaRuntimeProjectionGraph', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
-    expect(showConceptRecord('LoopDefinition', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
-    expect(showConceptRecord('WatchDefinition', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
-    expect(showConceptRecord('loop policy', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
-    expect(showConceptRecord('watch policy', { recordsDir: DEFAULT_CONCEPT_RECORDS_DIR }).status).toBe('found');
     expect(index.validation.valid).toBe(true);
   });
 
@@ -223,8 +217,6 @@ describe('ConceptRegistry loader', () => {
     expect(summaries.some((summary) => summary.concept_id === 'projection_topology')).toBe(true);
     expect(summaries.some((summary) => summary.concept_id === 'runtime_capability_profile')).toBe(true);
     expect(summaries.some((summary) => summary.concept_id === 'surface_attachment')).toBe(true);
-    expect(summaries.some((summary) => summary.concept_id === 'watch_definition')).toBe(true);
-    expect(summaries.some((summary) => summary.concept_id === 'loop_definition')).toBe(true);
     expect(summaries.some((summary) => summary.concept_id === 'work_order')).toBe(true);
   });
 

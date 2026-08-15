@@ -24,8 +24,6 @@ Narada repeatedly promotes recurring shapes into named objects:
 - `ProjectionTopology`
 - `ObjectLifecyclePolicy`
 - `OperatorViewPolicy`
-- `LoopDefinition`
-- `WatchDefinition`
 - `EvidencePacket`
 - `HostProfile`
 - `CompatibilityMigrationContract`
@@ -355,7 +353,7 @@ When a task chapter introduces or stabilizes a concept, it should:
 3. keep task numbers and chapter ids in the record's `tasks` field;
 4. keep the registry authoritative once the concept is accepted.
 
-When loop, watch, or projection-topology semantics stabilize, seed or update the matching ConceptRecords as `LoopDefinition`, `WatchDefinition`, and `ProjectionTopology` instead of leaving those names stranded in runtime notes or launcher prose.
+When scheduler or SOP semantics stabilize, seed or update the matching ConceptRecords instead of leaving those names stranded in runtime notes or launcher prose.
 
 Recent chapter examples:
 

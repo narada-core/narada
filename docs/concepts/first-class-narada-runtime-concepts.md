@@ -606,36 +606,6 @@ Acceptance coverage:
 - Task lifecycle and review flows can reference the packet without losing existing evidence fields.
 - No consequential completion claim is confirmed without a correlated observation or reconciliation evidence chain.
 
-## 1708 - LoopDefinition And WatchDefinition
-
-CL: 0.985
-
-First-class object: the declarative Site Operating Loop definition and its watch/trigger definition, distinct from the runtime host and from a single bounded Loop Run.
-
-Authority contracts:
-
-- [`site-operating-loop.md`](site-operating-loop.md)
-- [`site-operating-loop-runtime-contract.md`](site-operating-loop-runtime-contract.md)
-
-Current implementation posture:
-
-- Narada already has a generic Site Operating Loop runtime host, loop module contract, trigger admission, bounded runs, and durable run evidence.
-- The semantic gap is the durable definition object that names the loop policy and the companion watch definition that explains what wakes or gates a run.
-- The existing runtime contract already keeps host substrate separate from loop semantics, so the first-class object can be named without collapsing into the runtime package.
-
-Remaining implementation work:
-
-- Expose first-class LoopDefinition and WatchDefinition records in the concept registry.
-- Keep loop-definition semantics separate from the runtime host, one run, and raw substrate.
-- Clarify how watches map to trigger admission and cadence without reducing them to a plain subscription.
-
-Acceptance coverage:
-
-- LoopDefinition and WatchDefinition are named as distinct first-class objects.
-- The Site Operating Loop docs are linked as the authority surface.
-- Runtime host, loop definition, watch definition, and Loop Run remain separate objects.
-- Trigger admission and step execution remain runtime responsibilities, not definition responsibilities.
-
 ## 1710 - LauncherSessionDashboard (removed)
 
 Removed with the interactive group-launch stack (decision 20260718-2038, task

@@ -55,11 +55,10 @@ export async function sitesLaunchCommand(
   options: SitesLaunchOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const dryRun = options.dryRun === true;
   const checks: SiteLaunchCheck[] = [];
   const actions: string[] = [];
   const details: Record<string, unknown> = {};
-  let mutationObserved = false;
+  const mutationObserved = false;
 
   // 1. Resolve the Site record (id or alias) from the User Site registry.
   const resolution = await resolveSiteRecord(options.siteId);

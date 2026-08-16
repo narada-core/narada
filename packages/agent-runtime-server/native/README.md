@@ -20,11 +20,13 @@ binary also owns its conformance probes. It does not interpret
 `NARADA_RUNTIME_NODE_COMMAND`, and it never launches Node or Bun.
 
 NARADA_NATIVE_PROVIDER_MODE=echo is a deterministic provider fixture used by
-conformance tests. codex/codex-subscription invokes the explicit Codex provider
-command (NARADA_NATIVE_CODEX_COMMAND, default codex) with ordinary codex exec
-arguments; the runtime does not embed approval or sandbox bypass flags. An unset
-provider mode remains blocked, preserving fail-closed behavior when no provider is
-selected.
+conformance tests. `codex`/`codex-subscription` defaults to the native
+Codex-app-server broker supplied by the owning delegation surface. The runtime
+authenticates with the per-host capability, sends explicit model, effort, cwd,
+sandbox, and writable-root coordinates, and receives one fresh ephemeral
+provider thread. `NARADA_NATIVE_CODEX_TRANSPORT=codex-exec` retains the old
+subprocess behavior only as an explicit diagnostic fallback; it is never
+selected silently. An unset provider mode remains blocked.
 
 ## Native HTTP provider binding
 

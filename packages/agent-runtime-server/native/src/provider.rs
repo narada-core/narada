@@ -13,7 +13,8 @@ use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use std::env;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Instant;
@@ -173,11 +174,13 @@ impl<'a> NativeProviderAdapter<'a> {
             .binding
             .as_ref()
             .map(|binding| (binding.provider.as_str(), binding.provider.as_str(), "http"))
-            .unwrap_or((
-                "codex-subscription",
-                "codex-subscription",
-                "codex_subprocess",
-            ));
+            .unwrap_or_else(|| {
+                let transport = match env::var("NARADA_NATIVE_CODEX_TRANSPORT").as_deref() {
+                    Ok("codex-app-server") => "codex_app_server_broker",
+                    _ => "codex_subprocess",
+                };
+                ("codex-subscription", "codex-subscription", transport)
+            });
         let mut event = json!({
             "event": "provider_invocation_state_transition",
             "kind": "provider_invocation_state_transition",
@@ -579,6 +582,95 @@ Answer the original request using this tool result.",
     }
 
     fn invoke_codex(&self, prompt: &str) -> Result<(String, Option<String>), String> {
+        match env::var("NARADA_NATIVE_CODEX_TRANSPORT")
+            .unwrap_or_else(|_| "codex-app-server".to_string())
+            .as_str()
+        {
+            "codex-app-server" => self.invoke_codex_app_server(prompt),
+            "codex-exec" => self.invoke_codex_exec(prompt),
+            value => Err(format!("native_codex_transport_unsupported:{value}")),
+        }
+    }
+
+    fn invoke_codex_app_server(&self, prompt: &str) -> Result<(String, Option<String>), String> {
+        let endpoint = env::var("NARADA_NATIVE_CODEX_BROKER_ENDPOINT")
+            .map_err(|_| "native_codex_broker_endpoint_missing".to_string())?;
+        let capability = env::var("NARADA_NATIVE_CODEX_BROKER_CAPABILITY")
+            .map_err(|_| "native_codex_broker_capability_missing".to_string())?;
+        let timeout_ms = env::var("NARADA_NATIVE_PROVIDER_TIMEOUT_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(DEFAULT_PROVIDER_TIMEOUT_MS)
+            .clamp(1_000, 1_800_000);
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+        let mut stream = TcpStream::connect(&endpoint)
+            .map_err(|error| format!("native_codex_broker_connect_failed:{error}"))?;
+        stream
+            .set_read_timeout(Some(timeout))
+            .and_then(|()| stream.set_write_timeout(Some(timeout)))
+            .map_err(|error| format!("native_codex_broker_timeout_failed:{error}"))?;
+        let cwd = self
+            .site_root
+            .as_deref()
+            .unwrap_or_else(|| std::path::Path::new("."));
+        let model = env::var("NARADA_NATIVE_CODEX_MODEL")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        let effort = env::var("NARADA_NATIVE_CODEX_REASONING_EFFORT")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        let sandbox =
+            env::var("NARADA_NATIVE_CODEX_SANDBOX").unwrap_or_else(|_| "read-only".to_string());
+        let writable_roots = env::var("NARADA_NATIVE_CODEX_WRITABLE_ROOTS")
+            .ok()
+            .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
+            .unwrap_or_default();
+        let request = json!({
+            "schema":"narada.codex_app_server.broker_request.v1",
+            "capability":capability,
+            "request_id":uuid::Uuid::new_v4().to_string(),
+            "prompt":prompt,
+            "cwd":cwd,
+            "model":model,
+            "reasoning_effort":effort,
+            "sandbox":sandbox,
+            "writable_roots":writable_roots,
+        });
+        serde_json::to_writer(&mut stream, &request)
+            .map_err(|error| format!("native_codex_broker_request_encode_failed:{error}"))?;
+        stream
+            .write_all(b"\n")
+            .and_then(|()| stream.flush())
+            .map_err(|error| format!("native_codex_broker_request_write_failed:{error}"))?;
+        let mut line = String::new();
+        BufReader::new(stream)
+            .read_line(&mut line)
+            .map_err(|error| format!("native_codex_broker_response_read_failed:{error}"))?;
+        if line.len() > MAX_PROVIDER_RESPONSE_BYTES {
+            return Err("native_codex_broker_response_too_large".to_string());
+        }
+        let response: Value = serde_json::from_str(&line)
+            .map_err(|error| format!("native_codex_broker_response_invalid:{error}"))?;
+        if response.get("status").and_then(Value::as_str) != Some("completed") {
+            return Err(response
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("native_codex_broker_failed")
+                .to_string());
+        }
+        let content = response
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "native_codex_broker_content_missing".to_string())?
+            .to_string();
+        let provider_session_id = response
+            .get("thread_id")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        Ok((content, provider_session_id))
+    }
+
+    fn invoke_codex_exec(&self, prompt: &str) -> Result<(String, Option<String>), String> {
         let command = env::var("NARADA_NATIVE_CODEX_COMMAND")
             .or_else(|_| env::var("NARADA_CODEX_EXEC_COMMAND"))
             .or_else(|_| env::var("NARADA_CODEX_COMMAND"))

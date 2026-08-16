@@ -263,7 +263,7 @@ impl<'a> NativeProviderAdapter<'a> {
             self.emit_invocation_state(sink, &invocation_id, turn_id, Some("admitting"), "admitted", json!({
                 "admission": {"admitted": true, "reason": "native_provider_subprocess_admitted"},
             }))?;
-            let (response, provider_session_id) = match self.invoke_codex(&prompt) {
+            let (response, provider_session_id, provider_host_generation) = match self.invoke_codex(&prompt) {
                 Ok(response) => response,
                 Err(error) => {
                     self.emit_invocation_state(
@@ -288,6 +288,7 @@ impl<'a> NativeProviderAdapter<'a> {
                 json!({
                     "latency_ms": started.elapsed().as_millis(),
                     "provider_session_id": provider_session_id,
+                    "provider_host_generation": provider_host_generation,
                 }),
             )?;
             let tool_calls = parse_tool_calls(&response);
@@ -581,7 +582,7 @@ Answer the original request using this tool result.",
         )))
     }
 
-    fn invoke_codex(&self, prompt: &str) -> Result<(String, Option<String>), String> {
+    fn invoke_codex(&self, prompt: &str) -> Result<(String, Option<String>, Option<String>), String> {
         match env::var("NARADA_NATIVE_CODEX_TRANSPORT")
             .unwrap_or_else(|_| "codex-app-server".to_string())
             .as_str()
@@ -592,7 +593,7 @@ Answer the original request using this tool result.",
         }
     }
 
-    fn invoke_codex_app_server(&self, prompt: &str) -> Result<(String, Option<String>), String> {
+    fn invoke_codex_app_server(&self, prompt: &str) -> Result<(String, Option<String>, Option<String>), String> {
         let endpoint = env::var("NARADA_NATIVE_CODEX_BROKER_ENDPOINT")
             .map_err(|_| "native_codex_broker_endpoint_missing".to_string())?;
         let capability = env::var("NARADA_NATIVE_CODEX_BROKER_CAPABILITY")
@@ -667,10 +668,14 @@ Answer the original request using this tool result.",
             .get("thread_id")
             .and_then(Value::as_str)
             .map(str::to_string);
-        Ok((content, provider_session_id))
+        let provider_host_generation = response
+            .get("host_generation")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        Ok((content, provider_session_id, provider_host_generation))
     }
 
-    fn invoke_codex_exec(&self, prompt: &str) -> Result<(String, Option<String>), String> {
+    fn invoke_codex_exec(&self, prompt: &str) -> Result<(String, Option<String>, Option<String>), String> {
         let command = env::var("NARADA_NATIVE_CODEX_COMMAND")
             .or_else(|_| env::var("NARADA_CODEX_EXEC_COMMAND"))
             .or_else(|_| env::var("NARADA_CODEX_COMMAND"))
@@ -831,10 +836,10 @@ Answer the original request using this tool result.",
         }
         if let Some(value) = structured {
             return serde_json::to_string(&value)
-                .map(|response| (response, provider_session_id))
+                .map(|response| (response, provider_session_id, None))
                 .map_err(|error| format!("provider-response-encode-failed:{error}"));
         }
-        Ok((text, provider_session_id))
+        Ok((text, provider_session_id, None))
     }
 }
 

@@ -758,6 +758,8 @@ Answer the original request using this tool result.",
             // and sandbox contract. Carrier/project exec-policy rules would
             // add a second approval boundary with different semantics.
             "--ignore-rules".to_string(),
+            "-c".to_string(),
+            "windows.sandbox=\"unelevated\"".to_string(),
         ]);
         let worker_capability = worker_capability()?;
         let (sandbox, writable_roots) = codex_sandbox(&worker_capability)?;
@@ -793,10 +795,11 @@ Answer the original request using this tool result.",
         }
         args.push("-".to_string());
         let mut command = Command::new(command);
-        command.args(args).current_dir(cwd);
-        if sandbox == "workspace-write" {
-            command.env("CODEX_PERMISSION_PROFILE", ":workspace-write");
-        }
+        command
+            .args(args)
+            .current_dir(cwd)
+            .env_remove("CODEX_PERMISSION_PROFILE")
+            .env_remove("CODEX_THREAD_ID");
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

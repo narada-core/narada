@@ -34,6 +34,44 @@ if ($null -eq $secret -or [string]::IsNullOrWhiteSpace([string]$secret)) { exit 
 [Console]::Out.Write([string]$secret)
 "#;
 
+fn worker_capability() -> Result<Value, String> {
+    let raw = env::var("NARADA_WORKER_CAPABILITY_JSON")
+        .map_err(|_| "native_worker_capability_missing".to_string())?;
+    let capability: Value = serde_json::from_str(&raw)
+        .map_err(|error| format!("native_worker_capability_invalid:{error}"))?;
+    if capability.get("schema").and_then(Value::as_str)
+        != Some("narada.worker.capability_snapshot.v1")
+    {
+        return Err("native_worker_capability_schema_unsupported".to_string());
+    }
+    Ok(capability)
+}
+
+fn codex_sandbox(capability: &Value) -> Result<(&'static str, Vec<String>), String> {
+    let writable = capability
+        .pointer("/filesystem/write")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let roots = capability
+        .get("write_roots")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if writable && roots.is_empty() {
+        return Err("native_worker_write_roots_missing".to_string());
+    }
+    if !writable && !roots.is_empty() {
+        return Err("native_worker_read_only_has_write_roots".to_string());
+    }
+    Ok((if writable { "workspace-write" } else { "read-only" }, roots))
+}
+
 #[derive(Debug, Clone)]
 struct NativeProviderBinding {
     provider: String,
@@ -620,12 +658,8 @@ Answer the original request using this tool result.",
         let effort = env::var("NARADA_NATIVE_CODEX_REASONING_EFFORT")
             .ok()
             .filter(|value| !value.trim().is_empty());
-        let sandbox =
-            env::var("NARADA_NATIVE_CODEX_SANDBOX").unwrap_or_else(|_| "read-only".to_string());
-        let writable_roots = env::var("NARADA_NATIVE_CODEX_WRITABLE_ROOTS")
-            .ok()
-            .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
-            .unwrap_or_default();
+        let worker_capability = worker_capability()?;
+        let (sandbox, writable_roots) = codex_sandbox(&worker_capability)?;
         let request = json!({
             "schema":"narada.codex_app_server.broker_request.v1",
             "capability":capability,
@@ -725,19 +759,14 @@ Answer the original request using this tool result.",
             // add a second approval boundary with different semantics.
             "--ignore-rules".to_string(),
         ]);
-        let sandbox = env::var("NARADA_NATIVE_CODEX_SANDBOX")
-            .ok()
-            .filter(|sandbox| matches!(sandbox.as_str(), "read-only" | "workspace-write"));
-        match sandbox.as_deref() {
-            Some("read-only") => {
+        let worker_capability = worker_capability()?;
+        let (sandbox, writable_roots) = codex_sandbox(&worker_capability)?;
+        match sandbox {
+            "read-only" => {
                 args.extend(["--sandbox".to_string(), "read-only".to_string()]);
             }
-            Some("workspace-write") => {
+            "workspace-write" => {
                 args.push("--approve-for-me".to_string());
-                let writable_roots = env::var("NARADA_NATIVE_CODEX_WRITABLE_ROOTS")
-                    .ok()
-                    .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
-                    .unwrap_or_default();
                 for root in writable_roots {
                     let root = root.trim();
                     if !root.is_empty() && std::path::Path::new(root) != cwd {
@@ -745,7 +774,7 @@ Answer the original request using this tool result.",
                     }
                 }
             }
-            _ => {}
+            _ => unreachable!(),
         }
         if let Some(model) = model {
             args.extend(["-m".to_string(), model]);
@@ -765,7 +794,7 @@ Answer the original request using this tool result.",
         args.push("-".to_string());
         let mut command = Command::new(command);
         command.args(args).current_dir(cwd);
-        if sandbox.as_deref() == Some("workspace-write") {
+        if sandbox == "workspace-write" {
             command.env("CODEX_PERMISSION_PROFILE", ":workspace-write");
         }
         let mut child = command
@@ -1242,6 +1271,43 @@ fn compact(value: &Value) -> String {
 #[cfg(test)]
 mod provider_tests {
     use super::*;
+
+    #[test]
+    fn derives_codex_sandbox_from_one_worker_capability() {
+        let read = json!({
+            "schema":"narada.worker.capability_snapshot.v1",
+            "filesystem":{"write":false},
+            "write_roots":[]
+        });
+        assert_eq!(codex_sandbox(&read).expect("read"), ("read-only", vec![]));
+
+        let write = json!({
+            "schema":"narada.worker.capability_snapshot.v1",
+            "filesystem":{"write":true},
+            "write_roots":["C:/workspace/repo"]
+        });
+        assert_eq!(
+            codex_sandbox(&write).expect("write"),
+            ("workspace-write", vec!["C:/workspace/repo".to_string()])
+        );
+    }
+
+    #[test]
+    fn rejects_incoherent_worker_capability() {
+        let missing_root = json!({"filesystem":{"write":true},"write_roots":[]});
+        assert_eq!(
+            codex_sandbox(&missing_root).expect_err("missing root"),
+            "native_worker_write_roots_missing"
+        );
+        let read_with_root = json!({
+            "filesystem":{"write":false},
+            "write_roots":["C:/workspace/repo"]
+        });
+        assert_eq!(
+            codex_sandbox(&read_with_root).expect_err("read root"),
+            "native_worker_read_only_has_write_roots"
+        );
+    }
 
     #[test]
     fn parses_standard_and_legacy_tool_calls() {

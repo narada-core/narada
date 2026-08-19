@@ -178,7 +178,7 @@
     },
     {
       "component_kind": "epistemic-graph-mcp",
-      "package": "@narada-core/mcp-surfaces-native",
+      "package": "@narada-core/ledger-domain-mcp",
       "required": false,
       "profile_runtime_engine_kinds": {
         "native": "rust",

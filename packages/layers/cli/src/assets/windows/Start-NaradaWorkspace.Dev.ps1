@@ -30,6 +30,8 @@ param(
 
   [switch]$EnableNativeShell,
 
+  [switch]$SiteOrientation,
+
   [switch]$NoWaitForEnterBeforeExec,
 
   [switch]$VisibleRuntimeTerminal,
@@ -393,6 +395,7 @@ function Invoke-NaradaWorkspaceLaunch {
   }
 
   if ($EnableNativeShell) { $cliArgs.Add('--enable-native-shell') }
+  if ($SiteOrientation) { $cliArgs.Add('--site-orientation') }
   if ($NoWaitForEnterBeforeExec) { $cliArgs.Add('--no-wait-for-enter-before-exec') }
   if ($VisibleRuntimeTerminal) { $cliArgs.Add('--visible-runtime-terminal') }
   if ($Smoke) { $cliArgs.Add('--smoke') }

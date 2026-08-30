@@ -70,6 +70,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
+    .option('--site-orientation', 'Opt in to Narada logical Site orientation projection', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
     .option('--visible-runtime-terminal', 'Request a visible terminal for NARS runtime hosts', false)
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
@@ -104,6 +105,7 @@ export function registerLauncherCommands(program: Command): void {
           resultPath: opts.resultPath,
           suppressResultOutput: opts.suppressResultOutput,
           enableNativeShell: opts.enableNativeShell,
+          siteOrientation: opts.siteOrientation,
           noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
           visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
           smoke: opts.smoke,
@@ -131,6 +133,7 @@ export function registerLauncherCommands(program: Command): void {
     .option('--result-path <path>', 'Write the workspace plan JSON to a file')
     .option('--suppress-result-output', 'Do not print the final result envelope after writing --result-path', false)
     .option('--enable-native-shell', 'Break-glass: permit native shell posture where supported', false)
+    .option('--site-orientation', 'Opt in to Narada logical Site orientation projection', false)
     .option('--no-wait-for-enter-before-exec', 'Do not add the wait gate before exec handoff')
     .option('--visible-runtime-terminal', 'Request a visible terminal for NARS runtime hosts', false)
     .option('--smoke', 'Return smoke dry-run commands instead of opening terminals', false)
@@ -165,6 +168,7 @@ export function registerLauncherCommands(program: Command): void {
           resultPath: opts.resultPath,
           suppressResultOutput: opts.suppressResultOutput,
           enableNativeShell: opts.enableNativeShell,
+          siteOrientation: opts.siteOrientation,
           noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
           visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
           smoke: opts.smoke,

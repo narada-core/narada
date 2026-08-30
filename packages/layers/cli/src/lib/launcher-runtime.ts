@@ -177,6 +177,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   if (options.exec) args.push('--exec');
   if (options.wait) args.push('--wait');
   if (options.enableNativeShell) args.push('--enable-native-shell');
+  if (options.siteOrientation) args.push('--site-orientation');
   if (options.resumeSessionId) args.push('--resume-session', options.resumeSessionId);
 
   // Materialize the result directory before any preflight can fail. The

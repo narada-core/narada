@@ -42,6 +42,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)
     .option('--wait', 'Wait for an operator keypress before spawning the runtime', false)
     .option('--enable-native-shell', 'Break-glass: do not disable Codex native shell_tool', false)
+    .option('--site-orientation', 'Opt in to Narada logical Site orientation projection', false)
     .option('--reuse-existing-session', 'Attach launch binding to an already-running matching session instead of starting a fresh one', false)
     .option('--launch-binding <path>', 'Write an exact operator projection launch binding for sibling surfaces')
     .option('--launch-session-id <id>', 'Launch session id for process ownership evidence when no launch binding is used')
@@ -67,6 +68,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         exec: opts.exec as boolean | undefined,
         wait: opts.wait as boolean | undefined,
         enableNativeShell: opts.enableNativeShell as boolean | undefined,
+        siteOrientation: opts.siteOrientation as boolean | undefined,
         reuseExistingSession: opts.reuseExistingSession as boolean | undefined,
         launchBindingPath: opts.launchBinding as string | undefined,
         launchSessionId: opts.launchSessionId as string | undefined,

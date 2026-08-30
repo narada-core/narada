@@ -213,6 +213,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     authority,
     mcpScope,
     enableNativeShell,
+    siteOrientation: options.siteOrientation === true,
     launchBindingPath,
     launchSessionId,
     waitForEnter,

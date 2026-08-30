@@ -47,3 +47,14 @@ export function mcpScopeLoci(scope: any) : any{
   if (scope === 'local-site') return ['local-site'];
   return ['host', 'user-site', 'local-site'];
 }
+
+export function resolveSiteOrientationSelection(args: any, launchMaterializationRequired: any) : any{
+  const requested: any = args?.site_orientation === true;
+  if (!requested && (args?.continuity_checkpoint_id !== undefined || args?.work_task_number !== undefined)) {
+    throw new Error('site_orientation_required_for_orientation_selection');
+  }
+  return {
+    requested,
+    required: Boolean(launchMaterializationRequired && requested),
+  };
+}

@@ -17,6 +17,7 @@ export interface WorkspaceLaunchRuntimeCommandOptions {
   authority: string;
   mcpScope: string;
   enableNativeShell: boolean;
+  siteOrientation?: boolean;
   launchBindingPath?: string | null;
   launchSessionId?: string | null;
   waitForEnter?: boolean;
@@ -51,6 +52,7 @@ export function workspaceLaunchRuntimeCommandSpec(
   ];
   if (options.workspaceRoot) args.push('--workspace-root', options.workspaceRoot);
   if (options.enableNativeShell) args.push('--enable-native-shell');
+  if (options.siteOrientation) args.push('--site-orientation');
   args.push('--authority', options.authority);
   args.push('--mcp-scope', options.mcpScope);
   if (options.launchBindingPath) args.push('--launch-binding', options.launchBindingPath);

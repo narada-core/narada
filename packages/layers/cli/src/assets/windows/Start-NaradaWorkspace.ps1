@@ -6,6 +6,7 @@ param(
   [switch]$All,
   [switch]$NoWaitForEnterBeforeExec,
   [switch]$EnableNativeShell,
+  [switch]$SiteOrientation,
   [switch]$VisibleRuntimeTerminal,
   [switch]$Smoke,
   [string[]]$ConfigPath,
@@ -93,6 +94,7 @@ if ($DryRun) { $args += '--dry-run' }
 if ($All) { $args += '--all' }
 if ($NoWaitForEnterBeforeExec) { $args += '--no-wait-for-enter-before-exec' }
 if ($EnableNativeShell) { $args += '--enable-native-shell' }
+if ($SiteOrientation) { $args += '--site-orientation' }
 if ($VisibleRuntimeTerminal) { $args += '--visible-runtime-terminal' }
 if ($Smoke) { $args += '--smoke' }
 if ($SuppressResultOutput) { $args += '--suppress-result-output' }

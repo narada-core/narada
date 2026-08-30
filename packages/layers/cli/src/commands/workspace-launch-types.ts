@@ -23,6 +23,7 @@ export interface WorkspaceLaunchPlanOptions {
   resultPath?: string;
   suppressResultOutput?: boolean;
   enableNativeShell?: boolean;
+  siteOrientation?: boolean;
   noWaitForEnterBeforeExec?: boolean;
   visibleRuntimeTerminal?: boolean;
   smoke?: boolean;

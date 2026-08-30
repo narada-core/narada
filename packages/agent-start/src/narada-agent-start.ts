@@ -5,13 +5,13 @@
  * Carrier launch orchestrator for one Site-selected Agent embodiment.
  *
  * The Site-selected Carrier Session Authority owns admission. This launcher
- * obtains or validates its exact starting receipt, asks Agent Context to retain
- * the receipt-bound Orientation Manifest generation as a compatibility
- * projection, projects that generation into the Carrier entry procedure, and
- * starts the runtime. Process creation never creates admission authority.
+ * obtains or validates its exact starting receipt and starts the runtime.
+ * When --site-orientation is explicit, Agent Context additionally retains and
+ * projects the receipt-bound Orientation Manifest into Carrier entry. Process
+ * creation never creates admission authority.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--continuity-checkpoint-id <checkpoint-id>] [--work-task-number <task-number>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--continuity-checkpoint-id <checkpoint-id>] [--work-task-number <task-number>] [--site-orientation] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
  *   runtime profile selection: --runtime-profile <native|bun|node-compat> (or NARADA_RUNTIME_PROFILE); --runtime-engine remains a compatibility override.
  */
 
@@ -80,7 +80,7 @@ import {
   SESSION_AUTHORITY_REFUSAL_CODES,
 } from '@narada-core/nars-session-authority';
 import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.js';
-import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.js';
+import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs, resolveSiteOrientationSelection } from './launcher-cli-contract.js';
 import { buildLauncherContractsFromAgentStartResult, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.js';
 import { AgentStartResultContractError, assertAgentStartResultV0 } from './launch-result-v0-contract.js';
 import { loadSiteEnvFiles } from './site-env-loader.js';
@@ -735,6 +735,9 @@ let orientationDeliveryReceipt: any = null;
 let orientationEntryArtifacts: any = null;
 const sessionAuthorityEnforced: any = runtime === 'narada-agent-runtime-server' && execFlag === true && dryRun !== true;
 const launchMaterializationRequired: any = execFlag === true && dryRun !== true;
+const siteOrientationSelection: any = resolveSiteOrientationSelection(args, launchMaterializationRequired);
+const siteOrientationRequested: any = siteOrientationSelection.requested;
+const siteOrientationRequired: any = siteOrientationSelection.required;
 if (launchMaterializationRequired && mcpFabric === null) {
   try {
     mcpFabric = carrier === 'opencode' ? emptyScopedMcpFabric() : loadScopedMcpFabric();
@@ -902,7 +905,7 @@ try {
     mcpBindingAdmissionPath = join(dirname(siteCarrierControlPath(plannedCarrierSessionId)), 'mcp-binding-admission.json');
     writeJsonFile(mcpBindingAdmissionPath, envelope);
   }
-  if (launchMaterializationRequired) {
+  if (siteOrientationRequired) {
     startResult = materializeAgentSessionStart({
       siteRoot: sessionSiteRoot,
       siteId: orientationSiteId,
@@ -1700,7 +1703,7 @@ function buildSpawnArgs(carrierName: any, identity: any, carrierSessionRegistrat
     orientationBrief: startResult.orientation_brief ?? null,
     orientationEntryFile: orientationEntryArtifacts?.packet_path ?? null,
     kimiAgentFile: orientationEntryArtifacts?.kimi_agent_file ?? null,
-    orientationRequired: launchMaterializationRequired,
+    orientationRequired: siteOrientationRequired,
     runtimeAuthority: runtimeAuthoritySelection.effective,
   });
 }
@@ -2028,6 +2031,8 @@ const output: any = {
   orientation_delivery_receipt: orientationDeliveryReceipt,
   orientation_entry_artifacts: orientationEntryArtifacts,
   orientation_selection: {
+    requested: siteOrientationRequested,
+    required: siteOrientationRequired,
     continuity_checkpoint_id: exactContinuityCheckpointId,
     work_task_number: exactWorkTaskNumber,
     selection_semantics: 'exact_or_explicitly_omitted_never_latest',

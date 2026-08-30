@@ -440,6 +440,12 @@ test('Codex McpScope none materializes isolated config with no MCP servers', () 
   assert.equal(output.mcp_scope.enforcement.inherited_codex_home_allowed, false);
   assert.equal(configText.includes('[mcp_servers.'), false);
   assert.equal(configText.includes('McpScope=none'), true);
+  assert.equal(output.orientation_selection.requested, false);
+  assert.equal(output.orientation_selection.required, false);
+  assert.deepEqual(output.startup_sequence, []);
+  assert.equal(output.orientation_delivery_receipt, null);
+  assert.equal(output.orientation_entry_artifacts, null);
+  assert.equal(output.ordinary_work_gate, 'not_materialized');
 });
 
 test('agent-start output bundles first-class launcher contracts without launch-time intelligence selection', () => {

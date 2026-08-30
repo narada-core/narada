@@ -42,6 +42,7 @@ export interface OperatorSurfaceRuntimeStartOptions {
   exec?: boolean;
   wait?: boolean;
   enableNativeShell?: boolean;
+  siteOrientation?: boolean;
   reuseExistingSession?: boolean;
   launchBindingPath?: string;
   launchSessionId?: string;
@@ -182,6 +183,7 @@ export async function operatorSurfaceRuntimeStartCommand(
     exec: options.exec,
     wait: options.wait,
     enableNativeShell: options.enableNativeShell,
+    siteOrientation: options.siteOrientation,
     launchSource: 'narada operator-surface start',
     launchBindingPath: options.launchBindingPath,
     launchSessionId: options.launchSessionId,

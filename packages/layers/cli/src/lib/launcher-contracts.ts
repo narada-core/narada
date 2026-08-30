@@ -61,6 +61,7 @@ export interface AgentStartOptions {
   exec?: boolean;
   wait?: boolean;
   enableNativeShell?: boolean;
+  siteOrientation?: boolean;
   launchSource?: string;
   launchBindingPath?: string;
   launchSessionId?: string;

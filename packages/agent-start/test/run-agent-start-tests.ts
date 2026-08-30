@@ -54,6 +54,12 @@ const commands: ProcessTestCommand[] = [
     timeoutMs: 30_000,
   },
   {
+    label: 'site-orientation-selection-contract',
+    args: ['--import', 'tsx', '--test', 'test/site-orientation-selection.test.ts'],
+    cwd: packageRoot,
+    timeoutMs: 30_000,
+  },
+  {
     label: 'orientation-admission-contract',
     args: ['--import', 'tsx', '--test', 'test/orientation-admission.test.ts'],
     cwd: packageRoot,

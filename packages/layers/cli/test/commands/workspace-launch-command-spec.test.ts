@@ -41,4 +41,10 @@ describe('workspace launch command specifications', () => {
     expect(workspaceLaunchCommandArgv(node)).toEqual(expect.arrayContaining(['--dry-run', '--format', 'json']));
     expect(workspaceLaunchCommandArgv(smoke)[0]).toBe('narada');
   });
+
+  it('keeps Site orientation off by default and forwards an explicit opt-in', () => {
+    expect(workspaceLaunchRuntimeCommandSpec(options, 'execute').args).not.toContain('--site-orientation');
+    expect(workspaceLaunchRuntimeCommandSpec({ ...options, siteOrientation: true }, 'execute').args)
+      .toContain('--site-orientation');
+  });
 });

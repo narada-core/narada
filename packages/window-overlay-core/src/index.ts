@@ -100,6 +100,13 @@ export interface OverlayStatus {
   visibility_state: OverlayRuntimeState | null;
   surface_snapshot: OverlaySurfaceSnapshot | null;
   focus_owner: Record<string, unknown> | null;
+  state_recoveries: OverlayStateRecovery[];
+}
+
+export interface OverlayStateRecovery {
+  path: string;
+  quarantine_path: string;
+  reason: 'malformed_json';
 }
 
 export interface OverlayDocumentInput extends Record<string, unknown> {
@@ -364,6 +371,23 @@ async function readJson(path: string): Promise<unknown> {
   }
 }
 
+async function readRecoverableJson(path: string, recoveries: OverlayStateRecovery[]): Promise<unknown> {
+  try {
+    return await readJson(path);
+  } catch (error: unknown) {
+    if (!(error instanceof SyntaxError)) throw error;
+    const quarantinePath = `${path}.corrupt-${Date.now()}-${process.pid}`;
+    try {
+      await rename(path, quarantinePath);
+    } catch (renameError: unknown) {
+      if (errorCode(renameError) === 'ENOENT') return null;
+      throw renameError;
+    }
+    recoveries.push({ path, quarantine_path: quarantinePath, reason: 'malformed_json' });
+    return null;
+  }
+}
+
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(value, null, 2) + '\n', 'utf8');
@@ -398,8 +422,9 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
       if (!['ESRCH', 'EPERM'].includes(errorCode(error) ?? '')) throw error;
     }
   }
+  const stateRecoveries: OverlayStateRecovery[] = [];
   const storedDocument = await readJson(paths.document);
-  let actionState = await readJson(paths.actionState) as OverlayActionState | null;
+  let actionState = await readRecoverableJson(paths.actionState, stateRecoveries) as OverlayActionState | null;
   if (actionState?.status === 'running' && actionState.pid && !processIsRunning(actionState.pid)) {
     actionState = {
       ...actionState,
@@ -409,9 +434,9 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
     };
     await writeJson(paths.actionState, actionState);
   }
-  const visibilityState = await readJson(paths.visibilityState) as OverlayRuntimeState | null;
-  const surfaceSnapshot = await readJson(paths.surfaceSnapshot) as OverlaySurfaceSnapshot | null;
-  const focusOwner = await readJson(paths.focusOwner) as Record<string, unknown> | null;
+  const visibilityState = await readRecoverableJson(paths.visibilityState, stateRecoveries) as OverlayRuntimeState | null;
+  const surfaceSnapshot = await readRecoverableJson(paths.surfaceSnapshot, stateRecoveries) as OverlaySurfaceSnapshot | null;
+  const focusOwner = await readRecoverableJson(paths.focusOwner, stateRecoveries) as Record<string, unknown> | null;
   return {
     schema: OVERLAY_RESULT_SCHEMA,
     id: normalizedId,
@@ -424,6 +449,7 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
     visibility_state: visibilityState,
     surface_snapshot: surfaceSnapshot,
     focus_owner: focusOwner,
+    state_recoveries: stateRecoveries,
   };
 }
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -165,6 +165,26 @@ test('inspect reconciles an abandoned running action as interrupted', async () =
     const status = await overlayStatus('example', { stateRoot });
     assert.equal(status.action_state?.status, 'interrupted');
     assert.equal(status.action_state?.detail, 'The action process exited without recording a terminal result.');
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('inspect quarantines malformed derived state and continues', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-overlay-corrupt-state-'));
+  try {
+    const paths = overlayPaths('example', { stateRoot });
+    await mkdir(paths.stateDirectory, { recursive: true });
+    const malformed = Buffer.from([0, 0, 0, 0]);
+    await writeFile(paths.visibilityState, malformed);
+    const status = await overlayStatus('example', { stateRoot });
+    assert.equal(status.state, 'stopped');
+    assert.equal(status.visibility_state, null);
+    assert.equal(status.state_recoveries.length, 1);
+    assert.equal(status.state_recoveries[0]?.path, paths.visibilityState);
+    assert.equal(status.state_recoveries[0]?.reason, 'malformed_json');
+    assert.deepEqual(await readFile(status.state_recoveries[0]!.quarantine_path), malformed);
+    assert.equal((await readdir(paths.stateDirectory)).some((name) => name.startsWith('visibility.state.json.corrupt-')), true);
   } finally {
     await rm(stateRoot, { recursive: true, force: true });
   }

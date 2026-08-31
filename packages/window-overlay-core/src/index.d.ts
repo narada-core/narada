@@ -69,6 +69,12 @@ export interface OverlayStatus {
   visibility_state: import('./overlay-surface-fsm.js').OverlayRuntimeState | null;
   surface_snapshot: import('./overlay-surface-fsm.js').OverlaySurfaceSnapshot | null;
   focus_owner: Record<string, unknown> | null;
+  state_recoveries: OverlayStateRecovery[];
+}
+export interface OverlayStateRecovery {
+  path: string;
+  quarantine_path: string;
+  reason: 'malformed_json';
 }
 export interface OverlayDocumentInput extends Record<string, unknown> {
   id?: unknown;

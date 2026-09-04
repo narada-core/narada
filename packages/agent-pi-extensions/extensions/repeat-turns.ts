@@ -437,6 +437,22 @@ export default function (pi: ExtensionAPI) {
 		iterationProducedAssistant = false;
 	});
 
+	pi.on("agent_end", async (event) => {
+		if (disposed || !state.active || !iterationStarted || state.mode !== "repeat") return;
+		const messages = Array.isArray(event.messages) ? event.messages : [];
+		for (let index = messages.length - 1; index >= 0; index -= 1) {
+			const text = assistantText(messages[index]);
+			if (!text) continue;
+			iterationProducedAssistant = true;
+			const stopReason = repeatStopReason(text);
+			if (stopReason) {
+				lastAssistantRequestedStop = true;
+				lastAssistantStopReason = stopReason;
+			}
+			break;
+		}
+	});
+
 	pi.on("message_end", async (event, ctx) => {
 		if (disposed || !state.active || !iterationStarted) return;
 		const text = assistantText(event.message);

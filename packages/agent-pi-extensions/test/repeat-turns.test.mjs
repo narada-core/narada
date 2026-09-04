@@ -44,6 +44,31 @@ test('repeat stop marker accepts a final inline marker but rejects trailing text
   assert.equal(repeatStopReason('blocked [REPEAT_STOP]\npostscript'), null);
 });
 
+test('repeat stop marker prevents the next iteration', async () => {
+  const harness = createHarness();
+  await harness.commands.get('repeat').handler('3 test prompt', harness.context);
+  assert.equal(harness.sent.length, 1);
+
+  await completeIteration(harness, 'result [REPEAT_STOP]');
+
+  assert.equal(harness.sent.length, 1);
+  assert.equal(harness.entries.at(-1).data.active, false);
+  assert.match(harness.notifications.at(-1).message, /Repeat stopped: agent requested stop/);
+});
+
+test('agent_end fallback observes a stop marker before agent_settled', async () => {
+  const harness = createHarness();
+  await harness.commands.get('repeat').handler('3 test prompt', harness.context);
+  await harness.handlers.get('agent_start')({}, harness.context);
+  await harness.handlers.get('agent_end')({
+    messages: [{ role: 'assistant', content: [{ type: 'text', text: 'result [REPEAT_STOP]' }] }],
+  }, harness.context);
+  await harness.handlers.get('agent_settled')({}, harness.context);
+
+  assert.equal(harness.sent.length, 1);
+  assert.equal(harness.entries.at(-1).data.active, false);
+});
+
 test('repeat-then-notify emits once after the complete repeat sequence', async () => {
   const harness = createHarness();
   assert.ok(harness.commands.has('repeat'));

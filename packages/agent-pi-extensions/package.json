@@ -1,0 +1,38 @@
+{
+  "name": "@narada-core/agent-pi-extensions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "extensions",
+    "test",
+    "README.md",
+    "package.json"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/repeat-turns.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
+  },
+  "description": "Narada-owned Pi carrier extensions for bounded repeat and traversal workflows",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/narada-core/narada.git",
+    "directory": "packages/agent-pi-extensions"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

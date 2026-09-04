@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import extension from '../extensions/repeat-turns.ts';
+import extension, { repeatStopReason } from '../extensions/repeat-turns.ts';
 
 function createHarness() {
   const commands = new Map();
@@ -37,6 +37,12 @@ async function completeIteration(harness, text) {
   }, harness.context);
   await harness.handlers.get('agent_settled')({}, harness.context);
 }
+
+test('repeat stop marker accepts a final inline marker but rejects trailing text', () => {
+  assert.equal(repeatStopReason('blocked [REPEAT_STOP]'), 'agent requested stop');
+  assert.equal(repeatStopReason('blocked [REPEAT_STOP reason="no executable continuation"]'), 'no executable continuation');
+  assert.equal(repeatStopReason('blocked [REPEAT_STOP]\npostscript'), null);
+});
 
 test('repeat-then-notify emits once after the complete repeat sequence', async () => {
   const harness = createHarness();

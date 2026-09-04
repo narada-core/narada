@@ -198,7 +198,7 @@ export function traversalIsTerminal(snapshot: string): boolean {
 
 export function repeatStopReason(text: string): string | null {
 	const finalLine = text.trimEnd().split(/\r?\n/).at(-1)?.trim() ?? "";
-	const match = finalLine.match(/^\[REPEAT_STOP(?:\s+reason="([^"\r\n]+)")?\]$/);
+	const match = finalLine.match(/(?:^|\s)\[REPEAT_STOP(?:\s+reason="([^"\r\n]+)")?\]$/);
 	if (!match) return null;
 	return match[1]?.trim() || "agent requested stop";
 }
@@ -356,7 +356,7 @@ export default function (pi: ExtensionAPI) {
 			"Complete one substantive agent turn using freshly read mutable state.",
 			...(state.mode === "traverse"
 				? []
-				: [`Emit ${STOP_MARKER} only if the objective is complete, explicitly cancelled, or has no nonredundant executable continuation.`]),
+				: [`Emit ${STOP_MARKER} only if the objective is complete, explicitly cancelled, or has no nonredundant executable continuation. If stopping, put it (optionally with reason="...") at the end of the final line; do not continue after it.`]),
 		].join("\n");
 
 		awaitingAgentStart = true;
